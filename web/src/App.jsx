@@ -289,11 +289,8 @@ function Home() {
             </div>
             <div className="text-lg leading-normal mt-6 md:mt-8 text-neutral-400">
               <p>
-                We threw out the modern software stack and{" "}
-                <A className="text-neutral-300" href={LINKS.handmadeManifesto}>
-                  handmade
-                </A>{" "}
-                the entire IDE in blazing fast C/C++.
+                We threw out the modern software stack and rewrote the entire
+                IDE with in blazing fast C/C++.
               </p>
               <p>
                 Performance as fast as a video game. Instant startup. 144 FPS.
@@ -607,33 +604,30 @@ function BuyLicense() {
 
 const faqs = [
   {
-    q: "Why is CodePerfect fast?",
+    q: "What makes CodePerfect fast?",
     a: (
       <>
         <p>
-          It's actually not particularly fast, just fast compared to modern
-          software. Why modern software is slow is complicated, but suffice it
-          to say it's a hundred different reasons, and CodePerfect achieves
-          relative fastness mostly by declining to copy them.
+          There isn't any one thing or algorithm or technique. CodePerfect is
+          fast compared to modern software because it declines to copy the
+          numerous things that make modern software slow.
         </p>
 
         <p>
-          The biggest of these reasons is extreme bloat everywhere in the modern
-          tech stack. We eschewed all that in favor of a low level language
-          (C/C++) and managing our own memory by doing amortized bulk allocation
-          with arena allocators. We write straightforward,{" "}
-          <A href={LINKS.nonPessimized}>non-pessimized</A> code that more or
-          less just executes the actual CPU instructions that it needs to in
-          order to do the thing it's supposed to do.
+          The modern tech stack has extreme bloat everywhere. We eschewed that
+          and instead use a low level language (C/C++) and manage our own memory
+          with amortized bulk arena allocation. We write straightforward,{" "}
+          <A href={LINKS.nonPessimized}>non-pessimized</A> code that just
+          executes the actual CPU instructions that do the thing it's supposed
+          to.
         </p>
 
         <p>
-          CodePerfect's speed is really just the speed of modern computers. We
-          aren't hyperoptimizing by writing crazy inline assembly or anything.
-          There are some techniques we use, like using file mappings and
-          multithreading some things where it makes sense, but overall it's just
-          straightforward C code that performs the actual task of executing an
-          IDE, which as it turns out modern computers can do quite efficiently.
+          We're not writing crazy inline assembly or SIMD intrinsics or
+          whatever. We do some optimization, like using file mappings and
+          multithreading stuff where it makes sense, but mostly we are just
+          writing straightforward code that performs the actual task of
+          executing an IDE. Modern computers are just fast.
         </p>
       </>
     ),
@@ -648,16 +642,11 @@ const faqs = [
         </p>
 
         <p>
-          Right now we're targeting people who want a code editor as fast as
-          alacritty/tmux/vim or Sublime Text, but comes with code intelligence
-          and other IDE features you need to program productively. Our users
-          spend substantial amounts of time in their editor, and derive
-          significant value and joy from a seamless, latency-free workflow.
-        </p>
-        <p>
-          We want to be <A href="https://sesuperhuman.com">Superhuman</A> for
-          programming. Much like business people and email, programmers use
-          their IDE all day.
+          Right now we're targeting people who want a code editor as fast as Vim
+          or Sublime Text, but comes with code intelligence and other IDE
+          features you need to program productively. Our users spend substantial
+          amounts of time in their editor, and derive significant value and joy
+          from a seamless, latency-free workflow.
         </p>
       </>
     ),
@@ -667,43 +656,47 @@ const faqs = [
     a: (
       <>
         <p>
-          We are trying to build a tool tailor-made specifically for the task of
+          We are trying to build a custom power tool for the specific task of
           programming.
         </p>
         <p>
-          Efforts to improve programming tools tend to focus on abstract ideas
-          like making programming more collaborative, or involve less code, or
-          more integrated with third-party tools. Those are fine goals; we're
-          just aiming in an orthogonal, more boring direction: simply building
-          the best tool for literally editing, compiling, and debugging code.
-          CodePerfect is tightly integrated and optimized around that use case.
+          New programming tools today tend to have ambitious goals like making
+          programming more collaborative, or involve less code, or more
+          integrated with third-party tools. We're aiming in a boring orthogonal
+          direction: building the best tool for literally editing, compiling,
+          and debugging code. CodePerfect is tightly integrated and optimized
+          around that use case.
         </p>
 
         <p>
-          A big part of this is building a smooth experience. We're trying to
-          build a "bicycle for the mind" for programming. But up to a point,
-          smoothness basically means speed (or latency), so that is a big
-          initial focus.
+          We want to be <A href="https://sesuperhuman.com">Superhuman</A> for
+          programming. Programmers use their IDE all day, and small improvements
+          add up. We want to make big improvements.
+        </p>
+        <p>
+          A big part of this is building a smooth experience. But up to a point,
+          smoothness means speed (or low latency), so that's a big initial
+          focus.
         </p>
       </>
     ),
   },
   {
-    q: "Why is it a subscription model? Can I buy a perpetual license?",
+    q: "Why is it a recurring subscription?",
     a: (
       <>
         <p>
-          Because we have rent to pay, and our rent is a subscription model :)
+          Because we have to pay our rent, which is a recurring subscription :)
         </p>
         <p>
-          CodePerfect is also in active development and shipping{" "}
-          <A href={LINKS.changelog}>actively</A>, so your recurring payments
-          help fund ongoing development.
+          CodePerfect is also in{" "}
+          <A href={LINKS.changelog}>active development</A> so technically you
+          are paying for constant new updates.
         </p>
         <p>
           We understand some users adamantly oppose subscription models and
-          strongly prefer a perpetual license. We sell one for the cost of four
-          years: $200 for individuals, or $400 if you're expensing it. Please{" "}
+          require a perpetual license. We sell one for the cost of four years:
+          $200 for individuals, $400 if you're expensing. Please{" "}
           <A href={`mailto:${SUPPORT_EMAIL}`}>email us</A> to initiate this
           process.
         </p>
@@ -715,9 +708,9 @@ const faqs = [
     a: (
       <>
         <p>
-          It's a throwback to an era when somehow, on hardware way slower than
-          today's, software was way{" "}
-          <A href={LINKS.oldSoftwareOpenedInstantly}>faster</A>.
+          It's a throwback to an era when software was way{" "}
+          <A href={LINKS.oldSoftwareOpenedInstantly}>faster</A>, despite running
+          on hardware orders of magnitude slower than a phone today.
         </p>
       </>
     ),
