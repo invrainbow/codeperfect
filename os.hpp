@@ -31,13 +31,21 @@
 #endif
 
 #ifdef DEBUG_BUILD
-#   if OS_WINBLOWS
-#       define BREAK_HERE DebugBreak()
-#   elif OS_MAC || OS_LINUX
-#       define BREAK_HERE raise(SIGSTOP)
+#   if defined (_MSC_VER)
+#       define BREAK_HERE() __debugbreak()
+#   elif defined(__clang__)
+#       define BREAK_HERE() __builtin_debugtrap()
+#   elif defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
+#       define BREAK_HERE() __asm__ volatile("int $0x03")
+#   elif defined(__GNUC__) && defined(__thumb__)
+#       define BREAK_HERE() __asm__ volatile(".inst 0xde01")
+#   elif defined(__GNUC__) && defined(__arm__) && !defined(__thumb__)
+#       define BREAK_HERE() __asm__ volatile(".inst 0xe7f001f0");
+#   else
+#       define BREAK_HERE() cp_panic("break")
 #   endif
 #else
-#   define BREAK_HERE
+#   define BREAK_HERE()
 #endif
 
 #include "common.hpp"
