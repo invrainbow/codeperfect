@@ -75,6 +75,21 @@ ccstr format_key(int mods, ccstr key, bool icon) {
     return rend.finish();
 }
 
+void keep_item_inside_scroll() {
+    auto offset = im::GetWindowPos().y + im::GetScrollY();
+    auto top = im::GetWindowContentRegionMin().y + offset;
+    auto bot = im::GetWindowContentRegionMax().y + offset;
+    auto pos = im::GetCursorScreenPos().y;
+
+    auto hi = top + (bot - top) * 0.9;
+    if (pos > hi)
+        im::SetScrollY(im::GetScrollY() + (pos - hi));
+
+    auto lo = top + (bot - top) * 0.1;
+    if (pos < lo)
+        im::SetScrollY(im::GetScrollY() - (lo - pos));
+}
+
 namespace ImGui {
     bool OurBeginPopupContextItem(const char* str_id = NULL, ImGuiPopupFlags popup_flags = 1) {
         ImGuiWindow* window = GImGui->CurrentWindow;
@@ -2260,13 +2275,17 @@ void UI::draw_everything() {
     hover.id = 0;
     hover.cursor = ImGuiMouseCursor_Arrow;
 
-    ImGuiIO& io = im::GetIO();
-
     // start rendering imgui
     im::NewFrame();
 
+    bool old_mouse_captured_by_imgui = world.ui.mouse_captured_by_imgui;
+    bool old_keyboard_captured_by_imgui = world.ui.keyboard_captured_by_imgui;
+    bool old_input_captured_by_imgui = world.ui.input_captured_by_imgui;
+
+    ImGuiIO& io = im::GetIO();
     world.ui.mouse_captured_by_imgui = io.WantCaptureMouse;
     world.ui.keyboard_captured_by_imgui = io.WantCaptureKeyboard;
+    world.ui.input_captured_by_imgui = io.WantTextInput;
 
     // prevent ctrl+tab from doing shit
     im::GetCurrentContext()->NavWindowingTarget = NULL;
@@ -3074,7 +3093,7 @@ void UI::draw_everything() {
                     auto clicked = draw_selectable();
 
                     if (wnd.scroll_to == index) {
-                        im::SetScrollHereY();
+                        keep_item_inside_scroll();
                         wnd.scroll_to = -1;
                     }
 
@@ -3201,7 +3220,7 @@ void UI::draw_everything() {
                     auto clicked = draw_selectable();
 
                     if (wnd.scroll_to == index) {
-                        im::SetScrollHereY();
+                        keep_item_inside_scroll();
                         wnd.scroll_to = -1;
                     }
 
@@ -3399,7 +3418,7 @@ void UI::draw_everything() {
                         }
 
                         if (wnd.scroll_to_file == file_index && wnd.scroll_to_result == result_index) {
-                            im::SetScrollHereY();
+                            keep_item_inside_scroll();
                             wnd.scroll_to_file = -1;
                             wnd.scroll_to_result = -1;
                         }
@@ -3826,7 +3845,7 @@ void UI::draw_everything() {
                     */
 
                     if (i == b.scroll_to) {
-                        im::SetScrollHereY();
+                        keep_item_inside_scroll();
                         b.scroll_to = -1;
                     }
 
@@ -4101,19 +4120,7 @@ void UI::draw_everything() {
                         label = cp_sprintf("%s %s", icon, it->name);
 
                     if (it == wnd.scroll_to) {
-                        auto offset = im::GetWindowPos().y + im::GetScrollY();
-                        auto top = im::GetWindowContentRegionMin().y + offset;
-                        auto bot = im::GetWindowContentRegionMax().y + offset;
-                        auto pos = im::GetCursorScreenPos().y;
-
-                        auto hi = top + (bot - top) * 0.85;
-                        if (pos > hi)
-                            im::SetScrollY(im::GetScrollY() + (pos - hi));
-
-                        auto lo = top + (bot - top) * 0.15;
-                        if (pos < lo)
-                            im::SetScrollY(im::GetScrollY() - (lo - pos));
-
+                        keep_item_inside_scroll();
                         wnd.scroll_to = NULL;
                     }
 
@@ -5461,6 +5468,12 @@ void UI::draw_everything() {
                     if (wnd.sel_file == file_idx && wnd.sel_result == -1)
                         flags |= ImGuiTreeNodeFlags_Selected;
 
+                    if (wnd.scroll_file == file_idx && wnd.scroll_result == -1) {
+                        keep_item_inside_scroll();
+                        wnd.scroll_file = -1;
+                        wnd.scroll_result = -1;
+                    }
+
                     open = im::TreeNodeEx(cp_sprintf("%s", get_path_relative_to(it.filepath, world.current_path)), flags);
                 }
 
@@ -5492,7 +5505,7 @@ void UI::draw_everything() {
                         im::PopStyleColor();
 
                         if (wnd.scroll_file == file_idx && wnd.scroll_result == result_idx) {
-                            im::SetScrollHereY();
+                            keep_item_inside_scroll();
                             wnd.scroll_file = -1;
                             wnd.scroll_result = -1;
                         }
@@ -5623,9 +5636,11 @@ void UI::draw_everything() {
                 goto_result(wnd.sel_file+1, -1);
             };
 
-            if (world.ui.keyboard_captured_by_imgui) {
-                wnd.sel_file = -1;
-                wnd.sel_result = -1;
+            if (world.ui.input_captured_by_imgui) {
+                if (!old_input_captured_by_imgui) {
+                    wnd.sel_file = -1;
+                    wnd.sel_result = -1;
+                }
 
                 switch (get_keyboard_nav(&wnd, KNF_ALLOW_IMGUI_FOCUSED)) {
                 case KN_UP:

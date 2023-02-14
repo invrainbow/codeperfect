@@ -1402,6 +1402,7 @@ int realmain(int argc, char **argv) {
         SCOPED_MEM(&world.world_mem);
         io.IniFilename = path_join(world.configdir, "imgui.ini");
     }
+    io.ConfigInputTrickleEventQueue = false;
 
     // ImGui::StyleColorsLight();
 

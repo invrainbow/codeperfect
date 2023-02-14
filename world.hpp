@@ -687,6 +687,7 @@ struct World {
         GLuint textures[__TEXTURE_COUNT__];
         bool mouse_captured_by_imgui;
         bool keyboard_captured_by_imgui;
+        bool input_captured_by_imgui;
     } ui;
 
     struct Windows_Open {
