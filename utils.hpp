@@ -146,7 +146,7 @@ struct Table {
     }
 
     List<Table_Entry*> *entries() {
-        auto ret = alloc_list<Table_Entry*>(HASH_COUNT(lookup));
+        auto ret = new_list(Table_Entry*, HASH_COUNT(lookup));
         Table_Entry *curr = NULL, *tmp = NULL;
         HASH_ITER(hh, lookup, curr, tmp) ret->append(curr);
         return ret;
@@ -196,7 +196,7 @@ struct Table {
         Table_Entry *item = NULL;
         HASH_FIND_STR(lookup, name, item);
         if (!item) {
-            item = alloc_object(Table_Entry);
+            item = new_object(Table_Entry);
             item->name = name;
             HASH_ADD_KEYPTR(hh, lookup, name, strlen(name), item);
         }
@@ -235,7 +235,7 @@ struct Scoped_Table {
     }
 
     List<Table_Entry*> *entries() {
-        auto ret = alloc_list<Table_Entry*>(HASH_COUNT(lookup));
+        auto ret = new_list(Table_Entry*, HASH_COUNT(lookup));
         Table_Entry *curr = NULL, *tmp = NULL;
         HASH_ITER(hh, lookup, curr, tmp) ret->append(curr);
         return ret;
@@ -332,7 +332,7 @@ struct Scoped_Table {
         Table_Entry *item = NULL;
         HASH_FIND_STR(lookup, name, item);
         if (!item) {
-            item = alloc_object(Table_Entry);
+            item = new_object(Table_Entry);
             item->name = name;
             HASH_ADD_KEYPTR(hh, lookup, name, strlen(name), item);
         }
@@ -507,7 +507,7 @@ struct String_Cursor {
     void back() { i--; }
 
     List<char> *slurp(fn<bool(char)> f) {
-        auto ret = alloc_list<char>();
+        auto ret = new_list(char);
         for (; i < len && f(s[i]); i++)
             ret->append(s[i]);
         // '\0'?

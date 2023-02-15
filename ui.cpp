@@ -174,7 +174,7 @@ ccstr get_menu_command_key(Command cmd) {
     auto keyname = get_key_name(info.key);
     if (!keyname) return NULL;
 
-    auto s = alloc_list<char>();
+    auto s = new_list(char);
     for (int i = 0, len = strlen(keyname); i < len; i++) {
         auto it = keyname[i];
         if (!i) it = toupper(it);
@@ -485,7 +485,7 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec4f *out) {
 }
 
 Pretty_Menu *UI::pretty_menu_start(ImVec2 padding) {
-    auto ret = alloc_object(Pretty_Menu);
+    auto ret = new_object(Pretty_Menu);
     ret->drawlist = im::GetWindowDrawList();
     ret->padding = padding;
     return ret;
@@ -838,12 +838,12 @@ void UI::render_ts_cursor(TSTreeCursor *curr, Parse_Lang lang, cur2 open_cur) {
 
 
 Font *init_builtin_font(u8 *data, u32 len, int size, ccstr name) {
-    auto fd = alloc_object(Font_Data);
+    auto fd = new_object(Font_Data);
     fd->type = FONT_DATA_FIXED;
     fd->data = data;
     fd->len = len;
 
-    auto ret = alloc_object(Font);
+    auto ret = new_object(Font);
     return ret->init(name, size, fd) ? ret : NULL;
 }
 
@@ -862,7 +862,7 @@ Font* UI::acquire_system_ui_font() {
     auto data = load_system_ui_font();
     if (!data) return NULL;
 
-    auto font = alloc_object(Font);
+    auto font = new_object(Font);
     if (!font->init("<system ui font>", UI_FONT_SIZE, data)) {
         frame.restore();
         // error("unable to acquire system font");
@@ -904,7 +904,7 @@ bool UI::init() {
         if (!base_ui_font) return false;
 
         // list available font names
-        all_font_names = alloc_list<ccstr>();
+        all_font_names = new_list(ccstr);
         if (!list_all_fonts(all_font_names)) return false;
     }
 
@@ -1051,7 +1051,7 @@ void UI::draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int b
 }
 
 Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
-    auto utf8chars = alloc_list<char>();
+    auto utf8chars = new_list(char);
     For (grapheme) {
         char buf[4];
         int len = uchar_to_cstr(it, buf);
@@ -1085,8 +1085,8 @@ Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
     int cur_y = 0;
     int bx0 = -1, by0 = -1, bx1 = -1, by1 = -1;
 
-    auto glyph_bitmaps = alloc_list<u8*>();
-    auto glyph_positions = alloc_list<box>();
+    auto glyph_bitmaps = new_list(u8*);
+    auto glyph_positions = new_list(box);
 
     if (!glyph_count) return NULL; // but then won't it keep calling this every single frame?
 
@@ -1175,7 +1175,7 @@ Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glBindTexture(GL_TEXTURE_2D, 0);
 
-        auto a = alloc_object(Atlas);
+        auto a = new_object(Atlas);
         a->pos = new_cur2(0, 0);
         a->tallest = 0;
         a->gl_texture_id = texture_id;
@@ -1206,12 +1206,12 @@ Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
     if (bbox.h > atlas->tallest) atlas->tallest = bbox.h;
     atlas->pos.x += bbox.w + 1;
 
-    glyph = alloc_object(Glyph);
+    glyph = new_object(Glyph);
     glyph->single = grapheme->len == 1;
     if (glyph->single) {
         glyph->codepoint = grapheme->at(0);
     } else {
-        auto copy = alloc_list<uchar>();
+        auto copy = new_list(uchar);
         copy->concat(grapheme);
         glyph->grapheme = copy;
     }
@@ -1261,7 +1261,7 @@ int UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
 }
 
 int UI::draw_char(vec2f* pos, uchar codepoint, vec4f color) {
-    auto grapheme = alloc_list<uchar>();
+    auto grapheme = new_list(uchar);
     grapheme->append(codepoint);
     return draw_char(pos, grapheme, color);
 }
@@ -1285,7 +1285,7 @@ vec2f UI::draw_string(vec2f pos, ccstr s, vec4f color) {
 
     Grapheme_Clusterer gc; gc.init();
     int i = 0;
-    auto grapheme = alloc_list<uchar>();
+    auto grapheme = new_list(uchar);
 
     gc.feed(codepoints->at(0));
     while (i < codepoints->len) {
@@ -1596,7 +1596,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
             value_label = var_value_as_string(var);
             if (var->kind == GO_KIND_STRING) {
                 auto len = strlen(value_label) - 2;
-                auto buf = alloc_array(char, len+1);
+                auto buf = new_array(char, len+1);
                 strncpy(buf, value_label+1, len);
                 buf[len] = '\0';
                 underlying_value = buf;
@@ -2218,7 +2218,7 @@ void trigger_file_search(int limit_start, int limit_end) {
 
     if (!wnd.sess.start()) return;
 
-    auto chars = alloc_list<char>();
+    auto chars = new_list(char);
     char buf[4];
 
     For (&ed->buf->lines) {
@@ -2229,7 +2229,7 @@ void trigger_file_search(int limit_start, int limit_end) {
         chars->append('\n');
     }
 
-    auto tmp = alloc_list<Search_Match>();
+    auto tmp = new_list(Search_Match);
     wnd.sess.search(chars->items, chars->len, tmp, 1000);
 
     // is o(n*m) gonna fuck us? (n = number lines, m = number matches)
@@ -2243,7 +2243,7 @@ void trigger_file_search(int limit_start, int limit_end) {
         if (it.group_starts) {
             {
                 SCOPED_MEM(&wnd.mem);
-                match.group_starts = alloc_list<cur2>();
+                match.group_starts = new_list(cur2);
             }
             For (it.group_starts)
                 match.group_starts->append(ed->offset_to_cur(it));
@@ -2252,7 +2252,7 @@ void trigger_file_search(int limit_start, int limit_end) {
         if (it.group_ends) {
             {
                 SCOPED_MEM(&wnd.mem);
-                match.group_ends = alloc_list<cur2>();
+                match.group_ends = new_list(cur2);
             }
             For (it.group_ends)
                 match.group_ends->append(ed->offset_to_cur(it));
@@ -2625,10 +2625,10 @@ void UI::draw_everything() {
                     {
                         SCOPED_MEM(&file.pool);
                         file.filename = cp_basename(editor->filepath);
-                        file.scope_ops = alloc_list<Go_Scope_Op>();
-                        file.decls = alloc_list<Godecl>();
-                        file.imports = alloc_list<Go_Import>();
-                        file.references = alloc_list<Go_Reference>();
+                        file.scope_ops = new_list(Go_Scope_Op);
+                        file.decls = new_list(Godecl);
+                        file.imports = new_list(Go_Import);
+                        file.references = new_list(Go_Reference);
                     }
 
                     if (!world.indexer.try_acquire_lock(IND_READING)) break;
@@ -3057,7 +3057,7 @@ void UI::draw_everything() {
             if (!isempty(wnd.results)) {
                 im_push_mono_font();
 
-                auto results = alloc_list<Find_Decl*>();
+                auto results = new_list(Find_Decl*);
                 For (wnd.results) {
                     if (!wnd.include_empty) {
                         auto gotype = it->decl->decl->gotype;
@@ -3767,7 +3767,7 @@ void UI::draw_everything() {
                     }
 
                     if (im::Selectable("Copy All")) {
-                        auto output = alloc_list<char>();
+                        auto output = new_list(char);
                         For (&lines) {
                             for (auto p = it; *p != '\0'; p++) {
                                 output->append(*p);
@@ -4933,7 +4933,7 @@ void UI::draw_everything() {
             if (im_input_text_full("Replace:", wnd.replace_str, _countof(wnd.replace_str), ImGuiInputTextFlags_EnterReturnsTrue)) {
                 auto repl_parts = wnd.sess.parse_replacement(wnd.replace_str);
                 For (&wnd.matches) {
-                    auto chars = alloc_list<char>();
+                    auto chars = new_list(char);
                     auto &m = it;
 
                     if (m.group_starts || m.group_ends) {
@@ -5359,9 +5359,9 @@ void UI::draw_everything() {
                 wnd.mem.cleanup();
                 wnd.mem.init();
                 SCOPED_MEM(&wnd.mem);
-                wnd.files_open = alloc_array(bool, world.searcher.search_results.len);
-                wnd.set_file_open = alloc_array(bool, world.searcher.search_results.len);
-                wnd.set_file_close = alloc_array(bool, world.searcher.search_results.len);
+                wnd.files_open = new_array(bool, world.searcher.search_results.len);
+                wnd.set_file_open = new_array(bool, world.searcher.search_results.len);
+                wnd.set_file_close = new_array(bool, world.searcher.search_results.len);
             }
 
             if (wnd.replace)
@@ -5983,7 +5983,7 @@ void UI::draw_everything() {
         glUseProgram(world.ui.program);
         glBindVertexArray(world.ui.vao); // bind my vertex array & buffers
         glBindBuffer(GL_ARRAY_BUFFER, world.ui.vbo);
-        verts.init(LIST_FIXED, 6 * 128, alloc_array(Vert, 6 * 128));
+        verts.init(LIST_FIXED, 6 * 128, new_array(Vert, 6 * 128));
     }
 
     boxf status_area = get_status_area();
@@ -6313,8 +6313,8 @@ void UI::draw_everything() {
 
                     auto p = make_path(path);
                     int base_index = -1;
-                    auto prefix_parts = alloc_list<ccstr>();
-                    auto label_parts  = alloc_list<ccstr>();
+                    auto prefix_parts = new_list(ccstr);
+                    auto label_parts  = new_list(ccstr);
 
                     Fori (p->parts) {
                         auto part = it;
@@ -6683,7 +6683,7 @@ void UI::draw_everything() {
                         next_search_match = 0;
             }
 
-            auto goroutines_hit = alloc_list<Dlv_Goroutine*>();
+            auto goroutines_hit = new_list(Dlv_Goroutine*);
             u32 current_goroutine_id = 0;
             Dlv_Goroutine *current_goroutine = NULL;
             Dlv_Frame *current_frame = NULL;
@@ -6762,7 +6762,7 @@ void UI::draw_everything() {
             ast_navigation.start = new_cur2(0, 0);
             ast_navigation.end = new_cur2(0, 0);
             ast_navigation.curr_sib = 0;
-            ast_navigation.siblings = alloc_list<Ast_Node*>();
+            ast_navigation.siblings = new_list(Ast_Node*);
 
             do {
                 auto &nav = editor->ast_navigation;
@@ -6807,7 +6807,7 @@ void UI::draw_everything() {
             for (u32 y = 0; y < view.y; y++)
                 byte_offset += buf->bytecounts[y];
 
-            auto grapheme_codepoints = alloc_list<uchar>();
+            auto grapheme_codepoints = new_list(uchar);
 
             auto relative_y = 0;
             for (u32 y = view.y; y < view.y + view.h && y < buf->lines.len; y++, relative_y++) {
@@ -7112,7 +7112,7 @@ void UI::draw_everything() {
                     case TS_TYPE_DECLARATION:
                     case TS_TYPE_ALIAS:
                     case TS_SHORT_VAR_DECLARATION:
-                        toplevel = alloc_object(Ast_Node);
+                        toplevel = new_object(Ast_Node);
                         memcpy(toplevel, it, sizeof(Ast_Node));
                         return WALK_ABORT;
                     }
@@ -7173,7 +7173,7 @@ void UI::draw_everything() {
                     if (cp_idx >= line.len) break;
 
                     // collect the entire grapheme cluster
-                    auto grapheme = alloc_list<uchar>();
+                    auto grapheme = new_list(uchar);
                     do {
                         auto uch = line[cp_idx];
                         grapheme->append(uch);
@@ -7380,7 +7380,7 @@ void UI::draw_everything() {
                 wnd.mem.init();
                 {
                     SCOPED_MEM(&wnd.mem);
-                    wnd.logs = alloc_list<Drawn_Quad>();
+                    wnd.logs = new_list(Drawn_Quad);
                 }
                 wnd.selected_quad = -1;
                 wnd.tracking = true;
@@ -8181,7 +8181,7 @@ Pane_Areas* UI::get_pane_areas(boxf* pane_area, bool has_tabs) {
     scrollbar_area.x = editor_area.x + editor_area.w - scrollbar_area.w;
     editor_area.w -= scrollbar_area.w;
 
-    auto ret = alloc_object(Pane_Areas);
+    auto ret = new_object(Pane_Areas);
     ret->editor_area = editor_area;
     ret->preview_area = preview_area;
     ret->preview_margin = preview_margin;
@@ -8191,7 +8191,7 @@ Pane_Areas* UI::get_pane_areas(boxf* pane_area, bool has_tabs) {
 }
 
 void UI::recalculate_view_sizes(bool force) {
-    auto new_sizes = alloc_list<vec2f>();
+    auto new_sizes = new_list(vec2f);
 
     float total = 0;
     For (&world.panes) total += it.width;
@@ -8284,7 +8284,7 @@ Font* UI::acquire_font(ccstr name, bool dont_check) {
     SCOPED_MEM(&world.ui_mem);
     Frame frame;
 
-    font = alloc_object(Font);
+    font = new_object(Font);
     if (!font->init(name, CODE_FONT_SIZE, dont_check)) {
         frame.restore();
         // error("unable to acquire font: %s", name);

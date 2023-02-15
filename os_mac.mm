@@ -21,7 +21,7 @@ static ccstr cfstring_to_ccstr(CFStringRef s) {
 
     Frame frame;
 
-    auto ret = alloc_array(char, maxsize);
+    auto ret = new_array(char, maxsize);
     if (!CFStringGetCString(s, ret, maxsize, kCFStringEncodingUTF8)) {
         frame.restore();
         return NULL;
@@ -230,7 +230,7 @@ Font_Data *load_font_data_from_ctfont(CTFontRef ctfont) {
     auto fm = map_file_into_memory(cfstring_to_ccstr(cffilepath));
     if (!fm) return NULL;
 
-    auto ret = alloc_object(Font_Data);
+    auto ret = new_object(Font_Data);
     ret->type = FONT_DATA_MMAP;
     ret->fm = fm;
     return ret;

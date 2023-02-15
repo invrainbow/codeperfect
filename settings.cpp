@@ -9,8 +9,8 @@ Project_Settings project_settings;
 
 void Project_Settings::load_defaults() {
     ptr0(this);
-    build_profiles = alloc_list<Build_Profile>();
-    debug_profiles = alloc_list<Debug_Profile>();
+    build_profiles = new_list(Build_Profile);
+    debug_profiles = new_list(Debug_Profile);
 
     // This is designed so that debug/build profiles is never empty, and
     // active_debug_profile/active_build_profile always points to a valid profile.

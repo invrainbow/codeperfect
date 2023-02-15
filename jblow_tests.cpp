@@ -183,9 +183,9 @@ void Jblow_Tests::move_cursor(cur2 cur) {
 }
 
 List<ccstr> *list_go_files(ccstr subfolder) {
-    auto go_files = alloc_list<ccstr>();
+    auto go_files = new_list(ccstr);
 
-    auto queue = alloc_list<ccstr>();
+    auto queue = new_list(ccstr);
     queue->append(subfolder);
 
     auto cwd = cp_getcwd();
@@ -320,7 +320,7 @@ void Jblow_Tests::run() {
 
         auto generate_inputs = [&](int seed, int n) {
             mt_seed32(seed);
-            auto ret = alloc_list<Input>();
+            auto ret = new_list(Input);
 
             auto add_char = [&](char c) {
                 Input it; ptr0(&it);
@@ -403,7 +403,7 @@ void Jblow_Tests::run() {
 
             WAIT { return buf->tree != NULL; };
 
-            auto iter = alloc_object(Parser_It);
+            auto iter = new_object(Parser_It);
             iter->init(buf);
             auto root = new_ast_node(ts_tree_root_node(buf->tree), iter);
 
@@ -412,7 +412,7 @@ void Jblow_Tests::run() {
                 ccstr name;
             };
 
-            auto targets = alloc_list<Target>();
+            auto targets = new_list(Target);
 
             walk_ast_node(root, true, [&](auto it, auto, auto) {
                 switch (it->type()) {
@@ -542,7 +542,7 @@ void Jblow_Tests::run() {
 
             WAIT { return buf->tree != NULL; };
 
-            auto iter = alloc_object(Parser_It);
+            auto iter = new_object(Parser_It);
             iter->init(buf);
             auto root = new_ast_node(ts_tree_root_node(buf->tree), iter);
 
@@ -567,7 +567,7 @@ void Jblow_Tests::run() {
                 ccstr name;
             };
 
-            auto targets = alloc_list<Target>();
+            auto targets = new_list(Target);
 
             walk_ast_node(root, true, [&](auto it, auto, auto) {
                 switch (it->type()) {

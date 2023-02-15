@@ -116,7 +116,7 @@ struct Serde {
         auto len = read_int();
         if (!ok) return NULL;
 
-        auto ret = alloc_list<T>();
+        auto ret = new_list(T);
         for (u32 i = 0; i < len; i++) {
             T obj;
             read_type(&obj, type);

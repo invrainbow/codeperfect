@@ -13,8 +13,8 @@ void test_diff() {
     auto run = [&](ccstr a, ccstr b) {
         print("diff \"%s\" \"%s\"", a, b);
 
-        auto al = alloc_list<uchar>();
-        auto bl = alloc_list<uchar>();
+        auto al = new_list(uchar);
+        auto bl = new_list(uchar);
         for (auto p = a; *p != '\0'; p++) al->append(*p);
         for (auto p = b; *p != '\0'; p++) bl->append(*p);
 
@@ -349,10 +349,10 @@ void profile_parser() {
         {
             SCOPED_MEM(&file.pool);
             file.filename = cp_strdup(it);
-            file.scope_ops = alloc_list<Go_Scope_Op>();
-            file.decls = alloc_list<Godecl>();
-            file.imports = alloc_list<Go_Import>();
-            file.references = alloc_list<Go_Reference>();
+            file.scope_ops = new_list(Go_Scope_Op);
+            file.decls = new_list(Godecl);
+            file.imports = new_list(Go_Import);
+            file.references = new_list(Go_Reference);
         }
 
         ccstr pkgname = NULL;

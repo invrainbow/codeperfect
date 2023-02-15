@@ -261,27 +261,29 @@ struct Pool {
 extern thread_local Pool *MEM;
 extern thread_local bool use_pool_for_tree_sitter;
 
-void* _alloc_memory(size_t size, bool zero);
+void* _alloc_mem(size_t size, bool zero);
 
-#define alloc_memory(n) _alloc_memory(n, true)
-#define alloc_array(T, n) (T *)alloc_memory(sizeof(T) * (n))
-#define alloc_object(T) alloc_array(T, 1)
+#define alloc_mem(n) _alloc_mem(n, true)
+#define new_array(T, n) (T *)alloc_mem(sizeof(T) * (n))
+#define new_object(T) new_array(T, 1)
 
 template <typename T>
 void alloc_list(List<T>* list, s32 len) {
-    list->init(LIST_FIXED, len, alloc_array(T, len));
+    list->init(LIST_FIXED, len, new_array(T, len));
 }
 
 template <typename T>
 List<T>* alloc_list(s32 len) {
-    auto ret = alloc_object(List<T>);
+    auto ret = new_object(List<T>);
     alloc_list(ret, len);
     return ret;
 }
 
+#define new_list(t, ...) alloc_list<t>(__VA_ARGS__)
+
 template <typename T>
 List<T>* alloc_list() {
-    auto ret = alloc_object(List<T>);
+    auto ret = new_object(List<T>);
     ret->init();
     return ret;
 }

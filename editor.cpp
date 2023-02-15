@@ -44,7 +44,7 @@ done:
     }
 
     // copy first `copy_spaces_until` chars of line y
-    auto ret = alloc_list<char>();
+    auto ret = new_list(char);
     for (u32 x = 0; x < copy_spaces_until; x++)
         ret->append((char)line[x]); // has to be ' ' or '\t'
 
@@ -128,7 +128,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 copy_spaces_until = x;
             }
 
-            auto ret = alloc_list<char>(copy_spaces_until + 1);
+            auto ret = new_list(char, copy_spaces_until + 1);
 
             // copy first `copy_spaces_until` chars of line y
             for (u32 x = 0; x < copy_spaces_until; x++)
@@ -621,12 +621,12 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
         auto import_to_add = see_if_we_need_autoimport();
         if (import_to_add) {
-            auto iter = alloc_object(Parser_It);
+            auto iter = new_object(Parser_It);
             iter->init(buf);
             auto root = new_ast_node(ts_tree_root_node(buf->tree), iter);
 
             Ast_Node *package_node = NULL;
-            auto import_nodes = alloc_list<Ast_Node*>();
+            auto import_nodes = new_list(Ast_Node*);
 
             FOR_NODE_CHILDREN (root) {
                 if (it->type() == TS_PACKAGE_CLAUSE) {
@@ -641,7 +641,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
                 auto already_exists = [&]() {
                     For (import_nodes) {
-                        auto imports = alloc_list<Go_Import>();
+                        auto imports = new_list(Go_Import);
                         world.indexer.import_decl_to_goimports(it, imports);
 
                         auto imp = imports->find([&](auto it) { return streq(it->import_path, import_to_add); });
@@ -661,7 +661,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 rend.write("\"%s\"\n", import_to_add);
                 {
                     if (firstnode && cur > firstnode->end()) {
-                        auto imports = alloc_list<Go_Import>();
+                        auto imports = new_list(Go_Import);
                         world.indexer.import_decl_to_goimports(firstnode, imports);
 
                         For (imports) {
@@ -703,7 +703,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 }
                 new_end = start;
 
-                auto chars = alloc_list<uchar>();
+                auto chars = new_list(uchar);
                 if (!firstnode) {
                     // add two newlines, it's going after the package decl
                     chars->append('\n');
@@ -786,7 +786,7 @@ bool Editor::is_current_editor() {
 }
 
 Move_Cursor_Opts *default_move_cursor_opts() {
-    auto ret = alloc_object(Move_Cursor_Opts);
+    auto ret = new_object(Move_Cursor_Opts);
 
     // set defaults
     ret->dont_add_to_history = false;
@@ -1303,7 +1303,7 @@ void Editor::init() {
     {
         SCOPED_MEM(&mem);
         postfix_stack.init();
-        buf = alloc_object(Buffer);
+        buf = new_object(Buffer);
     }
 
     ast_navigation.mem.init("ast_navigation mem");
@@ -1312,7 +1312,7 @@ void Editor::init() {
 void Editor::update_selected_ast_node(Ast_Node *node) {
     auto &nav = ast_navigation;
 
-    auto prev_siblings = alloc_list<Ast_Node*>();
+    auto prev_siblings = new_list(Ast_Node*);
     for (auto curr = node->prev(); !isastnull(curr); curr = curr->prev())
         prev_siblings->append(curr);
 
@@ -1504,7 +1504,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             SCOPED_MEM(&world.autocomplete_mem);
 
             // copy results
-            auto new_results = alloc_list<AC_Result>(ac.results->len);
+            auto new_results = new_list(AC_Result, ac.results->len);
             For (ac.results) {
                 auto r = new_results->append();
                 memcpy(r, it.copy(), sizeof(AC_Result));
@@ -1512,7 +1512,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
 
             // copy ac over to autocomplete.ac
             memcpy(&autocomplete.ac, &ac, sizeof(Autocomplete));
-            autocomplete.filtered_results = alloc_list<int>();
+            autocomplete.filtered_results = new_list(int);
             autocomplete.ac.prefix = cp_strdup(ac.prefix);
             autocomplete.ac.results = new_results;
         }
@@ -1547,7 +1547,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             int str_length;
         };
 
-        auto cache = alloc_array(Cached_Stuff, results->len);
+        auto cache = new_array(Cached_Stuff, results->len);
         auto filtered_results = autocomplete.filtered_results;
 
         // lazy load expensive operations
@@ -1742,7 +1742,7 @@ void Editor::update_parameter_hint() {
         find_nodes_containing_pos(pf.root, cur, true, [&](auto it) {
             if (it->type() == TS_ARGUMENT_LIST) {
                 if (!arglist)
-                    arglist = alloc_object(Ast_Node);
+                    arglist = new_object(Ast_Node);
                 memcpy(arglist, it, sizeof(Ast_Node));
             }
             return WALK_CONTINUE;
@@ -1750,7 +1750,7 @@ void Editor::update_parameter_hint() {
 
         if (!arglist) return;
 
-        auto commas = alloc_list<cur2>();
+        auto commas = new_list(cur2);
 
         FOR_ALL_NODE_CHILDREN (arglist) {
             if (it->type() == TS_COMMA)
@@ -1889,7 +1889,7 @@ void Editor::type_char_in_insert_mode(uchar ch) {
 
         auto root_node = new_ast_node(ts_tree_root_node(buf->tree), &it);
 
-        Ast_Node *rbrace_node = alloc_object(Ast_Node);
+        Ast_Node *rbrace_node = new_object(Ast_Node);
         bool rbrace_found = false;
 
         find_nodes_containing_pos(root_node, rbrace_pos, false, [&](auto it) {
@@ -1925,7 +1925,7 @@ void Editor::type_char_in_insert_mode(uchar ch) {
             if (node->is_missing()) return;
 
             SCOPED_FRAME();
-            auto children = alloc_list<Ast_Node*>(node->all_child_count());
+            auto children = new_list(Ast_Node*, node->all_child_count());
             FOR_ALL_NODE_CHILDREN (node) children->append(it);
             for (; children->len > 0; children->len--)
                 process_node(*children->last());
@@ -1946,7 +1946,7 @@ void Editor::type_char_in_insert_mode(uchar ch) {
 
         if (lbrace_line == -1) break;
 
-        auto indentation = alloc_list<uchar>();
+        auto indentation = new_list(uchar);
         For (&buf->lines[lbrace_line]) {
             if (it == '\t' || it == ' ')
                 indentation->append(it);
@@ -2070,7 +2070,7 @@ bool Editor::optimize_imports() {
 
     // add imports into the file
     do {
-        auto iter = alloc_object(Parser_It);
+        auto iter = new_object(Parser_It);
         iter->init(buf);
         auto root = new_ast_node(ts_tree_root_node(buf->tree), iter);
 
@@ -2078,10 +2078,10 @@ bool Editor::optimize_imports() {
         Ast_Node *first_imports_node = NULL;
         Ast_Node *last_imports_node = NULL;
 
-        auto cgo_imports = alloc_list<Ast_Node*>();
+        auto cgo_imports = new_list(Ast_Node*);
 
         auto is_cgo_import = [&](Ast_Node *it) {
-            auto imports = alloc_list<Go_Import>();
+            auto imports = new_list(Go_Import);
             world.indexer.import_decl_to_goimports(it, imports);
             return imports->len == 1 && streq(imports->at(0).import_path, "C");
         };
@@ -2115,7 +2115,7 @@ bool Editor::optimize_imports() {
                 last_imports_node = first_imports_node;
         }
 
-        auto cgo_imports_text = alloc_list<char>();
+        auto cgo_imports_text = new_list(char);
 
         For (cgo_imports) {
             auto startnode = it;
@@ -2189,7 +2189,7 @@ bool Editor::optimize_imports() {
             old_end = package_node->end();
         }
 
-        auto chars = alloc_list<uchar>();
+        auto chars = new_list(uchar);
         if (!first_imports_node) {
             // add two newlines, it's going after the package decl
             chars->append('\n');
@@ -2403,7 +2403,7 @@ void Editor::toggle_comment(int ystart, int yend) {
             }
         }
 
-        auto ret = alloc_list<uchar>();
+        auto ret = new_list(uchar);
         if (x != -1)
             for (int i = x; i < line->len; i++)
                 ret->append(line->at(i));

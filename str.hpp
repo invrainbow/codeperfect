@@ -7,7 +7,7 @@ struct Str {
     u32 len;
 
     void _copy_string(ccstr source, int len) {
-        auto ret = alloc_array(char, len+1);
+        auto ret = new_array(char, len+1);
         memcpy(ret, source, len);
         return ret;
     }
@@ -32,7 +32,7 @@ struct Str {
     Str concat(Str b) {
         Str ret = {0};
         ret.len = len + b.len;
-        ret.s = alloc_array(char, ret.len + 1);
+        ret.s = new_array(char, ret.len + 1);
         memcpy(ret.s, s, len);
         memcpy(ret.s + len, b.s, b.len);
         return ret;

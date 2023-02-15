@@ -1122,7 +1122,7 @@ int realmain(int argc, char **argv) {
 
     {
         SCOPED_MEM(&world.world_mem);
-        world.window = alloc_object(Window);
+        world.window = new_object(Window);
     }
 
     auto init_glew = []() -> bool {
@@ -1667,7 +1667,7 @@ int realmain(int argc, char **argv) {
             world.fst_mem.reset();
             SCOPED_MEM(&world.fst_mem);
             world.fst.init("frameskip");
-            world.fst.log_output = alloc_list<char>();
+            world.fst.log_output = new_list(char);
         }
 
         {

@@ -11,7 +11,7 @@ ccstr normalize_path_sep(ccstr path, char sep) {
     if (!sep) sep = PATH_SEP;
 
     auto len = strlen(path);
-    auto ret = alloc_array(char, len+1);
+    auto ret = new_array(char, len+1);
 
     for (u32 i = 0; i < len; i++)
         ret[i] = is_sep(path[i]) ? sep : path[i];
@@ -33,7 +33,7 @@ bool are_filepaths_equal(ccstr a, ccstr b) {
 File_Mapping *map_file_into_memory(ccstr path) {
     Frame frame;
 
-    auto fm = alloc_object(File_Mapping);
+    auto fm = new_object(File_Mapping);
     if (!fm->init(path)) {
         frame.restore();
         return NULL;
@@ -45,7 +45,7 @@ File_Mapping *map_file_into_memory(ccstr path) {
 File_Mapping *map_file_into_memory(ccstr path, File_Mapping_Opts *opts) {
     Frame frame;
 
-    auto fm = alloc_object(File_Mapping);
+    auto fm = new_object(File_Mapping);
     if (!fm->init(path, opts)) {
         frame.restore();
         return NULL;
@@ -59,7 +59,7 @@ Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title, ccstr yeslabel, 
 }
 
 ccstr cp_getcwd() {
-    auto ret = alloc_array(char, 256);
+    auto ret = new_array(char, 256);
     return getcwd(ret, 256);
 }
 
@@ -126,7 +126,7 @@ ccstr rel_to_abs_path(ccstr path, ccstr cwd) {
     if (cwd == NULL) {
         while (true) {
             Frame frame;
-            auto newcwd = alloc_array(char, size);
+            auto newcwd = new_array(char, size);
             if (getcwd(newcwd, size)) {
                 cwd = newcwd;
                 break;
@@ -140,7 +140,7 @@ ccstr rel_to_abs_path(ccstr path, ccstr cwd) {
     if (!len) return NULL;
 
     Frame frame;
-    auto ret = alloc_array(char, len+1);
+    auto ret = new_array(char, len+1);
 
     if (!cwk_path_get_absolute(cwd, path, ret, len+1)) {
         frame.restore();

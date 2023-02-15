@@ -939,7 +939,7 @@ struct Module_Resolver {
 
         if (create_if_not_found) {
             SCOPED_MEM(&mem);
-            auto ret = alloc_object(Trie_Node);
+            auto ret = new_object(Trie_Node);
             ret->next = node->children;
             ret->name = cp_strdup(name);
             node->children = ret;
@@ -972,7 +972,7 @@ struct Module_Resolver {
         for (u32 i = 0; i < slen; i++)
             len += (isupper(import_path[i]) ? 2 : 1);
 
-        auto new_filepath = alloc_array(char, len+1);
+        auto new_filepath = new_array(char, len+1);
         for (u32 i = 0, j = 0; i < slen; i++) {
             auto ch = import_path[i];
             if (isupper(ch)) {
@@ -1009,7 +1009,7 @@ struct Module_Resolver {
 
         if (!last_value) return NULL;
 
-        auto ret = alloc_list<ccstr>(parts->len - last_index + 1);
+        auto ret = new_list(ccstr, parts->len - last_index + 1);
         ret->append(last_value);
         for (u32 i = last_index; i < parts->len; i++)
             ret->append(parts->at(i));
@@ -1358,7 +1358,7 @@ T *read_object(Index_Stream *s) {
     // rebuild the index or something
     cp_assert(size == sizeof(T));
 
-    auto obj = alloc_object(T);
+    auto obj = new_object(T);
     s->readn(obj, size);
     obj->read(s);
     return obj;
@@ -1369,7 +1369,7 @@ List<T> *read_list(Index_Stream *s) {
     auto len = s->read4();
     if (len == -1) return NULL;
 
-    auto ret = alloc_object(List<T>);
+    auto ret = new_object(List<T>);
     ret->init(LIST_POOL, len);
     for (u32 i = 0; i < len; i++)
         ret->append(read_object<T>(s));
@@ -1381,7 +1381,7 @@ List<T*> *read_listp(Index_Stream *s) {
     auto len = s->read4();
     if (len == -1) return NULL;
 
-    auto ret = alloc_object(List<T*>);
+    auto ret = new_object(List<T*>);
     ret->init(LIST_POOL, len);
     for (u32 i = 0; i < len; i++)
         ret->append(read_object<T>(s));

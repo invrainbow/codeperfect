@@ -26,7 +26,7 @@ s32 uchar_to_cstr(uchar c, cstr out) {
 }
 
 char* uchar_to_cstr(uchar c) {
-    auto ret = alloc_array(char, 5);
+    auto ret = new_array(char, 5);
     auto len = uchar_to_cstr(c, ret);
     ret[len] = '\0';
     return ret;
@@ -173,7 +173,7 @@ bool Cstr_To_Ustr::feed(u8 ch) {
 List<uchar>* cstr_to_ustr(ccstr s) {
     Cstr_To_Ustr conv; conv.init();
 
-    auto ret = alloc_list<uchar>();
+    auto ret = new_list(uchar);
     for (int i = 0, len = strlen(s); i < len; i++) {
         if (conv.feed(s[i]))
             ret->append(conv.uch);
@@ -204,7 +204,7 @@ cur2 Buffer::hist_undo() {
 
     hist_curr = hist_dec(hist_curr);
 
-    auto arr = alloc_list<Change*>();
+    auto arr = new_list(Change*);
     for (auto it = history[hist_curr]; it; it = it->next)
         arr->append(it);
 
@@ -235,7 +235,7 @@ cur2 Buffer::hist_redo() {
 }
 
 ccstr Buffer::get_text(cur2 start, cur2 end) {
-    auto ret = alloc_list<char>();
+    auto ret = new_list(char);
     char tmp[4];
 
     // make sure start is valid
@@ -860,7 +860,7 @@ void Buffer::remove(cur2 start, cur2 end, bool applying_change) {
             change->new_end = it.pos;
 
             {
-                auto tmp = alloc_list<uchar>();
+                auto tmp = new_list(uchar);
                 For (&change->old_text)
                     tmp->append(it);
 
@@ -918,7 +918,7 @@ cur2 Buffer::dec_cur(cur2 c) {
 uchar* Buffer::alloc_temp_array(s32 size) {
     if (size > 1024)
         return (uchar*)cp_malloc(sizeof(uchar) * size);
-    return alloc_array(uchar, size);
+    return new_array(uchar, size);
 }
 
 void Buffer::free_temp_array(uchar* buf, s32 size) {

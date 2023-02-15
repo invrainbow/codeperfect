@@ -10,7 +10,7 @@
 
 template<typename T>
 T *clone(T *old) {
-    auto ret = alloc_object(T);
+    auto ret = new_object(T);
     memcpy(ret, old, sizeof(T));
     return ret;
 }
@@ -24,7 +24,7 @@ template <typename T>
 List<T> *copy_list(List<T> *arr, fn<T*(T* it)> copy_func) {
     if (!arr) return NULL;
 
-    auto new_arr = alloc_object(List<T>);
+    auto new_arr = new_object(List<T>);
     new_arr->init(LIST_POOL, max(arr->len, 1));
     For (arr) new_arr->append(copy_func(&it));
     return new_arr;
@@ -34,7 +34,7 @@ template <typename T>
 List<T> *copy_listp(List<T> *arr) {
     if (!arr) return NULL;
 
-    auto new_arr = alloc_object(List<T>);
+    auto new_arr = new_object(List<T>);
     new_arr->init(LIST_POOL, max(arr->len, 1));
     For (arr) new_arr->append(copy_object(it));
     return new_arr;
@@ -50,7 +50,7 @@ List<T> *copy_list(List<T> *arr) {
 List<ccstr> *copy_string_list(List<ccstr> *arr) {
     if (!arr) return NULL;
 
-    auto new_arr = alloc_object(List<ccstr>);
+    auto new_arr = new_object(List<ccstr>);
     new_arr->init(LIST_POOL, max(arr->len, 1));
     For (arr) new_arr->append(cp_strdup(it));
     return new_arr;
@@ -60,7 +60,7 @@ template <typename T>
 List<T> *copy_raw_list(List<T> *arr) {
     if (!arr) return NULL;
 
-    auto new_arr = alloc_object(List<T>);
+    auto new_arr = new_object(List<T>);
     new_arr->init(LIST_POOL, max(arr->len, 1));
     new_arr->concat(arr);
     return new_arr;
@@ -307,7 +307,7 @@ Go_Package *Go_Package::copy() {
     ret->import_path = cp_strdup(import_path);
     ret->package_name = cp_strdup(package_name);
 
-    auto new_files = alloc_object(List<Go_File>);
+    auto new_files = new_object(List<Go_File>);
     new_files->init(LIST_POOL, max(ret->files->len, 1));
     For (ret->files) {
         auto gofile = new_files->append();

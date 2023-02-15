@@ -34,13 +34,13 @@ int index_of(DString big, DString small, int start = 0) {
 
 List<Diff> *diff_compute(DString a, DString b) {
     if (!a.len()) {
-        auto ret = alloc_list<Diff>();
+        auto ret = new_list(Diff);
         add_diff(ret, DIFF_INSERT, b);
         return ret;
     }
 
     if (!b.len()) {
-        auto ret = alloc_list<Diff>();
+        auto ret = new_list(Diff);
         add_diff(ret, DIFF_DELETE, a);
         return ret;
     }
@@ -50,7 +50,7 @@ List<Diff> *diff_compute(DString a, DString b) {
 
     int i = index_of(big, small);
     if (i != -1) {
-        auto ret = alloc_list<Diff>();
+        auto ret = new_list(Diff);
         bool abig = a.len() > b.len();
         add_diff(ret, abig ? DIFF_DELETE : DIFF_INSERT, big.slice(0, i));
         if (abig)
@@ -62,7 +62,7 @@ List<Diff> *diff_compute(DString a, DString b) {
     }
 
     if (small.len() == 1) {
-        auto ret = alloc_list<Diff>();
+        auto ret = new_list(Diff);
         add_diff(ret, DIFF_DELETE, a);
         add_diff(ret, DIFF_INSERT, b);
     }
@@ -81,7 +81,7 @@ List<Diff> *diff_compute(DString a, DString b) {
         auto diffs_a = diff_main(text1_a, text2_a);
         auto diffs_b = diff_main(text1_b, text2_b);
 
-        auto ret = alloc_list<Diff>();
+        auto ret = new_list(Diff);
         For (diffs_a) ret->append(&it);
         add_diff(ret, DIFF_SAME, mid_common);
         For (diffs_b) ret->append(&it);
@@ -93,7 +93,7 @@ List<Diff> *diff_compute(DString a, DString b) {
 
 List<Diff> *diff_main(DString a, DString b) {
     if (a.equals(b)) {
-        auto ret = alloc_list<Diff>();
+        auto ret = new_list(Diff);
         if (a.len() > 0)
             add_diff(ret, DIFF_SAME, a);
         return ret;
@@ -109,7 +109,7 @@ List<Diff> *diff_main(DString a, DString b) {
 
     auto diffs = diff_compute(a, b);
 
-    auto ret = alloc_list<Diff>();
+    auto ret = new_list(Diff);
     if (prefix.len() > 0) add_diff(ret, DIFF_SAME, prefix);
     For (diffs) ret->append(&it);
     if (suffix.len() > 0) add_diff(ret, DIFF_SAME, suffix);
@@ -124,8 +124,8 @@ List<Diff> *diff_bisect(DString a, DString b) {
     auto voff = maxd;
     auto vlen = maxd*2;
 
-    List<int> v1; v1.init(LIST_FIXED, vlen, alloc_array(int, vlen));
-    List<int> v2; v2.init(LIST_FIXED, vlen, alloc_array(int, vlen));
+    List<int> v1; v1.init(LIST_FIXED, vlen, new_array(int, vlen));
+    List<int> v2; v2.init(LIST_FIXED, vlen, new_array(int, vlen));
     for (int i = 0; i < vlen; i++) {
         v1[i] = -1;
         v2[i] = -1;
@@ -198,7 +198,7 @@ List<Diff> *diff_bisect(DString a, DString b) {
         }
     }
 
-    auto ret = alloc_list<Diff>();
+    auto ret = new_list(Diff);
     add_diff(ret, DIFF_DELETE, a);
     add_diff(ret, DIFF_INSERT, b);
     return ret;
@@ -208,7 +208,7 @@ List<Diff> *diff_bisect_split(DString a, DString b, int x, int y) {
     auto diffs = diff_main(a.slice(0, x), b.slice(0, y));
     auto diffsb = diff_main(a.slice(x), b.slice(y));
 
-    auto ret = alloc_list<Diff>();
+    auto ret = new_list(Diff);
     For (diffs) ret->append(&it);
     For (diffsb) ret->append(&it);
     return ret;
@@ -272,7 +272,7 @@ Half_Match *diff_half_match(DString a, DString b) {
 
         if (best_common.len() * 2 < big.len()) return NULL;
 
-        auto ret = alloc_object(Half_Match);
+        auto ret = new_object(Half_Match);
         ret->big_prefix = best_big_a;
         ret->big_suffix = best_big_b;
         ret->small_prefix = best_small_a;
