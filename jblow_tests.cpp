@@ -267,31 +267,33 @@ void Jblow_Tests::run() {
         ccstr chars = (
             "KKKKKKKKKKKKKK"                // does nothing in normal mode
             "aioaioaioaio"                  // enter insert mode
+            "jkjkjkjkjkjkjkkjkjkjk"         // vertical movement
             "\x01\x01\x01\x01\x01\x01\x01"  // escape
             "\x02\x02\x02\x02\x02\x02\x02"  // backspace
+            "\x03\x03\x03\x03\x03"          // delete lines
             "\n\n\n\n\n\n"                  // new line
         );
 
         int chars_len = strlen(chars);
 
-        auto generate_inputs = [&](int seed, int n) -> List<char>* {
-            mt_seed32(seed);
-            auto ret = alloc_list<char>();
-            for (int i = 0; i < n; i++)
-                ret->append(chars[mt_lrand() % chars_len]);
-            return ret;
-        };
-
         for (int seed = 0; seed < 16; seed++) {
             // wait for editor
             auto editor = open_editor("main.go");
 
-            auto inputs = generate_inputs(seed, 500);
-            Fori (inputs) {
-                if (it == 0x01)        press_key(CP_KEY_ESCAPE);
-                else if (it == 0x02)   press_key(CP_KEY_BACKSPACE);
-                else if (it == '\n')   press_key(CP_KEY_ENTER);
-                else                   type_char(it);
+            for (int i = 0; i < 5000; i++) {
+                auto it = chars[mt_lrand() % chars_len];
+
+                if (it == 0x01)
+                    press_key(CP_KEY_ESCAPE);
+                else if (it == 0x02)
+                    press_key(CP_KEY_BACKSPACE);
+                else if (it == '\n')
+                    press_key(CP_KEY_ENTER);
+                else if (it == 0x03) {
+                    press_key(CP_KEY_ESCAPE);
+                    type_string(cp_sprintf("d%dd", 3 + mt_lrand() % 5));
+                } else
+                    type_char(it);
 
                 if (i % 10 == 0) sleep_milliseconds(25);
             }

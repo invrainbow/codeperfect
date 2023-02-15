@@ -21,7 +21,7 @@
             "program": "${workspaceFolder}/build/bin/ide",
             "args": [
                 "--jblow-tests",
-                "autocomplete",
+                "vim_fuzzer",
             ],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native",
