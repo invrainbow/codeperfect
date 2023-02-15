@@ -4,7 +4,6 @@
 #include "editor.hpp"
 #include "go.hpp"
 #include "mem.hpp"
-#include "nvim.hpp"
 #include "os.hpp"
 #include "world.hpp"
 #include "diff.hpp"

@@ -537,10 +537,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
         if (curr_postfix) {
             if (curr_postfix->insert_positions.len > 1) {
-                if (world.use_nvim)
-                    trigger_escape(curr_postfix->insert_positions[0]);
-                else
-                    move_cursor(curr_postfix->insert_positions[0]);
+                move_cursor(curr_postfix->insert_positions[0]);
                 curr_postfix->current_insert_position++;
             } else {
                 postfix_stack.len--;
@@ -700,8 +697,6 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 if (firstnode) {
                     start = firstnode->start();
                     old_end = firstnode->end();
-                    if (world.use_nvim)
-                        if (old_end.y >= nvim_insert.start.y) break;
                 } else {
                     start = package_node->end();
                     old_end = package_node->end();
@@ -778,34 +773,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
 }
 
 void Editor::add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end) {
-    if (world.use_nvim) {
-        auto change = nvim_insert.other_changes.append();
-        change->start = start;
-        change->end = old_end;
-
-        {
-            SCOPED_MEM(&nvim_insert.mem);
-
-            change->lines.init(LIST_POOL, new_end.y - start.y + 1);
-            for (int i = start.y; i <= new_end.y; i++) {
-                auto line = change->lines.append();
-                line->init(LIST_POOL, buf->lines[i].len);
-                line->len = buf->lines[i].len;
-                memcpy(line->items, buf->lines[i].items, sizeof(uchar) * line->len);
-            }
-        }
-
-        if (old_end.y >= nvim_insert.start.y)
-            cp_panic("can only add changes in insert mode before current change");
-    }
-
     auto dy = new_end.y - old_end.y;
-
-    if (world.use_nvim) {
-        nvim_insert.start.y += dy;
-        nvim_insert.old_end.y += dy;
-    }
-
     raw_move_cursor(new_cur2(cur.x, cur.y + dy));
 }
 
@@ -838,10 +806,7 @@ void Editor::raw_move_cursor(cur2 c, Move_Cursor_Opts *opts) {
 
     auto line_len = buf->lines[c.y].len;
     if (c.x > line_len) {
-        if (!world.use_nvim || world.nvim.mode == VI_INSERT)
-            c.x = line_len;
-        else
-            c.x = relu_sub(line_len, 1);
+        c.x = line_len;
     }
 
     cur = c;
@@ -883,7 +848,7 @@ void Editor::raw_move_cursor(cur2 c, Move_Cursor_Opts *opts) {
 
     // If we're not using nvim, then we're using this function to trigger
     // certain "on cursor move" actions
-    if (!world.use_nvim && opts->is_user_movement) {
+    if (opts->is_user_movement) {
         // clear out autocomplete
         ptr0(&autocomplete.ac);
 
@@ -984,30 +949,7 @@ void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, 
 }
 
 void Editor::move_cursor(cur2 c, Move_Cursor_Opts *opts) {
-    if (world.use_nvim && world.nvim.mode == VI_INSERT) {
-        nvim_data.waiting_for_move_cursor = true;
-        nvim_data.move_cursor_to = c;
-
-        // clear out last_closed_autocomplete
-        last_closed_autocomplete = new_cur2(-1, -1);
-
-        trigger_escape();
-        return;
-    }
-
     raw_move_cursor(c, opts);
-
-    if (world.use_nvim) {
-        auto& nv = world.nvim;
-        auto msgid = nv.start_request_message("nvim_win_set_cursor", 2);
-        nv.writer.write_int(nvim_data.win_id);
-        {
-            nv.writer.write_array(2);
-            nv.writer.write_int(cur.y + 1);
-            nv.writer.write_int(buf->idx_cp_to_byte(cur.y, cur.x));
-        }
-        nv.end_message();
-    }
 }
 
 void Editor::reset_state() {
@@ -1065,20 +1007,6 @@ void Editor::reload_file(bool because_of_file_watcher) {
 
     print("=== reloading %s", filepath);
     buf->read(fm, true);
-
-    if (world.use_nvim) {
-        nvim_data.got_initial_lines = false;
-
-        auto& nv = world.nvim;
-        nv.start_request_message("nvim_buf_set_lines", 5);
-        nv.writer.write_int(nvim_data.buf_id);
-        nv.writer.write_int(0);
-        nv.writer.write_int(-1);
-        nv.writer.write_bool(false);
-        nv.writer.write_array(buf->lines.len);
-        For (&buf->lines) nv.write_line(&it);
-        nv.end_message();
-    }
 }
 
 Parse_Lang determine_lang(ccstr filepath) {
@@ -1099,7 +1027,7 @@ bool Editor::load_file(ccstr new_filepath) {
         buf->cleanup();
 
     lang = determine_lang(new_filepath);
-    buf->init(&mem, lang, !world.use_nvim);
+    buf->init(&mem, lang, true);
     buf->editable_from_main_thread_only = true;
 
     FILE* f = NULL;
@@ -1129,16 +1057,6 @@ bool Editor::load_file(ccstr new_filepath) {
         uchar tmp = '\0';
         buf->insert(new_cur2(0, 0), &tmp, 0);
         buf->dirty = false;
-    }
-
-    if (world.use_nvim) {
-        auto& nv = world.nvim;
-        auto msgid = nv.start_request_message("nvim_create_buf", 2);
-        nv.save_request(NVIM_REQ_CREATE_BUF, msgid, id);
-
-        nv.writer.write_bool(false);
-        nv.writer.write_bool(true);
-        nv.end_message();
     }
 
     auto &b = world.build;
@@ -1306,221 +1224,6 @@ bool Editor::trigger_escape(cur2 go_here_after) {
         parameter_hint.gotype = NULL;
     }
 
-    if (world.use_nvim && world.nvim.mode == VI_INSERT) {
-        auto &nv = world.nvim;
-        auto &writer = nv.writer;
-
-        /*
-        auto msgid = nv.start_request_message("nvim_buf_get_changedtick", 1);
-        auto req = nv.save_request(NVIM_REQ_POST_INSERT_GETCHANGEDTICK, msgid, id);
-        nv.writer.write_int(nvim_data.buf_id);
-        nv.end_message();
-        */
-
-        {
-            // skip next update from nvim
-            skip_next_nvim_update(nvim_insert.other_changes.len + 1);
-
-            auto start = nvim_insert.start;
-            auto old_end = nvim_insert.old_end;
-
-            u32 delete_len = nvim_insert.deleted_graphemes;
-
-            post_insert_dotrepeat_time = current_time_nano();
-
-            // set new lines
-            auto msgid = nv.start_request_message("nvim_call_atomic", 1);
-            nv.save_request(NVIM_REQ_POST_INSERT_DOTREPEAT_REPLAY, msgid, id);
-            {
-                writer.write_array(nvim_insert.other_changes.len + 8);
-
-                For (&nvim_insert.other_changes) {
-                    writer.write_array(2);
-                    writer.write_string("nvim_buf_set_lines");
-                    {
-                        writer.write_array(5);
-                        {
-                            writer.write_int(nvim_data.buf_id);
-                            writer.write_int(it.start.y);
-                            writer.write_int(it.end.y + 1);
-                            writer.write_bool(false);
-                            writer.write_array(it.lines.len);
-                            {
-                                For (&it.lines) nv.write_line(&it);
-                            }
-                        }
-                    }
-                }
-
-                writer.write_array(2);
-                writer.write_string("nvim_buf_set_lines");
-                {
-                    writer.write_array(5);
-                    {
-                        writer.write_int(nvim_data.buf_id);
-                        writer.write_int(start.y);
-                        writer.write_int(old_end.y + 1);
-                        writer.write_bool(false);
-                        writer.write_array(cur.y - start.y + 1);
-                        {
-                            for (u32 y = start.y; y <= cur.y; y++)
-                                nv.write_line(&buf->lines[y]);
-                        }
-                    }
-                }
-
-                writer.write_array(2);
-                writer.write_string("nvim_win_set_cursor");
-                {
-                    writer.write_array(2);
-                    {
-                        writer.write_int(nvim_data.win_id);
-                        writer.write_array(2);
-                        {
-                            nv.writer.write_int(cur.y + 1);
-                            nv.writer.write_int(buf->idx_cp_to_byte(cur.y, cur.x));
-                        }
-                    }
-                }
-
-                {
-                    writer.write_array(2);
-                    writer.write_string("nvim_set_option");
-                    {
-                        writer.write_array(2);
-                        writer.write_string("eventignore");
-                        writer.write_string("BufWinEnter,BufEnter,BufLeave");
-                    }
-                }
-
-                {
-                    writer.write_array(2);
-                    writer.write_string("nvim_set_current_win");
-                    {
-                        writer.write_array(1);
-                        writer.write_int(nv.dotrepeat_win_id);
-                    }
-                }
-
-                {
-                    writer.write_array(2);
-                    writer.write_string("nvim_set_option");
-                    {
-                        writer.write_array(2);
-                        writer.write_string("eventignore");
-                        writer.write_string("");
-                    }
-                }
-
-                {
-                    writer.write_array(2);
-                    writer.write_string("nvim_buf_set_lines");
-                    {
-                        writer.write_array(5);
-                        writer.write_int(nv.dotrepeat_buf_id);
-                        writer.write_int(0);
-                        writer.write_int(-1);
-                        writer.write_bool(false);
-                        {
-                            writer.write_array(1);
-                            writer.write1(MP_OP_STRING);
-                            writer.write4(delete_len);
-                            for (u32 i = 0; i < delete_len; i++)
-                                writer.write1('x');
-                        }
-                    }
-                }
-
-                {
-                    writer.write_array(2);
-                    writer.write_string("nvim_win_set_cursor");
-                    {
-                        writer.write_array(2);
-                        writer.write_int(nv.dotrepeat_win_id);
-                        {
-                            writer.write_array(2);
-                            writer.write_int(1);
-                            writer.write_int(delete_len);
-                        }
-                    }
-                }
-
-                {
-                    Text_Renderer r;
-                    r.init();
-
-                    for (u32 i = 0; i < delete_len; i++)
-                        r.writestr("<BS>");
-
-                    auto start = nvim_insert.start;
-
-                    // Honestly, this is such a stupid bandaid, but I still
-                    // don't know why sometimes nvim_insert.start has a value
-                    // that's out of bounds.
-                    //
-                    // I mean, it must be because buf->lines get changed after
-                    // nvim_insert.start is set, but I don't know why that
-                    // happens.
-
-                    if (start.y >= buf->lines.len) {
-                        start.y = buf->lines.len-1;
-                        start.x = buf->lines[start.y].len;
-                    }
-                    if (start.x > buf->lines[start.y].len)
-                        start.x = buf->lines[start.y].len;
-
-                    auto it = buf->iter(start);
-                    while (it.pos < cur) {
-                        // wait, does this take utf-8?
-                        auto ch = it.next();
-                        if (ch == '<') {
-                            r.writestr("<LT>");
-                        } else {
-                            char buf[4];
-                            auto len = uchar_to_cstr(ch, buf);
-                            for (int i = 0; i < len; i++)
-                                r.writechar(buf[i]);
-                        }
-                    }
-
-                    writer.write_array(2);
-                    writer.write_string("nvim_input");
-                    {
-                        writer.write_array(1);
-                        writer.write_string(r.finish());
-                    }
-                }
-            }
-
-            nv.end_message();
-
-            /*
-            // move cursor
-            {
-                auto c = cur;
-                if (c.x) {
-                    int gr_idx = buf->idx_cp_to_gr(c.y, c.x);
-                    c.x = buf->idx_gr_to_cp(c.y, relu_sub(gr_idx, 1));
-                }
-                raw_move_cursor(c);
-            }
-            */
-
-            // reset other_changes and mem
-            nvim_insert.other_changes.len = 0;
-            nvim_insert.mem.reset();
-        }
-
-        handled = true;
-
-        go_here_after_escape = go_here_after;
-        nv.exiting_insert_mode = true;
-        nv.editor_that_triggered_escape = id;
-    } else if (world.use_nvim && world.nvim.mode != VI_NORMAL) {
-        send_nvim_keys("<Esc>");
-        handled = true;
-    }
-
     return handled;
 }
 
@@ -1571,20 +1274,7 @@ Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos, bool pos_in_byte_format) 
     }
 
     if (pos.x != -1) {
-        if (editor.is_nvim_ready()) {
-            editor.move_cursor(cppos);
-        } else {
-            editor.nvim_data.need_initial_pos_set = true;
-            editor.nvim_data.initial_pos = cppos;
-            editor.raw_move_cursor(cppos);
-        }
-    }
-
-    if (world.nvim.current_win_id != editor.id) {
-        if (editor.nvim_data.win_id)
-            world.nvim.set_current_window(&editor);
-        else
-            world.nvim.waiting_focus_window = editor.id;
+        editor.move_cursor(cppos);
     }
 
     return &editor;
@@ -1597,18 +1287,6 @@ Editor* Pane::get_current_editor() {
     return &editors[current_editor];
 }
 
-bool Editor::is_nvim_ready() {
-    // will this fix things?
-    if (!world.use_nvim) return true;
-
-    return world.nvim.is_ui_attached
-        && nvim_data.is_buf_attached
-        && nvim_data.buf_id
-        && nvim_data.win_id
-        && nvim_data.got_initial_lines
-        && nvim_data.got_initial_cur;
-}
-
 void Editor::init() {
     ptr0(this);
     id = ++world.next_editor_id;
@@ -1618,11 +1296,9 @@ void Editor::init() {
     {
         SCOPED_MEM(&mem);
         postfix_stack.init();
-        nvim_insert.other_changes.init();
         buf = alloc_object(Buffer);
     }
 
-    nvim_insert.mem.init("nvim_insert mem");
     ast_navigation.mem.init("ast_navigation mem");
 }
 
@@ -1731,26 +1407,6 @@ void Editor::ast_navigate_next() {
 }
 
 void Editor::cleanup() {
-    auto &nv = world.nvim;
-
-    if (nvim_data.win_id) {
-        nv.start_request_message("nvim_win_close", 2);
-        nv.writer.write_int(nvim_data.win_id);
-        nv.writer.write_bool(true);
-        nv.end_message();
-    }
-
-    if (nvim_data.buf_id) {
-        nv.start_request_message("nvim_buf_delete", 2);
-        nv.writer.write_int(nvim_data.buf_id);
-        {
-            nv.writer.write_map(2);
-            nv.writer.write_string("force"); nv.writer.write_bool(true);
-            nv.writer.write_string("unload"); nv.writer.write_bool(false);
-        }
-        nv.end_message();
-    }
-
     buf->cleanup();
     mem.cleanup();
 
@@ -2347,10 +2003,6 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
     auto start = cur;
     auto zero = new_cur2(0, 0);
 
-    // does this just solve the whole stupid inconsistency thing?
-    if (start < nvim_insert.start)
-        nvim_insert.start = start;
-
     if (graphemes_to_erase > 0 && codepoints_to_erase > 0)
         cp_panic("backspace_in_insert_mode called with both graphemes and codepoints");
 
@@ -2360,11 +2012,6 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
 
             if (graphemes_to_erase > 0) graphemes_to_erase--;
             if (codepoints_to_erase > 0) codepoints_to_erase--;
-
-            if (start < nvim_insert.start) {
-                nvim_insert.start = start;
-                nvim_insert.deleted_graphemes++;
-            }
             continue;
         }
 
@@ -2393,18 +2040,6 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
                 start.x -= codepoints_to_erase;
                 codepoints_to_erase = 0;
             }
-        }
-
-        // if we backspaced PAST the last nvim_insert...
-        if (start < nvim_insert.start) {
-            // assert that we only acted on current line
-            cp_assert(start.y == nvim_insert.start.y);
-
-            int lo = buf->idx_cp_to_gr(start.y, start.x);
-            int hi = buf->idx_cp_to_gr(start.y, min(old_start, nvim_insert.start.x));
-            nvim_insert.deleted_graphemes += (hi - lo);
-
-            nvim_insert.start = start;
         }
     }
 
@@ -2571,26 +2206,12 @@ bool Editor::optimize_imports() {
 
             move_cursor(c); // use raw_move_cursor()?
         }
-
-        if (world.use_nvim) {
-            skip_next_nvim_update();
-
-            auto& nv = world.nvim;
-            nv.start_request_message("nvim_buf_set_lines", 5);
-            nv.writer.write_int(nvim_data.buf_id);
-            nv.writer.write_int(0);
-            nv.writer.write_int(-1);
-            nv.writer.write_bool(false);
-            nv.writer.write_array(buf->lines.len);
-            For (&buf->lines) nv.write_line(&it);
-            nv.end_message();
-        }
     } while (0);
 
     return true;
 }
 
-void Editor::format_on_save(bool fix_imports, bool write_to_nvim) {
+void Editor::format_on_save(bool fix_imports) {
     if (lang != LANG_GO) return; // any more checks needed?
 
     auto old_cur = cur;
@@ -2639,43 +2260,13 @@ void Editor::format_on_save(bool fix_imports, bool write_to_nvim) {
     buf->dirty = true;
 
     // we need to adjust cursor manually
-    if (!world.use_nvim) {
-        if (cur.y >= buf->lines.len) {
-            cur.y = buf->lines.len-1;
-            cur.x = buf->lines[cur.y].len;
-        }
-
-        if (cur.x > buf->lines[cur.y].len)
-            cur.x = buf->lines[cur.y].len;
+    if (cur.y >= buf->lines.len) {
+        cur.y = buf->lines.len-1;
+        cur.x = buf->lines[cur.y].len;
     }
 
-    if (world.use_nvim && write_to_nvim) {
-        auto &nv = world.nvim;
-        auto &writer = nv.writer;
-
-        skip_next_nvim_update();
-
-        auto msgid = nv.start_request_message("nvim_buf_set_lines", 5);
-        auto req = nv.save_request(NVIM_REQ_POST_SAVE_SETLINES, msgid, id);
-        req->post_save_setlines.cur = old_cur;
-
-        writer.write_int(nvim_data.buf_id);
-        writer.write_int(0);
-        writer.write_int(-1);
-        writer.write_bool(false);
-
-        writer.write_array(buf->lines.len);
-        For (&buf->lines) nv.write_line(&it);
-        nv.end_message();
-    }
-}
-
-void Editor::skip_next_nvim_update(int n) {
-    if (nvim_insert.skip_changedticks_until > nvim_data.changedtick) {
-        nvim_insert.skip_changedticks_until += n;
-    } else {
-        nvim_insert.skip_changedticks_until = nvim_data.changedtick + n;
-    }
+    if (cur.x > buf->lines[cur.y].len)
+        cur.x = buf->lines[cur.y].len;
 }
 
 void Editor::handle_save(bool about_to_close) {
@@ -2868,26 +2459,7 @@ void Editor::toggle_comment(int ystart, int yend) {
 
     buf->hist_batch_mode = false;
     move_cursor(new_cur);
-
-    if (world.use_nvim) {
-        skip_next_nvim_update();
-
-        auto& nv = world.nvim;
-        nv.start_request_message("nvim_buf_set_lines", 5);
-        nv.writer.write_int(nvim_data.buf_id);
-        nv.writer.write_int(ystart);
-        nv.writer.write_int(yend+1);
-        nv.writer.write_bool(false);
-        nv.writer.write_array(yend-ystart+1);
-        for (int y = ystart; y <= yend; y++)
-            nv.write_line(&buf->lines[y]);
-        nv.end_message();
-
-        // remove highlight
-        trigger_escape();
-    } else {
-        selecting = false;
-    }
+    selecting = false;
 }
 
 void Editor::highlight_snippet(cur2 start, cur2 end) {

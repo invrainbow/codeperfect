@@ -257,7 +257,6 @@ folder structure:
 	launcher*
 	bin/
 		ide*
-		nvim*
 		dynamic_gohelper.go
 		...
 	newbin/

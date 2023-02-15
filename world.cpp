@@ -85,7 +85,6 @@ void History::actually_go(History_Loc *it) {
 
     auto editor = find_editor_by_id(it->editor_id);
     if (!editor) return;
-    if (!editor->is_nvim_ready()) return;
 
     auto pos = it->mark->pos(); // it->pos
 
@@ -578,7 +577,6 @@ void World::init() {
 
     indexer.init();
     t.log("init indexer");
-    if (use_nvim) nvim.init();
     dbg.init();
     t.log("init debugger");
     history.init();
@@ -625,7 +623,6 @@ void World::init() {
 void World::start_background_threads() {
     indexer.start_background_thread();
 
-    if (use_nvim) nvim.start_running();
     dbg.start_loop();
 
 #ifdef DEBUG_BUILD
@@ -722,18 +719,6 @@ void activate_pane_by_index(u32 idx) {
     }
 
     world.current_pane = idx;
-
-    if (world.use_nvim) {
-        auto pane = get_current_pane();
-        if (pane->current_editor != -1)
-            pane->focus_editor_by_index(pane->current_editor);
-        /*
-        auto editor = pane->get_current_editor();
-        if (editor)
-            world.nvim.set_current_window(editor);
-        */
-    }
-
     world.cmd_unfocus_all_windows = true;
 }
 
@@ -2322,21 +2307,6 @@ void handle_command(Command cmd, bool from_menu) {
 
             editor->buf->hist_batch_mode = false;
             editor->highlight_snippet(result->highlight_start, result->highlight_end);
-
-            if (world.use_nvim) {
-                // TODO: refactor this
-                editor->skip_next_nvim_update();
-                auto& nv = world.nvim;
-                nv.start_request_message("nvim_buf_set_lines", 5);
-                nv.writer.write_int(editor->nvim_data.buf_id);
-                nv.writer.write_int(miny);
-                nv.writer.write_int(maxy+1);
-                nv.writer.write_bool(false);
-                nv.writer.write_array(maxy-miny+1);
-                for (int y = miny; y <= maxy; y++)
-                    nv.write_line(&editor->buf->lines[y]);
-                nv.end_message();
-            }
         }
         break;
     }
@@ -2346,34 +2316,17 @@ void handle_command(Command cmd, bool from_menu) {
         if (!editor) break;
         if (!editor->is_modifiable()) break;
 
-        if (world.use_nvim) {
-            if (world.nvim.mode == VI_INSERT) {
-                // TODO
-            } else {
-                if (world.nvim.mode == VI_VISUAL) {
-                    auto& nv = world.nvim;
-                    nv.start_request_message("nvim_call_function", 2);
-                    nv.writer.write_string("CPGetVisual");
-                    nv.writer.write_array(1);
-                    nv.writer.write_string("toggle_comment");
-                    nv.end_message();
-                } else {
-                    editor->toggle_comment(editor->cur.y, editor->cur.y);
-                }
+        if (editor->selecting) {
+            auto a = editor->select_start.y;
+            auto b = editor->cur.y;
+            if (a > b) {
+                auto tmp = a;
+                a = b;
+                b = tmp;
             }
+            editor->toggle_comment(a, b);
         } else {
-            if (editor->selecting) {
-                auto a = editor->select_start.y;
-                auto b = editor->cur.y;
-                if (a > b) {
-                    auto tmp = a;
-                    a = b;
-                    b = tmp;
-                }
-                editor->toggle_comment(a, b);
-            } else {
-                editor->toggle_comment(editor->cur.y, editor->cur.y);
-            }
+            editor->toggle_comment(editor->cur.y, editor->cur.y);
         }
         break;
     }
@@ -2424,8 +2377,6 @@ void handle_command(Command cmd, bool from_menu) {
     case CMD_UNDO:
     case CMD_REDO: {
         // TODO: handle this for vim too; do we just use `u` and `C-r`?
-        if (world.use_nvim) break;
-
         auto editor = get_current_editor();
         if (!editor) break;
 
@@ -2455,8 +2406,6 @@ void handle_command(Command cmd, bool from_menu) {
         break;
 
     case CMD_CLOSE_ALL_EDITORS: {
-        if (world.use_nvim) send_nvim_keys("<Esc>");
-
         auto &panes = world.panes;
         while (true) {
             auto pane = panes.last();
@@ -2497,8 +2446,6 @@ void handle_command(Command cmd, bool from_menu) {
             if (!world.dont_prompt_on_close_unsaved_tab)
                 if (!editor->ask_user_about_unsaved_changes())
                     break;
-
-            if (world.use_nvim) send_nvim_keys("<Esc>");
 
             editor->cleanup();
 
@@ -3329,20 +3276,6 @@ void do_generate_function() {
             } else {
                 ed->buf->insert(result->insert_pos, uchars->items, uchars->len);
             }
-
-            if (world.use_nvim) {
-                ed->skip_next_nvim_update();
-
-                auto& nv = world.nvim;
-                nv.start_request_message("nvim_buf_set_lines", 5);
-                nv.writer.write_int(ed->nvim_data.buf_id);
-                nv.writer.write_int(0);
-                nv.writer.write_int(-1);
-                nv.writer.write_bool(false);
-                nv.writer.write_array(ed->buf->lines.len);
-                For (&ed->buf->lines) nv.write_line(&it);
-                nv.end_message();
-            }
         } else {
             // otherwise, make the change on disk
             File_Replacer fr;
@@ -3855,13 +3788,6 @@ bool write_project_settings() {
     serde.init(&f);
     serde.write_type(&project_settings, SERDE_PROJECT_SETTINGS);
     return serde.ok;
-}
-
-void send_nvim_keys(ccstr s) {
-    auto& nv = world.nvim;
-    nv.start_request_message("nvim_input", 1);
-    nv.writer.write_string(s);
-    nv.end_message();
 }
 
 void clear_key_states() {

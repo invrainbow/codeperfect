@@ -20,7 +20,6 @@
 #include "fonts.hpp"
 #include "go.hpp"
 #include "list.hpp"
-#include "nvim.hpp"
 #include "os.hpp"
 #include "settings.hpp"
 #include "ui.hpp"
@@ -459,32 +458,10 @@ void handle_window_event(Window_Event *it) {
 
         auto editor = get_current_editor();
 
-        auto make_nvim_string = [&](ccstr s) {
-            List<ccstr> parts; parts.init();
-
-            if (keymods & CP_MOD_CMD)   parts.append("D");
-            if (keymods & CP_MOD_SHIFT) parts.append("S");
-            if (keymods & CP_MOD_ALT)   parts.append("A");
-            if (keymods & CP_MOD_CTRL)  parts.append("C");
-
-            Text_Renderer rend; rend.init();
-            For (&parts) rend.write("%s-", it);
-            rend.write("<%s>", s);
-            return rend.finish();
-        };
-
         auto handle_enter = [&]() {
             if (!editor) return;
 
-            if (world.use_nvim) {
-                if (world.nvim.mode != VI_INSERT) {
-                    send_nvim_keys(make_nvim_string("Enter"));
-                    return;
-                }
-            }
-
-            if (!world.use_nvim) editor->delete_selection();
-
+            editor->delete_selection();
             editor->type_char_in_insert_mode('\n');
 
             auto indent_chars = editor->get_autoindent(editor->cur.y);
@@ -500,13 +477,6 @@ void handle_window_event(Window_Event *it) {
                     auto idx = ac.filtered_results->at(ac.selection);
                     auto& result = ac.ac.results->at(idx);
                     editor->perform_autocomplete(&result);
-                    return;
-                }
-            }
-
-            if (world.use_nvim) {
-                if (world.nvim.mode != VI_INSERT) {
-                    send_nvim_keys(make_nvim_string("Tab"));
                     return;
                 }
             }
@@ -556,19 +526,7 @@ void handle_window_event(Window_Event *it) {
         auto handle_backspace = [&]() {
             if (!editor) return;
 
-            if (world.use_nvim) {
-                if (world.nvim.mode != VI_INSERT) {
-                    send_nvim_keys(make_nvim_string("Backspace"));
-                    return;
-                }
-
-                if (world.nvim.exiting_insert_mode) {
-                    world.nvim.chars_after_exiting_insert_mode.append('\b');
-                    return;
-                }
-            }
-
-            if (!world.use_nvim && editor->selecting) {
+            if (editor->selecting) {
                 editor->delete_selection();
             } else if (keymods & CP_MOD_TEXT) {
                 auto new_cur = alt_move(true, true);
@@ -630,7 +588,6 @@ void handle_window_event(Window_Event *it) {
         // =======================
 
         do {
-            if (world.use_nvim) break;
             if (!editor) break;
 
             bool handled = false;
@@ -883,7 +840,7 @@ void handle_window_event(Window_Event *it) {
             switch (key) {
             case CP_KEY_ESCAPE:
                 if (!editor) break;
-                if (!editor->trigger_escape()) send_nvim_keys("<S-Esc>");
+                editor->trigger_escape();
                 break;
             }
             break;
@@ -913,38 +870,13 @@ void handle_window_event(Window_Event *it) {
 
             case CP_KEY_ESCAPE:
                 if (!editor) break;
-                if (!editor->trigger_escape()) send_nvim_keys("<C-Esc>");
+                editor->trigger_escape();
                 break;
 
             case CP_KEY_TAB:
                 goto_next_tab();
                 break;
 
-            case CP_KEY_R:
-            case CP_KEY_O:
-            case CP_KEY_I:
-            case CP_KEY_D:
-            case CP_KEY_U:
-            case CP_KEY_B:
-#if !OS_WIN
-            case CP_KEY_F:
-#endif
-            case CP_KEY_E:
-            case CP_KEY_Y:
-            case CP_KEY_V:
-                if (world.use_nvim)
-                    if (world.nvim.mode != VI_INSERT)
-                        send_nvim_keys(cp_sprintf("<C-%c>", tolower((char)key)));
-                break;
-
-            case CP_KEY_SLASH: {
-                auto &nv = world.nvim;
-                nv.start_request_message("nvim_exec", 2);
-                nv.writer.write_string("nohlsearch");
-                nv.writer.write_bool(false);
-                nv.end_message();
-                break;
-            }
             case CP_KEY_SPACE: {
                 auto ed = get_current_editor();
                 if (!ed) break;
@@ -972,8 +904,7 @@ void handle_window_event(Window_Event *it) {
             switch (key) {
             case CP_KEY_ESCAPE:
                 if (!editor) break;
-                if (!editor->trigger_escape())
-                    send_nvim_keys("<C-S-Esc>");
+                editor->trigger_escape();
                 break;
             case CP_KEY_TAB:
                 goto_previous_tab();
@@ -998,8 +929,6 @@ void handle_window_event(Window_Event *it) {
                         editor->ast_navigate_next();
                     break;
                 }
-                if (world.use_nvim && world.nvim.mode != VI_INSERT)
-                    send_nvim_keys(key == CP_KEY_LEFT ? "<Left>" : "<Right>");
                 break;
 
             case CP_KEY_DOWN:
@@ -1012,21 +941,11 @@ void handle_window_event(Window_Event *it) {
                         editor->ast_navigate_prev();
                     break;
                 }
-                if (world.use_nvim) {
-                    if (world.nvim.mode == VI_INSERT) {
-                        if (!move_autocomplete_cursor(editor, key == CP_KEY_DOWN ? 1 : -1))  {
-                            // ???
-                        }
-                    } else {
-                        send_nvim_keys(key == CP_KEY_DOWN ? "<Down>" : "<Up>");
-                    }
-                }
                 break;
 
             case CP_KEY_ESCAPE:
                 if (!editor) break;
                 if (editor->trigger_escape()) break;
-                if (world.use_nvim) send_nvim_keys("<Esc>");
                 if (world.escape_flashes_cursor_red) editor->flash_cursor_error();
                 break;
             }
@@ -1045,37 +964,52 @@ void handle_window_event(Window_Event *it) {
                 break;
 #endif
 
-            case CP_KEY_A:
-                if (!world.use_nvim) {
-                    auto editor = get_current_editor();
-                    if (!editor) break;
+            case CP_KEY_A: {
+                auto editor = get_current_editor();
+                if (!editor) break;
 
-                    editor->select_start = new_cur2(0, 0);
+                editor->select_start = new_cur2(0, 0);
 
-                    auto buf = editor->buf;
-                    int y = buf->lines.len-1;
-                    int x = buf->lines[y].len;
-                    editor->raw_move_cursor(new_cur2(x, y));
+                auto buf = editor->buf;
+                int y = buf->lines.len-1;
+                int x = buf->lines[y].len;
+                editor->raw_move_cursor(new_cur2(x, y));
 
-                    if (editor->select_start != editor->cur)
-                        editor->selecting = true;
-                }
+                if (editor->select_start != editor->cur)
+                    editor->selecting = true;
                 break;
+            }
 
             case CP_KEY_C:
-            case CP_KEY_X:
-                if (world.use_nvim) {
-                    auto& nv = world.nvim;
-                    nv.start_request_message("nvim_call_function", 2);
-                    nv.writer.write_string("CPGetVisual");
-                    nv.writer.write_array(1);
-                    nv.writer.write_string("copy_visual");
-                    nv.end_message();
-                } else {
-                    auto editor = get_current_editor();
-                    if (!editor) break;
-                    if (!editor->selecting) break;
+            case CP_KEY_X: {
+                auto editor = get_current_editor();
+                if (!editor) break;
+                if (!editor->selecting) break;
 
+                auto a = editor->select_start;
+                auto b = editor->cur;
+                if (a > b) {
+                    auto tmp = a;
+                    a = b;
+                    b = tmp;
+                }
+
+                auto s = editor->buf->get_text(a, b);
+                world.window->set_clipboard_string(s);
+
+                if (key == CP_KEY_X) {
+                    editor->buf->remove(a, b);
+                    editor->selecting = false;
+                    editor->move_cursor(a);
+                }
+                break;
+            }
+
+            case CP_KEY_V: {
+                auto clipboard_contents = world.window->get_clipboard_string();
+                if (!clipboard_contents) break;
+
+                if (editor->selecting) {
                     auto a = editor->select_start;
                     auto b = editor->cur;
                     if (a > b) {
@@ -1084,39 +1018,14 @@ void handle_window_event(Window_Event *it) {
                         b = tmp;
                     }
 
-                    auto s = editor->buf->get_text(a, b);
-                    world.window->set_clipboard_string(s);
-
-                    if (key == CP_KEY_X) {
-                        editor->buf->remove(a, b);
-                        editor->selecting = false;
-                        editor->move_cursor(a);
-                    }
+                    editor->buf->remove(a, b);
+                    editor->raw_move_cursor(a);
+                    editor->selecting = false;
                 }
+
+                editor->insert_text_in_insert_mode(clipboard_contents);
                 break;
-
-            case CP_KEY_V:
-                if (!world.use_nvim || world.nvim.mode == VI_INSERT) {
-                    auto clipboard_contents = world.window->get_clipboard_string();
-                    if (!clipboard_contents) break;
-
-                    if (editor->selecting) {
-                        auto a = editor->select_start;
-                        auto b = editor->cur;
-                        if (a > b) {
-                            auto tmp = a;
-                            a = b;
-                            b = tmp;
-                        }
-
-                        editor->buf->remove(a, b);
-                        editor->raw_move_cursor(a);
-                        editor->selecting = false;
-                    }
-
-                    editor->insert_text_in_insert_mode(clipboard_contents);
-                }
-                break;
+            }
 
 #if 0
             // We need to rethink this, because cmd+k is now used for the
@@ -1166,62 +1075,7 @@ void handle_window_event(Window_Event *it) {
         auto ed = get_current_editor();
         if (!ed) return;
 
-        if (ed->ast_navigation.on) {
-            do {
-                if (mods != CP_MOD_NONE) break;
-                if (!world.use_nvim) break;
-
-                switch (tolower(ch)) {
-                case 's':
-                case 'c':
-                case 'x': {
-                    if (!world.use_nvim) break;
-
-                    auto &nav = ed->ast_navigation;
-
-                    if (nav.tree_version != ed->buf->tree_version) break;
-
-                    auto start = nav.node->start();
-                    auto end = nav.node->end();
-                    ed->buf->remove(start, end);
-
-                    ed->skip_next_nvim_update();
-
-                    auto& nv = world.nvim;
-                    nv.start_request_message("nvim_buf_set_lines", 5);
-                    nv.writer.write_int(ed->nvim_data.buf_id);
-                    nv.writer.write_int(start.y);
-                    nv.writer.write_int(end.y+1);
-                    nv.writer.write_bool(false);
-                    nv.writer.write_array(1);
-                    {
-                        nv.write_line(&ed->buf->lines[start.y]);
-                    }
-                    nv.end_message();
-
-                    nav.on = false;
-
-                    ed->move_cursor(start);
-
-                    if (tolower(ch) != 'x') send_nvim_keys("i");
-                    break;
-                }
-                }
-            } while (0);
-            return;
-        }
-
-        if (world.use_nvim) {
-            if (world.nvim.mode == VI_INSERT) {
-                if (world.nvim.exiting_insert_mode) {
-                    world.nvim.chars_after_exiting_insert_mode.append(ch);
-                } else {
-                    ed->type_char_in_insert_mode(ch);
-                }
-            } else {
-                send_nvim_keys(ch == '<' ? "<LT>" : uchar_to_cstr(ch));
-            }
-        } else if (ed->is_modifiable()) {
+        if (ed->is_modifiable()) {
             ed->delete_selection();
             ed->type_char_in_insert_mode(ch);
         }
@@ -1795,14 +1649,6 @@ int realmain(int argc, char **argv) {
 
         t.log("auth");
 
-        if (world.randomly_move_cursor_around) {
-            if (get_current_editor()) {
-                if (world.frame_index % 3 == 0) {
-                    send_nvim_keys(rand() % 2 == 0 ? "{" : "}");
-                }
-            }
-        }
-
         {
             GH_Message msg; ptr0(&msg);
             if (GHGetMessage(&msg)) {
@@ -1870,11 +1716,6 @@ int realmain(int argc, char **argv) {
                     break;
                 }
 
-                case MTM_NVIM_MESSAGE: {
-                    auto &nv = world.nvim;
-                    nv.handle_message_from_main_thread(&it.nvim_message);
-                    break;
-                }
                 case MTM_GOTO_FILEPOS:
                     goto_file_and_pos(it.goto_file, it.goto_pos);
                     break;
@@ -2043,16 +1884,6 @@ int realmain(int argc, char **argv) {
                         else
                             world.message_queue.end();
                     };
-
-                    int i = 0;
-                    while (i < messages->len) {
-                        auto &it = messages->at(i);
-                        if (it.type == MTM_NVIM_MESSAGE) {
-                            auto &nv = world.nvim;
-                            nv.handle_message_from_main_thread(&it.nvim_message);
-                            messages->remove(i);
-                        } else i++;
-                    }
 
                     // sleep what's rest of the 4 milliseconds
                     auto rem2 = timeleft();

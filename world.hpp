@@ -8,7 +8,6 @@
 #include "os.hpp"
 #include "go.hpp"
 #include "dbg.hpp"
-#include "nvim.hpp"
 #include "utils.hpp"
 #include "imgui.h"
 #include "mem.hpp"
@@ -50,7 +49,6 @@ struct FT_Node {
 };
 
 enum Main_Thread_Message_Type {
-    MTM_NVIM_MESSAGE,
     MTM_GOTO_FILEPOS,
     /**/
     MTM_FILETREE_DELETE,
@@ -71,7 +69,6 @@ struct Main_Thread_Message {
 
     union {
         int focus_app_debugger_pid;
-        Nvim_Message nvim_message;
         u32 reload_editor_id;
         struct {
             ccstr goto_file;
@@ -128,7 +125,6 @@ struct Build {
     bool done;
     bool started;
     List<Build_Error> errors;
-    u64 nvim_namespace_id;
     int current_error;
     bool build_itself_had_error;
     Thread_Handle thread;
@@ -411,8 +407,6 @@ struct World {
         return ret;
     }
 
-    bool use_nvim_this_time;
-
     int xdpi;
     int ydpi;
 
@@ -478,7 +472,6 @@ struct World {
 
     bool replace_line_numbers_with_bytecounts;
     bool turn_off_framerate_cap;
-    bool randomly_move_cursor_around;
     bool show_frame_index;
     bool trace_next_frame;
     bool show_frameskips;
@@ -873,7 +866,6 @@ void read_auth();
 void write_auth();
 
 bool write_project_settings();
-void send_nvim_keys(ccstr s);
 void clear_key_states();
 
 void fstlog(ccstr fmt, ...);

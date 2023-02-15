@@ -97,7 +97,6 @@ Editor* Jblow_Tests::wait_for_editor(ccstr relative_filepath) {
 
         ret = find_editor_by_filepath(abspath);
         if (!ret) return false;
-        if (world.use_nvim && !ret->is_nvim_ready()) return false;
 
         return true;
     };
@@ -231,10 +230,6 @@ void Jblow_Tests::run() {
     world.dont_prompt_on_close_unsaved_tab = true;
 
     while (!ready) sleep_milliseconds(10);
-
-    if (world.use_nvim) {
-        WAIT_FOR(10000) { return world.nvim.is_ui_attached; };
-    }
 
     {
         SCOPED_FRAME();

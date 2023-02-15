@@ -78,11 +78,11 @@ endif
 
 .PHONY: all test clean prep launcher
 
-all: build/bin/ide$(BINARY_SUFFIX) build/bin/init.vim build/bin/buildcontext.go
+all: build/bin/ide$(BINARY_SUFFIX) build/bin/buildcontext.go
 
 launcher: build/launcher$(BINARY_SUFFIX)
 
-test: build/bin/test build/bin/init.vim build/bin/buildcontext.go
+test: build/bin/test build/bin/buildcontext.go
 
 prep:
 	mkdir -p obj build/bin
@@ -158,6 +158,3 @@ enums.hpp: $(filter-out enums.hpp, $(wildcard *.hpp)) tstypes.hpp sh/generate_en
 
 build/bin/buildcontext.go: go/buildcontext/main.go
 	cp go/buildcontext/main.go build/bin/buildcontext.go
-
-build/bin/init.vim: init.vim
-	cp init.vim build/bin/init.vim

@@ -6,9 +6,6 @@
 #include "os.hpp"
 #include "tree_sitter_crap.hpp"
 
-#define NVIM_DEFAULT_WIDTH 200
-#define NVIM_DEFAULT_HEIGHT 500
-
 const int AUTOCOMPLETE_WINDOW_ITEMS = 10;
 
 #define MAX_BREAKPOINTS 128
@@ -106,7 +103,6 @@ struct Editor {
     u64 disable_file_watcher_until;
 
     bool saving;
-    char highlights[NVIM_DEFAULT_HEIGHT][NVIM_DEFAULT_WIDTH];
 
     cur2 go_here_after_escape;
 
@@ -118,49 +114,11 @@ struct Editor {
     bool ui_rect_set;
     boxf ui_rect;
 
-    struct {
-        bool is_buf_attached;
-        u32 buf_id;
-        u32 win_id;
-
-        bool got_initial_cur;
-        bool got_initial_lines;
-        bool need_initial_pos_set;
-        cur2 initial_pos;
-
-        bool waiting_for_move_cursor;
-        cur2 move_cursor_to;
-        int grid_topline;
-
-        cur2 post_insert_original_cur;
-
-        bool is_navigating;
-        cur2 navigating_to_pos;
-        int navigating_to_editor;
-
-        int changedtick;
-
-        cur2 visual_start;
-        cur2 visual_end;
-    } nvim_data;
-
     struct Insert_Change {
         cur2 start; // line
         cur2 end;
         List<Line> lines;
     };
-
-    struct {
-        Pool mem;
-
-        // current change
-        cur2 start;
-        cur2 old_end;
-        u32 deleted_graphemes;
-
-        List<Insert_Change> other_changes;
-        u32 skip_changedticks_until;
-    } nvim_insert;
 
     struct {
         Autocomplete ac;
@@ -183,7 +141,6 @@ struct Editor {
     void cleanup();
 
     bool is_unsaved() { return is_modifiable() && (file_was_deleted || buf->dirty); }
-    bool is_nvim_ready();
     bool is_modifiable();
 
     void raw_move_cursor(cur2 c, Move_Cursor_Opts *opts = NULL);
@@ -215,7 +172,7 @@ struct Editor {
     void update_lines(int firstline, int lastline, List<uchar*> *lines, List<s32> *line_lengths);
     bool trigger_escape(cur2 go_here_after = {-1, -1});
     bool optimize_imports();
-    void format_on_save(bool fix_imports, bool write_to_nvim = true);
+    void format_on_save(bool fix_imports);
     void handle_save(bool about_to_close = false);
     bool is_current_editor();
     void backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_erase);
@@ -226,7 +183,6 @@ struct Editor {
     void add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end);
     bool cur_is_inside_comment_or_string();
     bool ask_user_about_unsaved_changes();
-    void skip_next_nvim_update(int n = 1);
     void delete_selection();
     void toggle_comment(int ystart, int yend);
     void highlight_snippet(cur2 start, cur2 end);

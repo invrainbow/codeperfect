@@ -2203,22 +2203,16 @@ void trigger_file_search(int limit_start, int limit_end) {
     if (wnd.search_in_selection) {
         wnd.sess.limit_to_range = true;
 
-        if (world.use_nvim) {
-            if (limit_start == -1 || limit_end == -1) return;
-            wnd.sess.limit_start = limit_start;
-            wnd.sess.limit_end = limit_end;
-        } else {
-            auto a = ed->select_start;
-            auto b = ed->cur;
-            if (a > b) {
-                auto tmp = a;
-                a = b;
-                b = tmp;
-            }
-
-            wnd.sess.limit_start = ed->cur_to_offset(a);
-            wnd.sess.limit_end = ed->cur_to_offset(b);
+        auto a = ed->select_start;
+        auto b = ed->cur;
+        if (a > b) {
+            auto tmp = a;
+            a = b;
+            b = tmp;
         }
+
+        wnd.sess.limit_start = ed->cur_to_offset(a);
+        wnd.sess.limit_end = ed->cur_to_offset(b);
     }
     */
 
@@ -2580,7 +2574,6 @@ void UI::draw_everything() {
             im::MenuItem("Show mouse position", NULL, &world.wnd_mouse_pos.show);
             im::MenuItem("Style editor", NULL, &world.wnd_style_editor.show);
             im::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
-            im::MenuItem("Randomly move cursor around", NULL, &world.randomly_move_cursor_around);
             im::MenuItem("Disable framerate cap", NULL, &world.turn_off_framerate_cap);
             im::MenuItem("Hover Info", NULL, &world.wnd_hover_info.show);
             im::MenuItem("Show frame index", NULL, &world.show_frame_index);
@@ -4938,15 +4931,6 @@ void UI::draw_everything() {
             im_small_newline();
 
             if (im_input_text_full("Replace:", wnd.replace_str, _countof(wnd.replace_str), ImGuiInputTextFlags_EnterReturnsTrue)) {
-                struct Nvim_Edit {
-                    // 0-indexed, end-exclusive
-                    int ystart;
-                    int yend;
-                    ccstr new_text;
-                };
-
-                auto nvim_edits = alloc_list<Nvim_Edit>();
-
                 auto repl_parts = wnd.sess.parse_replacement(wnd.replace_str);
                 For (&wnd.matches) {
                     auto chars = alloc_list<char>();
@@ -4979,58 +4963,8 @@ void UI::draw_everything() {
                     chars->append('\0');
                     auto uchars = cstr_to_ustr(chars->items);
                     ed->buf->insert(m.start, uchars->items, uchars->len);
-
-                    if (world.use_nvim) {
-                        Nvim_Edit edit; ptr0(&edit);
-                        edit.ystart = m.start.y;
-                        edit.yend = m.end.y + 1;
-                        edit.new_text = ed->buf->get_text(
-                            new_cur2(0, m.start.y),
-                            new_cur2(0, m.end.y+1)
-                        );
-                        nvim_edits->append(&edit);
-                    }
                 }
 
-                if (world.use_nvim) {
-                    auto &nv = world.nvim;
-
-                    nv.start_request_message("nvim_call_atomic", 1);
-                    nv.writer.write_array(nvim_edits->len);
-
-                    For (nvim_edits) {
-                        auto lines = alloc_list<ccstr>();
-                        auto tmp = alloc_list<char>();
-
-                        for (auto p = it.new_text; *p; p++) {
-                            if (*p == '\n') {
-                                tmp->append('\0');
-                                lines->append(cp_strdup(tmp->items));
-                                tmp->len = 0;
-                                continue;
-                            }
-                            tmp->append(*p);
-                        }
-
-                        nv.writer.write_array(2);
-                        {
-                            nv.writer.write_string("nvim_buf_set_lines");
-                            nv.writer.write_array(5);
-                            {
-                                nv.writer.write_int(ed->nvim_data.buf_id);
-                                nv.writer.write_int(it.ystart);
-                                nv.writer.write_int(it.yend);
-                                nv.writer.write_bool(false);
-
-                                // write array of lines
-                                nv.writer.write_array(lines->len);
-                                For (lines) nv.writer.write_string(it);
-                            }
-                        }
-                    }
-
-                    nv.end_message();
-                }
                 wnd.show = false;
             }
             // if (im::IsItemEdited()) { }
@@ -6697,7 +6631,6 @@ void UI::draw_everything() {
                 auto muted = (current_pane != world.current_pane);
 
                 actual_cursor_positions[current_pane] = cur_pos;    // save position where cursor is drawn for later use
-                bool is_insert_cursor = !world.use_nvim; // (world.nvim.mode == VI_INSERT && is_pane_selected /* && !world.nvim.exiting_insert_mode */);
 
                 auto pos = cur_pos;
                 pos.y -= base_font->offset_y;
@@ -6705,7 +6638,7 @@ void UI::draw_everything() {
                 boxf b;
                 b.pos = pos;
                 b.h = (float)base_font->height;
-                b.w = is_insert_cursor ? 2 : ((float)base_font->width * chars);
+                b.w = 2;
 
                 auto py = base_font->height * (settings.line_height - 1.0) / 2;
                 b.y -= py;
@@ -7088,7 +7021,7 @@ void UI::draw_everything() {
                             draw_highlight(highlight_snippet.color, glyph_width);
                     }
 
-                    if (!world.use_nvim && editor->selecting) {
+                    if (editor->selecting) {
                         auto pos = new_cur2((u32)curr_cp_idx, (u32)y);
                         if (select_start <= pos && pos < select_end) {
                             draw_highlight(rgba(global_colors.visual_background), glyph_width, true);
@@ -7096,39 +7029,8 @@ void UI::draw_everything() {
                         }
                     }
 
-                    if (editor->cur == new_cur2((u32)curr_cp_idx, (u32)y)) {
+                    if (editor->cur == new_cur2((u32)curr_cp_idx, (u32)y))
                         draw_cursor(glyph_width);
-                        if (current_pane == world.current_pane && world.use_nvim) {
-                            if (flash_cursor) {
-                                text_color = rgba(merge_colors(global_colors.cursor_foreground, rgb_hex("#ffffff"), flash_cursor_perc));
-                            } else {
-                                text_color = rgba(global_colors.cursor_foreground);
-                            }
-                        }
-                    } else if (world.use_nvim && world.nvim.mode != VI_INSERT) {
-                        auto topline = editor->nvim_data.grid_topline;
-                        if (topline <= y && y < topline + NVIM_DEFAULT_HEIGHT) {
-                            int i = 0;
-                            while (i < glyph_width && vx+i < _countof(editor->highlights[y - topline]))
-                                i++;
-
-                            auto hl = editor->highlights[y - topline][vx];
-                            switch (hl) {
-                            case HL_INCSEARCH:
-                                draw_highlight(rgba(global_colors.foreground), i);
-                                text_color = rgba(global_colors.background);
-                                break;
-                            case HL_SEARCH:
-                                draw_highlight(rgba(global_colors.search_background), i);
-                                text_color = rgba(global_colors.search_foreground);
-                                break;
-                            case HL_VISUAL:
-                                draw_highlight(rgba(global_colors.visual_background), i);
-                                text_color = rgba(global_colors.visual_foreground);
-                                break;
-                            }
-                        }
-                    }
 
                     if (hint.gotype)
                         if (new_cur2(x, y) == hint.start)
@@ -7158,22 +7060,7 @@ void UI::draw_everything() {
                         }
                     }
 
-                    if (world.use_nvim) {
-                        auto topline = editor->nvim_data.grid_topline;
-                        if (topline <= y && y < topline + NVIM_DEFAULT_HEIGHT) {
-                            switch (editor->highlights[y - topline][0]) {
-                            case HL_INCSEARCH:
-                                draw_highlight(rgba(global_colors.foreground), 1);
-                                break;
-                            case HL_SEARCH:
-                                draw_highlight(rgba(global_colors.search_background), 1);
-                                break;
-                            case HL_VISUAL:
-                                draw_highlight(rgba(global_colors.visual_background), 1);
-                                break;
-                            }
-                        }
-                    } else if (editor->selecting) {
+                    if (editor->selecting) {
                         auto pos = new_cur2((u32)0, (u32)y);
                         if (select_start <= pos && pos < select_end)
                             draw_highlight(rgba(global_colors.visual_background), 1, true);
@@ -7402,59 +7289,6 @@ void UI::draw_everything() {
             return get_mouse_flags(rect);
         };
 
-        if (world.use_nvim) {
-            auto should_show_cmd = [&]() -> bool {
-                if (!world.use_nvim) return false;
-
-                auto &nv = world.nvim;
-                if (nv.mode != VI_CMDLINE) return false;
-                if (nv.cmdline.content.len) return true;
-                if (nv.cmdline.firstc.len) return true;
-                if (nv.cmdline.prompt.len) return true;
-                return false;
-            };
-
-            if (should_show_cmd()) {
-                auto &cmd = world.nvim.cmdline;
-
-                auto get_title = [&]() -> ccstr {
-                    if (cmd.prompt.len > 1)
-                        return cmd.prompt.items;
-                    if (streq(cmd.firstc.items, "/"))
-                        return "Forward search: ";
-                    if (streq(cmd.firstc.items, "?"))
-                        return "Backward search: ";
-                    if (streq(cmd.firstc.items, ":"))
-                        return "Command: ";
-                    return cmd.firstc.items;
-                };
-
-                auto command = cp_sprintf("%s%s", get_title(), cmd.content.items);
-                draw_status_piece(LEFT, command, rgba(global_colors.command_background), rgba(global_colors.command_foreground));
-            } else {
-                if (world.use_nvim) {
-                    auto editor = get_current_editor();
-                    if (editor) {
-                        if (editor->is_modifiable()) {
-                            ccstr mode_str = NULL;
-                            switch (world.nvim.mode) {
-                            case VI_NORMAL: mode_str = "NORMAL"; break;
-                            case VI_VISUAL: mode_str = "VISUAL"; break;
-                            case VI_INSERT: mode_str = "INSERT"; break;
-                            case VI_REPLACE: mode_str = "REPLACE"; break;
-                            case VI_OPERATOR: mode_str = "OPERATOR"; break;
-                            case VI_CMDLINE: mode_str = "CMDLINE"; break;
-                            default: mode_str = "UNKNOWN"; break;
-                            }
-                            draw_status_piece(LEFT, mode_str, rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
-                        } else {
-                            draw_status_piece(LEFT, "READONLY", rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
-                        }
-                    }
-                }
-            }
-        }
-
         if (world.show_frame_index) {
             auto s = cp_sprintf("%d", world.frame_index);
             auto bg = rgba("#000000");
@@ -7508,22 +7342,6 @@ void UI::draw_everything() {
             auto cur = curr_editor->cur;
 
             auto s = cp_sprintf("%d,%d", cur.y+1, cur.x+1);
-
-            if (world.use_nvim) {
-                auto view = curr_editor->view;
-
-                auto curr = view.y;
-                auto total = relu_sub(curr_editor->buf->lines.len, view.h);
-
-                auto blah = [&]() {
-                    if (!total) return curr > 0 ? "Bot" : "All";
-                    if (!curr) return "Top";
-                    if (curr >= total) return "Bot";
-                    return cp_sprintf("%d%%", (int)((float)curr/(float)total * 100));
-                };
-
-                s = cp_sprintf("%s  %s", s, blah());
-            }
 
             draw_status_piece(RIGHT, s, rgba(global_colors.white, 0.0), rgba("#aaaaaa"));
         }
@@ -8429,16 +8247,6 @@ void UI::recalculate_view_sizes(bool force) {
             // don't want to move it. Instead we should move the *view* so the
             // cursor is on the screen.
             editor.ensure_cursor_on_screen_by_moving_view();
-
-            // TODO: do we care about this?
-            if (world.use_nvim) {
-                auto& nv = world.nvim;
-                nv.start_request_message("nvim_win_set_option", 3);
-                nv.writer.write_int(editor.nvim_data.win_id);
-                nv.writer.write_string("scroll");
-                nv.writer.write_int(editor.view.h / 2);
-                nv.end_message();
-            }
         }
     }
 }

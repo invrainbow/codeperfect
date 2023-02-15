@@ -4,7 +4,6 @@
 #include "settings.hpp"
 #include "go.hpp"
 #include "dbg.hpp"
-#include "nvim.hpp"
 
 // -----
 // stupid c++ template shit
@@ -455,28 +454,3 @@ Work_Trie_Node *Work_Trie_Node::copy() {
     return ret;
 }
 */
-
-Nvim_Message_Buf_Lines *Nvim_Message_Buf_Lines::copy() {
-    auto ret = clone(this);
-    ret->line_lengths = copy_raw_list(line_lengths);
-
-    ret->lines = alloc_object(List<uchar*>);
-    ret->lines->init(LIST_POOL, max(lines->len, 1));
-    Fori (lines) {
-        auto newarr = alloc_array(uchar, line_lengths->at(i));
-        memcpy(newarr, it, sizeof(uchar) * line_lengths->at(i));
-        ret->lines->append(newarr);
-    }
-
-    return ret;
-}
-
-Nvim_Insert_Delayed_Action *Nvim_Insert_Delayed_Action::copy() {
-    auto ret = clone(this);
-    switch (type) {
-    case NIDA_LINE_UPDATE:
-        ret->update_lines = copy_object(update_lines);
-        break;
-    }
-    return ret;
-}
