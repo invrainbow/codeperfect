@@ -421,13 +421,13 @@ struct World {
     bool cmd_unfocus_all_windows;
 
     Message_Queue<Main_Thread_Message> message_queue;
-
     Searcher searcher;
-
     Go_Indexer indexer;
 
-    Nvim nvim;
-    bool use_nvim;
+    bool enable_vim;
+    struct {
+        Vim_Mode mode;
+    } vim;
 
     struct Debugger dbg;
 

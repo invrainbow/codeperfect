@@ -1293,6 +1293,13 @@ void Editor::init() {
 
     mem.init("editor mem");
 
+    if (world.use_vim) {
+        vim.mem.init();
+        // TODO: set a limit?
+        SCOPED_MEM(&vim.mem);
+        vim.normal_buffer = alloc_list<uchar>();
+    }
+
     {
         SCOPED_MEM(&mem);
         postfix_stack.init();
@@ -1409,7 +1416,8 @@ void Editor::ast_navigate_next() {
 void Editor::cleanup() {
     buf->cleanup();
     mem.cleanup();
-
+    if (world.use_vim)
+        vim.mem.cleanup();
     world.history.remove_invalid_marks();
 }
 
@@ -2484,4 +2492,219 @@ void Editor::delete_selection() {
     buf->remove(a, b);
     selecting = false;
     move_cursor(a);
+}
+
+enum Vim_Parse_Status {
+    VIM_PARSE_DONE;
+    VIM_PARSE_DISCARD;
+    VIM_PARSE_WAIT;
+};
+
+struct Vim_Command {
+    int o_count;
+    List<Command_Input> op;
+    int m_count;
+    List<Command_Input> motion;
+};
+
+Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
+    int ptr = 0;
+    auto bof = [&]() { return ptr == 0; };
+    auto eof = [&]() { return ptr == normal_buffer->len; };
+    auto peek = [&]() { return normal_buffer->at(ptr); };
+
+    auto peek_char = [&]() {
+        if (eof()) return 0;
+
+        auto it = peek();
+        if (it.is_key) return 0;
+        return it.ch;
+    };
+
+    if (eof()) return;
+
+    auto peek_digit = [&]() -> char {
+        if (eof()) return 0;
+
+        auto it = peek();
+        if (!it.is_key && it.ch < 127 && isdigit(it.ch))
+            return (char)it.ch;
+        return 0;
+    };
+
+    auto read_number = [&]() -> int {
+        auto ret = alloc_list<char>();
+        char digit;
+        while ((digit = peek_digit() != 0) {
+            ret->append(digit);
+            ptr++;
+        }
+        ret->append('\0');
+        return strtol(ret->items, NULL, 10);
+    };
+
+    auto char_input = [&](char ch) -> Command_Input {
+        Command_Input ret; ptr0(&ret);
+        ret.is_key = false;
+        ret.ch = ch;
+        return ret;
+    }
+
+    int count = 0;
+    bool want_motion = true;
+
+    auto digit = peek_digit();
+    if (digit && digit != '0')
+        count = read_number();
+
+    auto it = peek();
+    if (it.key) {
+        switch (it.mods) {
+        case CP_MOD_CTRL:
+            switch (it.key) {
+            case CP_KEY_R:
+                out->op.append(it);
+                want_motion = false;
+                break;
+            }
+        }
+    } else {
+        switch (ch) {
+        case 'u':
+        case 'J':
+            want_motion = false;
+            break;
+
+        case 'c':
+        case 'd':
+        case 'y':
+        case '~':
+        case '!':
+        case '!':
+        case '=':
+        case '<':
+        case '>':
+            out->op.append(char_input(ch));
+            ptr++;
+            break;
+        case 'g': {
+            ptr++;
+
+            ch = peek_char();
+            switch (ch) {
+            case 'q':
+            case 'w':
+            case '?':
+            case '@':
+            case '~':
+            case 'u':
+            case 'U':
+                ptr++;
+                out->op.append(char_input('g'));
+                out->op.append(char_input(ch));
+                goto done;
+            }
+
+            ptr--;
+            break;
+        }
+        case 'z': {
+            ptr++;
+            ch = peek_char();
+            switch (ch) {
+            case 'f':
+                ptr++;
+                out->op.append(char_input('z'));
+                out->op.append(char_input(ch));
+                goto done;
+            }
+            ptr--;
+            break;
+        }
+        }
+    }
+done:
+
+    if (!want_motion) return VIM_PARSE_DONE;
+
+    if (eof()) {
+        if (out->op.len)
+            return VIM_PARSE_WAIT;
+        return VIM_PARSE_DISCARD;
+    }
+
+    ch = peek_char();
+    switch (ch) {
+    case 'h':
+    case 'j':
+    case 'k':
+    case 'l':
+    case 'H':
+    case 'L':
+    case 'M':
+    case '0':
+    case '^':
+    case '$':
+
+    case 'g': {
+        ptr++;
+
+        ch = peek_char();
+        switch (ch) {
+        case 'g':
+        case 'm':
+        case 'M':
+        case '^':
+        case '$':
+
+        case 'u':
+        case 'U':
+            ptr++;
+            out->op.append(char_input('g'));
+            out->op.append(char_input(ch));
+            goto done;
+        }
+
+        ptr--;
+        break;
+    }
+    default: {
+        if (out->op.len == 1) {
+            auto it = out->op.at(0);
+            if (!it.is_key && (
+                    it.ch == 'd'
+                    it.ch == 'y'
+                    it.ch == 'c'
+            if (out->op.at(0).)
+    }
+            s
+            i
+
+
+    }
+
+}
+
+bool Editor::vim_handle_char(u32 ch) {
+    switch (world.vim.mode) {
+    case VI_NORMAL: {
+        normal_buffer->append(ch);
+        auto result = vim_parse_normal_buffer();
+        if (result->status == VIM_PARSE_DISCARD) {
+            normal_buffer->len = 0;
+            break;
+        } else if (result->status == VIM_PARSE_WAIT) {
+            break;
+        } else if (result->status == VIM_PARSE_DONE) {
+            execute_normal_command);lresult
+        }
+        break;
+    }
+    case VI_INSERT: {
+        break;
+    }
+    }
+}
+
+bool Editor::vim_handle_key(int key, int mods) {
 }

@@ -18,6 +18,17 @@ enum {
     HINT_NOT_CURRENT_PARAM,
 };
 
+enum Vim_Mode {
+    VI_NONE,
+    VI_NORMAL,
+    VI_VISUAL,
+    VI_INSERT,
+    VI_REPLACE,
+    VI_OPERATOR,
+    VI_CMDLINE,
+    VI_UNKNOWN,
+};
+
 struct Client_Parameter_Hint {
     Gotype *gotype; // save this here in case we need it later
     int current_param;
@@ -134,6 +145,25 @@ struct Editor {
         List<Ast_Node*> *siblings;
         int tree_version;
     } ast_navigation;
+
+    struct Command_Input {
+        bool is_key;
+        union {
+            uchar ch;
+            struct {
+                int key;
+                int mods;
+            };
+        };
+    };
+
+    struct {
+        Pool mem;
+        List<Command_Input> *command_buffer;
+    } vim;
+
+    bool vim_handle_char(u32 ch);
+    bool vim_handle_key(int key, int mods);
 
     Client_Parameter_Hint parameter_hint;
 
