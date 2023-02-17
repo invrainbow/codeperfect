@@ -2595,6 +2595,9 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
         case 'O':
         case 's':
         case 'S':
+        case 'x':
+        case 'v':
+        case 'V':
             skip_motion = true;
             // passthrough
         case 'c':
@@ -3023,7 +3026,6 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             ret->type = MOTION_CHAR_INCL;
             return ret;
         }
-
         case 'c':
         case 'y':
         case 'd': {
@@ -3067,7 +3069,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             if (x == lines[c.y].len && lines[c.y].len > 0)
                 x = lines[c.y].len-1;
 
-            vim.hidden_vx = buf->idx_cp_to_vcp(c.y, x);
+            // vim.hidden_vx = buf->idx_cp_to_vcp(c.y, x);
             ret->new_dest = new_cur2(x, c.y);
             ret->type = MOTION_CHAR_EXCL;
             return ret;
@@ -3170,6 +3172,33 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
 
     int o_count = cmd->o_count == 0 ? 1 : cmd->o_count;
 
+    // Move cursor in normal mode.
+    auto move_cursor_normal = [&](cur2 pos) {
+        auto len = lines[pos.y].len;
+        if (pos.x >= len && len > 0)
+            pos.x = len-1;
+
+        // man this is getting too "magical" and complicated
+        if (motion_result) {
+            if (motion_result->type == MOTION_CHAR_INCL || motion_result->type == MOTION_CHAR_EXCL) {
+                vim.hidden_vx = buf->idx_cp_to_gr(pos.y, pos.x);
+            }
+        }
+
+        move_cursor(pos);
+    };
+
+    auto enter_insert_mode = [&]() {
+        vim.insert_start = cur;
+        world.vim.mode = VI_INSERT;
+
+        // copy the command over
+        vim.insert_command.m_count = cmd->m_count;
+        vim.insert_command.o_count = cmd->o_count;
+        For (&cmd->op) vim.insert_command.op.append(it);
+        For (&cmd->motion) vim.insert_command.motion.append(it);
+    };
+
     auto &op = cmd->op;
     if (!op.len) {
         if (!motion_result) return false;
@@ -3183,7 +3212,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
         int len = lines[pos.y].len;
         if (pos.x >= len && len > 0) pos.x = len-1;
 
-        move_cursor(pos);
+        move_cursor_normal(pos);
         return true;
     }
 
@@ -3196,7 +3225,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
                 cur2 pos;
                 for (int i = 0; i < o_count; i++)
                     pos = buf->hist_redo();
-                move_cursor(pos);
+                move_cursor_normal(pos);
                 return true;
             }
             }
@@ -3220,17 +3249,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
             case 'o':
             case 'O': {
                 int y = inp.ch == 'o' ? c.y + 1 : c.y;
-
-                auto indent_chars = get_autoindent(y);
-                int indent_len = strlen(indent_chars);
-
-                auto text = new_list(uchar);
-                for (int i = 0; i < indent_len; i++)
-                    text->append((uchar)indent_chars[i]);
-                text->append((uchar)'\n');
-                buf->insert(new_cur2(0, y), text->items, text->len);
-
-                move_cursor(new_cur2(indent_len, y));
+                move_cursor(open_newline(y));
                 break;
             }
             case 's':
@@ -3253,27 +3272,50 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
             }
             }
 
-            vim.insert_start = cur;
-            world.vim.mode = VI_INSERT;
-
-            // copy the command over
-            vim.insert_command.m_count = cmd->m_count;
-            vim.insert_command.o_count = cmd->o_count;
-            For (&cmd->op) vim.insert_command.op.append(it);
-            For (&cmd->motion) vim.insert_command.motion.append(it);
+            enter_insert_mode();
             return true;
 
         case 'u': {
             cur2 pos;
             for (int i = 0; i < o_count; i++)
                 pos = buf->hist_undo();
-            move_cursor(pos);
+            move_cursor_normal(pos);
             return true;
         }
         case 'J':
-            break;
+            for (int i = 0; i < o_count; i++) {
+                int y = c.y;
+                if (y == lines.len-1) break;
+
+                auto start = new_cur2(lines[y].len, y);
+                auto x = find_first_nonspace_cp(y+1);
+                auto end = new_cur2(x, y+1);
+                bool add_space = (x < lines[y+1].len && lines[y+1][x] != ')');
+
+                buf->remove(start, end);
+                if (add_space) {
+                    uchar space = ' ';
+                    buf->insert(start, &space, 1);
+                }
+            }
+            return true;
+        case 'x': {
+            auto it = gr_iter();
+            for (int i = 0; i < o_count && !it.eol(); i++) {
+                it.read();
+                it.eat();
+            }
+
+            if (c != it.pos()) {
+                buf->remove(c, it.pos());
+                int len = lines[c.y].len;
+                if (c.x >= len && len > 0) {
+                    move_cursor_normal(new_cur2(len-1, c.y));
+                }
+            }
+            return true;
+        }
         case 'c':
-            break;
         case 'd': {
             switch (mode) {
             case VI_NORMAL: {
@@ -3297,12 +3339,20 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
                     }
 
                     buf->remove(a, b);
-                    move_cursor(a);
+                    move_cursor_normal(a);
+
+                    if (inp.ch == 'c') enter_insert_mode();
                     break;
                 }
                 case MOTION_LINE: {
                     int y1 = c.y;
                     int y2 = motion_result->new_dest.y;
+
+                    if (y1 > y2) {
+                        int tmp = y1;
+                        y1 = y2;
+                        y2 = tmp;
+                    }
 
                     cur2 start = new_cur2(0, y1);
                     cur2 end = new_cur2(0, y2+1);
@@ -3314,12 +3364,17 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
 
                     buf->remove(start, end);
 
-                    auto to = new_cur2(0, y1);
-                    if (y1 >= lines.len) {
-                        // TODO: find first non whitespace
-                        to = new_cur2(0, lines.len-1);
+                    if (inp.ch == 'c') {
+                        move_cursor(open_newline(y1));
+                        enter_insert_mode();
+                    } else {
+                        auto to = new_cur2(0, y1);
+                        if (y1 >= lines.len) {
+                            // TODO: find first non whitespace
+                            to = new_cur2(0, lines.len-1);
+                        }
+                        move_cursor_normal(to);
                     }
-                    move_cursor(to);
                 }
                 }
                 return true;
@@ -3369,6 +3424,29 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
         }
     }
     return false;
+}
+
+cur2 Editor::open_newline(int y) {
+    if (y == 0) {
+        // if it's the first line, start at 0, 0 and insert
+        // indent + \n, or rather, just \n
+        uchar newline = '\n';
+        buf->insert(new_cur2(0, 0), &newline, 1);
+        return new_cur2(0, 0);
+    }
+
+    // otherwise, start at the line above, and add \n + indent
+    auto yp = y-1;
+
+    auto indent_chars = get_autoindent(y);
+    int indent_len = strlen(indent_chars);
+
+    auto text = new_list(uchar);
+    text->append((uchar)'\n');
+    for (int i = 0; i < indent_len; i++)
+        text->append((uchar)indent_chars[i]);
+    buf->insert(new_cur2(buf->lines[yp].len, yp), text->items, text->len);
+    return new_cur2(indent_len, y);
 }
 
 bool Editor::vim_handle_input(Vim_Command_Input *input) {

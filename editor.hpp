@@ -22,6 +22,8 @@ enum Vim_Mode {
     VI_NONE,
     VI_NORMAL,
     VI_VISUAL,
+    VI_VISUAL_LINE,
+    VI_VISUAL_BLOCK,
     VI_INSERT,
     VI_REPLACE,
     VI_OPERATOR,
@@ -205,9 +207,13 @@ struct Editor {
         Pool mem;
         List<Vim_Command_Input> *command_buffer;
         int hidden_vx;
-        cur2 insert_start;
-        Vim_Command insert_command;
-
+        union {
+            struct {
+                cur2 insert_start;
+                Vim_Command insert_command;
+            };
+            cur2 visual_start;
+        };
     } vim;
 
     Client_Parameter_Hint parameter_hint;
@@ -279,6 +285,7 @@ struct Editor {
     Eval_Motion_Result* vim_eval_motion(Vim_Command *cmd);
     bool vim_exec_command(Vim_Command *cmd);
     int find_first_nonspace_cp(int y);
+    cur2 open_newline(int y);
 };
 
 Parse_Lang determine_lang(ccstr filepath);
