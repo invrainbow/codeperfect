@@ -476,7 +476,7 @@ void World::init() {
         serde.read_type(&options, SERDE_OPTIONS);
     } while (0);
 
-    world.use_nvim = options.enable_vim_mode;
+    world.vim.on = options.enable_vim_mode;
 
     if (make_testing_headless) {
         if (!jblow_tests.on)
@@ -618,6 +618,11 @@ void World::init() {
 #endif
 
     t.log("rest of shit");
+
+    if (vim.on) {
+        // anything else?
+        vim.mode = VI_NORMAL;
+    }
 }
 
 void World::start_background_threads() {

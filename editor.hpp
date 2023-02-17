@@ -71,6 +71,61 @@ struct Move_Cursor_Opts {
 
 Move_Cursor_Opts *default_move_cursor_opts();
 
+struct Vim_Command_Input {
+    bool is_key;
+    union {
+        uchar ch;
+        struct {
+            int key;
+            int mods;
+        };
+    };
+};
+
+enum Vim_Parse_Status {
+    VIM_PARSE_DONE,
+    VIM_PARSE_DISCARD,
+    VIM_PARSE_WAIT,
+};
+
+struct Vim_Command {
+    int o_count;
+    List<Vim_Command_Input> op;
+    int m_count;
+    List<Vim_Command_Input> motion;
+};
+
+enum Motion_Type {
+    MOTION_LINE,
+    MOTION_CHAR_INCL,
+    MOTION_CHAR_EXCL,
+};
+
+struct Eval_Motion_Result {
+    Motion_Type type;
+    cur2 new_dest; // anything else?
+    bool inclusive;
+};
+
+struct Editor;
+
+struct Gr_Iter {
+    Buffer_It it;
+    cur2 gr_end;
+
+    void init(Buffer_It _it) {
+        ptr0(this);
+        it = _it;
+    }
+
+    cur2 pos() { return it.pos; };
+    bool eof() { return it.eof(); };
+    bool eol() { return it.eol() || it.eof(); };
+
+    List<uchar>* read();
+    void eat();
+};
+
 struct Editor {
     u32 id;
     Pool mem;
@@ -146,24 +201,14 @@ struct Editor {
         int tree_version;
     } ast_navigation;
 
-    struct Command_Input {
-        bool is_key;
-        union {
-            uchar ch;
-            struct {
-                int key;
-                int mods;
-            };
-        };
-    };
-
     struct {
         Pool mem;
-        List<Command_Input> *command_buffer;
-    } vim;
+        List<Vim_Command_Input> *command_buffer;
+        int hidden_vx;
+        cur2 insert_start;
+        Vim_Command insert_command;
 
-    bool vim_handle_char(u32 ch);
-    bool vim_handle_key(int key, int mods);
+    } vim;
 
     Client_Parameter_Hint parameter_hint;
 
@@ -222,6 +267,18 @@ struct Editor {
     void ast_navigate_out();
     void ast_navigate_prev();
     void ast_navigate_next();
+
+    Vim_Parse_Status vim_parse_command(Vim_Command *out);
+    bool vim_handle_char(u32 ch);
+    bool vim_handle_key(int key, int mods);
+    bool vim_handle_input(Vim_Command_Input *input);
+
+    Gr_Iter gr_iter(cur2 c);
+    Gr_Iter gr_iter() { return gr_iter(cur); }
+
+    Eval_Motion_Result* vim_eval_motion(Vim_Command *cmd);
+    bool vim_exec_command(Vim_Command *cmd);
+    int find_first_nonspace_cp(int y);
 };
 
 Parse_Lang determine_lang(ccstr filepath);

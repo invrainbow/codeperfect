@@ -458,6 +458,12 @@ void handle_window_event(Window_Event *it) {
 
         auto editor = get_current_editor();
 
+        if (editor && world.vim.on)
+            if (keymods == CP_MOD_CTRL)
+                if (key != CP_KEY_LEFT_CONTROL && key != CP_KEY_RIGHT_CONTROL)
+                    if (editor->vim_handle_key(key, keymods))
+                        return;
+
         auto handle_enter = [&]() {
             if (!editor) return;
 
@@ -668,7 +674,7 @@ void handle_window_event(Window_Event *it) {
                     editor->view.y += editor->view.h;
                     if (editor->view.y > buf->lines.len-1) {
                         editor->view.y = buf->lines.len-1;
-                        cur = new_cur2((int)buf->lines[buf->lines.len-1].len, (int)buf->lines.len-1);
+                        cur = new_cur2(buf->lines[buf->lines.len-1].len, buf->lines.len-1);
                     } else {
                         editor->ensure_cursor_on_screen();
                         cur = editor->cur;
@@ -1075,7 +1081,9 @@ void handle_window_event(Window_Event *it) {
         auto ed = get_current_editor();
         if (!ed) return;
 
-        if (ed->is_modifiable()) {
+        if (world.vim.on && world.vim.mode != VI_INSERT) {
+            ed->vim_handle_char(ch);
+        } else if (ed->is_modifiable()) {
             ed->delete_selection();
             ed->type_char_in_insert_mode(ch);
         }

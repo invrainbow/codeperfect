@@ -349,9 +349,7 @@ struct boxf {
 };
 
 vec2 new_vec2(i32 x, i32 y);
-vec2 new_vec2(u32 x, u32 y);
 cur2 new_cur2(i32 x, i32 y);
-cur2 new_cur2(u32 x, u32 y);
 vec2f new_vec2f(float x, float y);
 vec3f new_vec3f(float x, float y, float z);
 // TODO: add others as needed

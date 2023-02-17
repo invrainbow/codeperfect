@@ -601,7 +601,7 @@ const char* read_from_parser_input(void *p, uint32_t off, TSPoint pos, uint32_t 
     u32 n = 0;
 
     if (it->type == IT_MMAP)
-        it->set_pos(new_cur2((i32)off, (i32)-1));
+        it->set_pos(new_cur2(off, -1));
     else if (it->type == IT_BUFFER)
         it->set_pos(tspoint_to_cur(pos));
 
@@ -1842,7 +1842,7 @@ ccstr Ast_Node::string() {
     auto len = end_byte() - start_byte();
 
     if (it->type == IT_MMAP) {
-        it->set_pos(new_cur2((i32)start_byte(), (i32)-1));
+        it->set_pos(new_cur2(start_byte(), -1));
 
         auto ret = new_array(char, len + 1);
         for (u32 i = 0; i < len; i++)
@@ -4762,7 +4762,7 @@ bool Go_Indexer::truncate_parsed_file(Parsed_File *pf, cur2 end_pos, ccstr chars
     if (pf->it->type != IT_BUFFER) return false;
 
     auto buf = pf->it->buffer_params.it.buf;
-    auto eof_pos = new_cur2((i32)buf->lines.last()->len, (i32)buf->lines.len - 1);
+    auto eof_pos = new_cur2(buf->lines.last()->len, buf->lines.len - 1);
 
     TSInputEdit edit; ptr0(&edit);
     edit.start_byte = buf->cur_to_offset(end_pos);
@@ -5626,7 +5626,7 @@ bool Go_Indexer::check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2
             auto start_ch = get_char_at_pos(start_pos);
             if (start_ch == '"' || start_ch == '`') {
                 auto end_pos = it->end();
-                auto last_pos = new_cur2((i32)relu_sub(end_pos.x, 1), (i32)end_pos.y);
+                auto last_pos = new_cur2(relu_sub(end_pos.x, 1), end_pos.y);
 
                 auto last_ch = get_char_at_pos(last_pos);
                 if (!(bytecur == end_pos && last_ch == start_ch && last_pos != start_pos))

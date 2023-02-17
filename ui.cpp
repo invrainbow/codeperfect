@@ -400,8 +400,8 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec4f *out) {
             auto start = node->start();
             auto end = node->start();
 
-            start = new_cur2((u32)editor->buf->idx_byte_to_cp(start.y, start.x), (u32)start.y);
-            end = new_cur2((u32)editor->buf->idx_byte_to_cp(end.y, end.x), (u32)end.y);
+            start = new_cur2(editor->buf->idx_byte_to_cp(start.y, start.x), start.y);
+            end = new_cur2(editor->buf->idx_byte_to_cp(end.y, end.x), end.y);
 
             char token[16] = {0};
             auto it = editor->iter(start);
@@ -6061,11 +6061,11 @@ void UI::draw_everything() {
 
                 if (y >= buf->lines.len) {
                     y = buf->lines.len-1;
-                    return new_cur2((i32)buf->lines[y].len, (i32)y);
+                    return new_cur2(buf->lines[y].len, y);
                 }
 
-                if (pos.x < area.x)           return new_cur2((i32)0, (i32)y);
-                if (pos.x >= area.x + area.w) return new_cur2((i32)buf->lines[y].len, (i32)y);
+                if (pos.x < area.x)           return new_cur2(0, y);
+                if (pos.x >= area.x + area.w) return new_cur2(buf->lines[y].len, y);
 
                 auto vx = (int)((pos.x - area.x) / ui.base_font->width);
                 return new_cur2(buf->idx_vcp_to_cp(y, vx), y);
@@ -6631,6 +6631,7 @@ void UI::draw_everything() {
                 auto muted = (current_pane != world.current_pane);
 
                 actual_cursor_positions[current_pane] = cur_pos;    // save position where cursor is drawn for later use
+                bool is_insert_cursor = !world.vim.on || world.vim.mode == VI_INSERT;
 
                 auto pos = cur_pos;
                 pos.y -= base_font->offset_y;
@@ -6638,7 +6639,7 @@ void UI::draw_everything() {
                 boxf b;
                 b.pos = pos;
                 b.h = (float)base_font->height;
-                b.w = 2;
+                b.w = is_insert_cursor ? 2 : ((float)base_font->width * chars);
 
                 auto py = base_font->height * (settings.line_height - 1.0) / 2;
                 b.y -= py;
@@ -6961,7 +6962,7 @@ void UI::draw_everything() {
                     vec4f text_color = rgba(global_colors.foreground);
 
                     if (next_hl != -1) {
-                        auto curr = new_cur2((u32)curr_byte_idx, (u32)y);
+                        auto curr = new_cur2(curr_byte_idx, y);
 
                         while (next_hl != -1 && curr >= highlights[next_hl].end)
                             if (++next_hl >= highlights.len)
@@ -6975,7 +6976,7 @@ void UI::draw_everything() {
                     }
 
                     if (next_search_match != -1) {
-                        auto curr = new_cur2((u32)curr_byte_idx, (u32)y);
+                        auto curr = new_cur2(curr_byte_idx, y);
                         auto &wnd = world.wnd_current_file_search;
 
                         while (next_search_match != -1 && curr >= wnd.matches[next_search_match].end)
@@ -6999,7 +7000,7 @@ void UI::draw_everything() {
                     if (ast_navigation.on) {
                         auto &ref = ast_navigation;
 
-                        auto pos = new_cur2((int)curr_byte_idx, (int)y);
+                        auto pos = new_cur2(curr_byte_idx, y);
                         if (ref.start <= pos && pos < ref.end) {
                             draw_highlight(rgba(global_colors.cursor), glyph_width, true);
                             text_color = rgba(global_colors.cursor_foreground);
@@ -7016,20 +7017,20 @@ void UI::draw_everything() {
                     }
 
                     if (highlight_snippet.on) {
-                        auto pos = new_cur2((int)curr_byte_idx, (int)y);
+                        auto pos = new_cur2(curr_byte_idx, y);
                         if (highlight_snippet.start <= pos && pos < highlight_snippet.end)
                             draw_highlight(highlight_snippet.color, glyph_width);
                     }
 
                     if (editor->selecting) {
-                        auto pos = new_cur2((u32)curr_cp_idx, (u32)y);
+                        auto pos = new_cur2(curr_cp_idx, y);
                         if (select_start <= pos && pos < select_end) {
                             draw_highlight(rgba(global_colors.visual_background), glyph_width, true);
                             text_color = rgba(global_colors.visual_foreground);
                         }
                     }
 
-                    if (editor->cur == new_cur2((u32)curr_cp_idx, (u32)y))
+                    if (editor->cur == new_cur2(curr_cp_idx, y))
                         draw_cursor(glyph_width);
 
                     if (hint.gotype)
@@ -7061,7 +7062,7 @@ void UI::draw_everything() {
                     }
 
                     if (editor->selecting) {
-                        auto pos = new_cur2((u32)0, (u32)y);
+                        auto pos = new_cur2(0, y);
                         if (select_start <= pos && pos < select_end)
                             draw_highlight(rgba(global_colors.visual_background), 1, true);
                     }
@@ -7288,6 +7289,27 @@ void UI::draw_everything() {
 
             return get_mouse_flags(rect);
         };
+
+        if (world.vim.on) {
+            auto editor = get_current_editor();
+            if (editor) {
+                if (editor->is_modifiable()) {
+                    ccstr mode_str = NULL;
+                    switch (world.vim.mode) {
+                    case VI_NORMAL: mode_str = "NORMAL"; break;
+                    case VI_VISUAL: mode_str = "VISUAL"; break;
+                    case VI_INSERT: mode_str = "INSERT"; break;
+                    case VI_REPLACE: mode_str = "REPLACE"; break;
+                    case VI_OPERATOR: mode_str = "OPERATOR"; break;
+                    case VI_CMDLINE: mode_str = "CMDLINE"; break;
+                    default: mode_str = "UNKNOWN"; break;
+                    }
+                    draw_status_piece(LEFT, mode_str, rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
+                } else {
+                    draw_status_piece(LEFT, "READONLY", rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
+                }
+            }
+        }
 
         if (world.show_frame_index) {
             auto s = cp_sprintf("%d", world.frame_index);

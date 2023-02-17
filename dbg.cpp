@@ -1347,7 +1347,7 @@ void Debugger::jump_to_frame() {
     world.message_queue.add([&](auto msg) {
         msg->type = MTM_GOTO_FILEPOS;
         msg->goto_file = cp_strdup(frame->filepath);
-        msg->goto_pos = new_cur2((i32)0, (i32)frame->lineno - 1);
+        msg->goto_pos = new_cur2(0, frame->lineno - 1);
     });
 
     if (debuggee_pid) {

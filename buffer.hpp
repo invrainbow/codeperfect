@@ -29,7 +29,7 @@ struct Buffer_It {
     uchar prev();
     uchar next();
     bool bof() { return !x && !y; }
-    bool eol() { return peek() == '\n'; }
+    bool eol() { return peek() == '\n' || eof(); }
     uchar get(cur2 _pos);
 };
 
@@ -230,7 +230,7 @@ struct Buffer {
     cur2 inc_cur(cur2 c);
     cur2 dec_cur(cur2 c);
     i32 cur_to_offset(cur2 c);
-    cur2 offset_to_cur(i32 off);
+    cur2 offset_to_cur(i32 off, bool nothrow = true);
 
     // this is so stupid lmao
     u32 idx_byte_to_gr(int y, int off);
@@ -246,6 +246,9 @@ struct Buffer {
     u32 idx_cp_to_vcp(int y, int off) { return internal_convert_x_vx(y, off, true); }
 
     ccstr get_text(cur2 start, cur2 end);
+
+    bool is_valid(cur2 c);
+    cur2 fix_cur(cur2 c);
 };
 
 s32 uchar_size(uchar c);

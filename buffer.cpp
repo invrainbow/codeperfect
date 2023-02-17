@@ -227,7 +227,7 @@ cur2 Buffer::hist_redo() {
 
     for (auto it = history[hist_curr]; it; it = it->next){
         hist_apply_change(it, false);
-        if (!it->next) ret = it->new_end;
+        if (!it->next) ret = it->start;
     }
 
     hist_curr = hist_inc(hist_curr);
@@ -248,6 +248,26 @@ ccstr Buffer::get_text(cur2 start, cur2 end) {
 
     ret->append('\0');
     return ret->items;
+}
+
+bool Buffer::is_valid(cur2 c) {
+    if (0 <= c.y && c.y < lines.len)
+        if (0 <= c.x && c.x <= lines[c.y].len)
+            return true;
+    return false;
+}
+
+cur2 Buffer::fix_cur(cur2 c) {
+    if (c.y < 0) return new_cur2(0, 0);
+
+    if (c.y >= lines.len) {
+        int y = lines.len-1;
+        return new_cur2(lines[y].len, y);
+    }
+
+    if (c.x < 0) c.x = 0;
+    if (c.x > lines[c.y].len) c.x = lines[c.y].len;
+    return c;
 }
 
 void Buffer::init(Pool *_mem, int _lang, bool _use_history) {
@@ -1018,30 +1038,32 @@ u32 Buffer::internal_convert_x_vx(int y, int off, bool to_vx) {
     while (true) {
         if (x >= line.len) break;
 
-        if (to_vx) {
-            if (x >= off) break;
-        } else {
-            if (vx >= off) break;
-        }
+        int dvx = -1;
+        int dx = 1;
 
         if (line[x] == '\t') {
-            vx += options.tabsize - (vx % options.tabsize);
-            x++;
+            dvx = options.tabsize - (vx % options.tabsize);
         } else {
-            auto width = cp_wcwidth(line[x]);
-            if (width == -1) width = 1;
-            vx += width;
-
-            x++;
-            while (x < (to_vx ? off : line.len) && !gc.feed(line[x]))
-                x++;
+            dvx = cp_wcwidth(line[x]);
+            if (dvx == -1) dvx = 1;
+            while (x+dx < (to_vx ? off : line.len) && !gc.feed(line[x+dx]))
+                dx++;
         }
+
+        if (to_vx) {
+            if (x + dx > off) break;
+        } else {
+            if (vx + dvx > off) break;
+        }
+
+        vx += dvx;
+        x += dx;
     }
 
     return to_vx ? vx : x;
 }
 
-cur2 Buffer::offset_to_cur(i32 off) {
+cur2 Buffer::offset_to_cur(i32 off, bool nothrow) {
     cur2 ret;
     ret.x = -1;
     ret.y = -1;
@@ -1057,7 +1079,9 @@ cur2 Buffer::offset_to_cur(i32 off) {
 
     if (ret.x == -1 || ret.y == -1) {
         cp_assert(ret.x == -1 && ret.y == -1);
-        cp_assert(!off);
+        if (!nothrow) {
+            cp_assert(!off);
+        }
         ret.y = lines.len-1;
         ret.x = lines[ret.y].len;
     }

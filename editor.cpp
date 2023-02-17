@@ -1,4 +1,5 @@
 #include "editor.hpp"
+#include "enums.hpp"
 #include "os.hpp"
 #include "world.hpp"
 #include "ui.hpp"
@@ -902,9 +903,9 @@ void Editor::ensure_cursor_on_screen_by_moving_view(Ensure_Cursor_Mode mode) {
 
 void Editor::ensure_cursor_on_screen() {
     if (relu_sub(cur.y, options.scrolloff) < view.y)
-        move_cursor(new_cur2((u32)cur.x, (u32)min(view.y + options.scrolloff, view.y + view.h)));
+        move_cursor(new_cur2(cur.x, min(view.y + options.scrolloff, view.y + view.h)));
     if (cur.y + options.scrolloff >= view.y + view.h)
-        move_cursor(new_cur2((u32)cur.x, (u32)relu_sub(view.y + view.h,  1 + options.scrolloff)));
+        move_cursor(new_cur2(cur.x, relu_sub(view.y + view.h,  1 + options.scrolloff)));
 
     // TODO: handle x
 }
@@ -922,7 +923,7 @@ void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, 
         // end.
         start_cur = buf->dec_cur(start_cur);
 
-        old_end_cur = new_cur2((i32)buf->lines.last()->len, (i32)buf->lines.len - 1);
+        old_end_cur = new_cur2(buf->lines.last()->len, buf->lines.len - 1);
     }
 
     buf->internal_start_edit(start_cur, old_end_cur);
@@ -942,7 +943,7 @@ void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, 
         if (!buf->lines.len)
             new_end_cur = new_cur2(0, 0);
         else
-            new_end_cur = new_cur2((i32)buf->lines.last()->len, (i32)buf->lines.len - 1);
+            new_end_cur = new_cur2(buf->lines.last()->len, buf->lines.len - 1);
     }
 
     buf->internal_finish_edit(new_end_cur);
@@ -1206,6 +1207,20 @@ bool Editor::trigger_escape(cur2 go_here_after) {
 
     bool handled = false;
 
+    if (world.vim.on) {
+        switch (world.vim.mode) {
+        case VI_INSERT: {
+            auto gr = buf->idx_cp_to_gr(cur.y, cur.x);
+            if (gr) {
+                auto x = buf->idx_gr_to_cp(cur.y, gr-1);
+                move_cursor(new_cur2(x, cur.y));
+            }
+            world.vim.mode = VI_NORMAL;
+            break;
+        }
+        }
+    }
+
     if (autocomplete.ac.results) {
         handled = true;
         ptr0(&autocomplete.ac);
@@ -1293,11 +1308,13 @@ void Editor::init() {
 
     mem.init("editor mem");
 
-    if (world.use_vim) {
+    if (world.vim.on) {
         vim.mem.init();
         // TODO: set a limit?
         SCOPED_MEM(&vim.mem);
-        vim.normal_buffer = alloc_list<uchar>();
+        vim.command_buffer = new_list(Vim_Command_Input);
+        vim.insert_command.op.init();
+        vim.insert_command.motion.init();
     }
 
     {
@@ -1416,7 +1433,7 @@ void Editor::ast_navigate_next() {
 void Editor::cleanup() {
     buf->cleanup();
     mem.cleanup();
-    if (world.use_vim)
+    if (world.vim.on)
         vim.mem.cleanup();
     world.history.remove_invalid_marks();
 }
@@ -2494,34 +2511,26 @@ void Editor::delete_selection() {
     move_cursor(a);
 }
 
-enum Vim_Parse_Status {
-    VIM_PARSE_DONE;
-    VIM_PARSE_DISCARD;
-    VIM_PARSE_WAIT;
-};
-
-struct Vim_Command {
-    int o_count;
-    List<Command_Input> op;
-    int m_count;
-    List<Command_Input> motion;
-};
+int Editor::find_first_nonspace_cp(int y) {
+    auto it = iter(new_cur2(0, y));
+    while (!it.eol() && !it.eof() && isspace(it.peek()))
+        it.next();
+    return it.pos.x;
+}
 
 Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
     int ptr = 0;
     auto bof = [&]() { return ptr == 0; };
-    auto eof = [&]() { return ptr == normal_buffer->len; };
-    auto peek = [&]() { return normal_buffer->at(ptr); };
+    auto eof = [&]() { return ptr == vim.command_buffer->len; };
+    auto peek = [&]() { return vim.command_buffer->at(ptr); };
 
-    auto peek_char = [&]() {
+    auto peek_char = [&]() -> char {
         if (eof()) return 0;
 
         auto it = peek();
         if (it.is_key) return 0;
         return it.ch;
     };
-
-    if (eof()) return;
 
     auto peek_digit = [&]() -> char {
         if (eof()) return 0;
@@ -2533,9 +2542,9 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
     };
 
     auto read_number = [&]() -> int {
-        auto ret = alloc_list<char>();
+        auto ret = new_list(char);
         char digit;
-        while ((digit = peek_digit() != 0) {
+        while ((digit = peek_digit()) != 0) {
             ret->append(digit);
             ptr++;
         }
@@ -2543,54 +2552,67 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
         return strtol(ret->items, NULL, 10);
     };
 
-    auto char_input = [&](char ch) -> Command_Input {
-        Command_Input ret; ptr0(&ret);
+    auto read_count = [&]() -> int {
+        auto digit = peek_digit();
+        if (digit && digit != '0')
+            return read_number();
+        return 0;
+    };
+
+    auto char_input = [&](char ch) -> Vim_Command_Input {
+        Vim_Command_Input ret; ptr0(&ret);
         ret.is_key = false;
         ret.ch = ch;
         return ret;
-    }
+    };
 
-    int count = 0;
-    bool want_motion = true;
+    if (eof()) return VIM_PARSE_WAIT;
 
-    auto digit = peek_digit();
-    if (digit && digit != '0')
-        count = read_number();
+    out->o_count = read_count();
 
+    if (eof()) return VIM_PARSE_WAIT;
+
+    bool skip_motion = false;
     auto it = peek();
-    if (it.key) {
+
+    if (it.is_key) {
         switch (it.mods) {
         case CP_MOD_CTRL:
             switch (it.key) {
             case CP_KEY_R:
                 out->op.append(it);
-                want_motion = false;
+                skip_motion = true;
                 break;
             }
         }
     } else {
-        switch (ch) {
+        switch (it.ch) {
         case 'u':
         case 'J':
-            want_motion = false;
-            break;
-
+        case 'i':
+        case 'a':
+        case 'o':
+        case 'O':
+        case 's':
+        case 'S':
+            skip_motion = true;
+            // passthrough
         case 'c':
         case 'd':
         case 'y':
         case '~':
         case '!':
-        case '!':
         case '=':
         case '<':
         case '>':
-            out->op.append(char_input(ch));
+            out->op.append(it);
             ptr++;
             break;
+
         case 'g': {
             ptr++;
 
-            ch = peek_char();
+            auto ch = peek_char();
             switch (ch) {
             case 'q':
             case 'w':
@@ -2610,7 +2632,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
         }
         case 'z': {
             ptr++;
-            ch = peek_char();
+            auto ch = peek_char();
             switch (ch) {
             case 'f':
                 ptr++;
@@ -2625,15 +2647,22 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
     }
 done:
 
-    if (!want_motion) return VIM_PARSE_DONE;
+    // skip_motion implies o->op.len > 0
+    if (skip_motion) return VIM_PARSE_DONE;
 
-    if (eof()) {
-        if (out->op.len)
-            return VIM_PARSE_WAIT;
-        return VIM_PARSE_DISCARD;
+    if (eof()) return VIM_PARSE_WAIT;
+
+    out->m_count = 0;
+    if (out->o_count && !out->op.len) {
+        out->m_count = out->o_count;
+        out->o_count = 0;
+    } else {
+        out->m_count = read_count();
     }
 
-    ch = peek_char();
+    if (eof()) return VIM_PARSE_WAIT;
+
+    auto ch = peek_char();
     switch (ch) {
     case 'h':
     case 'j':
@@ -2645,66 +2674,742 @@ done:
     case '0':
     case '^':
     case '$':
+    case 'w':
+    case 'W':
+    case 'e':
+    case 'E':
+    case 'b':
+    case 'B':
+    case 'G':
+    case '}':
+    case '{':
+        ptr++;
+        out->motion.append(char_input(ch));
+        return VIM_PARSE_DONE;
 
     case 'g': {
         ptr++;
 
+        if (eof()) return VIM_PARSE_WAIT;
+
         ch = peek_char();
         switch (ch) {
         case 'g':
+        case 'o':
         case 'm':
         case 'M':
         case '^':
         case '$':
-
-        case 'u':
-        case 'U':
             ptr++;
-            out->op.append(char_input('g'));
-            out->op.append(char_input(ch));
-            goto done;
+            out->motion.append(char_input('g'));
+            out->motion.append(char_input(ch));
+            return VIM_PARSE_DONE;
         }
 
-        ptr--;
+        break;
+    }
+    case 'f':
+    case 'F':
+    case 't':
+    case 'T': {
+        ptr++;
+        if (eof()) return VIM_PARSE_WAIT;
+
+        char motion = ch;
+
+        ch = peek_char();
+        if (ch) {
+            out->motion.append(char_input(motion));
+            out->motion.append(char_input(ch));
+            return VIM_PARSE_DONE;
+
+        }
         break;
     }
     default: {
-        if (out->op.len == 1) {
-            auto it = out->op.at(0);
-            if (!it.is_key && (
-                    it.ch == 'd'
-                    it.ch == 'y'
-                    it.ch == 'c'
-            if (out->op.at(0).)
-    }
-            s
-            i
+        if (out->op.len != 1) break;
 
+        auto it = out->op[0];
+        if (it.is_key) break;
+        if (it.ch != ch) break;
 
-    }
-
-}
-
-bool Editor::vim_handle_char(u32 ch) {
-    switch (world.vim.mode) {
-    case VI_NORMAL: {
-        normal_buffer->append(ch);
-        auto result = vim_parse_normal_buffer();
-        if (result->status == VIM_PARSE_DISCARD) {
-            normal_buffer->len = 0;
-            break;
-        } else if (result->status == VIM_PARSE_WAIT) {
-            break;
-        } else if (result->status == VIM_PARSE_DONE) {
-            execute_normal_command);lresult
+        switch (it.ch) {
+        case 'd':
+        case 'y':
+        case 'c':
+            out->motion.append(char_input(ch));
+            return VIM_PARSE_DONE;
         }
         break;
     }
-    case VI_INSERT: {
-        break;
+    }
+
+    return VIM_PARSE_DISCARD;
+}
+
+ccstr render_key(int key, int mods) {
+    Text_Renderer rend; rend.init();
+
+    auto parts = new_list(ccstr);
+    if (mods & CP_MOD_CMD) parts->append("cmd");
+    if (mods & CP_MOD_CTRL) parts->append("ctrl");
+    if (mods & CP_MOD_ALT) parts->append("option");
+    if (mods & CP_MOD_SHIFT) parts->append("shift");
+    parts->append(key_str((Key)key) + strlen("CP_KEY_"));
+    return join_array(parts, "+");
+}
+
+ccstr render_command_buffer(List<Vim_Command_Input> *arr) {
+    Text_Renderer rend; rend.init();
+    For (arr) {
+        if (it.is_key)
+            rend.write("<%s>", render_key(it.key, it.mods));
+        else
+            rend.write("%c", (char)it.ch);
+    }
+    return rend.finish();
+}
+
+ccstr render_command(Vim_Command *cmd) {
+    Text_Renderer rend; rend.init();
+
+    rend.write("operator: %d ", cmd->o_count);
+    if (cmd->op.len)
+        rend.write("%s", render_command_buffer(&cmd->op));
+    else
+        rend.write("<none>", render_command_buffer(&cmd->op));
+
+    rend.write(" | motion: %d ", cmd->m_count);
+    if (cmd->motion.len)
+        rend.write("%s", render_command_buffer(&cmd->motion));
+    else
+        rend.write("<none>", render_command_buffer(&cmd->motion));
+
+    return rend.finish();
+}
+
+bool gr_isspace(List<uchar> *graph) {
+    if (graph->len == 1) {
+        auto uch = graph->at(0);
+        if (uch < 127 && isspace(uch))
+            return true;
+    }
+    return false;
+}
+
+bool gr_isident(List<uchar> *graph) {
+    if (graph->len == 1) {
+        auto uch = graph->at(0);
+        if (isident(uch))
+            return true;
+    }
+    return false;
+}
+
+enum Gr_Type {
+    GR_SPACE,
+    GR_IDENT,
+    GR_OTHER,
+};
+
+Gr_Type gr_type(List<uchar> *graph) {
+    if (gr_isspace(graph))
+        return GR_SPACE;
+    if (gr_isident(graph))
+        return GR_IDENT;
+    return GR_OTHER;
+}
+
+Gr_Iter Editor::gr_iter(cur2 c) {
+    Gr_Iter ret;
+    ret.init(iter(c));
+    return ret;
+}
+
+List<uchar>* Gr_Iter::read() {
+    if (eof()) return NULL;
+
+    cur2 start = it.pos;
+
+    Grapheme_Clusterer gc;
+    gc.init();
+    gc.feed(it.peek());
+
+    auto ret = new_list(uchar);
+    do {
+        ret->append(it.next());
+    } while (!eof() && !gc.feed(it.peek()));
+
+    gr_end = it.pos;
+    it.pos = start;
+    return ret;
+}
+
+void Gr_Iter::eat() {
+    it.pos = gr_end;
+}
+
+Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
+    auto &motion = cmd->motion;
+    if (!motion.len) return NULL;
+
+    auto &op = cmd->op;
+
+    auto is_op = [&](ccstr s) {
+        int len = strlen(s);
+        if (len != op.len) return false;
+
+        for (int i = 0; i < len; i++)
+            if (op[i].is_key || op[i].ch != s[i])
+                return false;
+        return true;
+    };
+
+    auto &c = cur;
+    auto &lines = buf->lines;
+    auto ret = new_object(Eval_Motion_Result);
+
+    int o_count = (cmd->o_count == 0 ? 1 : cmd->o_count);
+    int m_count = (cmd->m_count == 0 ? 1 : cmd->m_count);
+    int count = o_count * m_count;
+
+    // TODO: does this break anything?
+    c = buf->fix_cur(c);
+    cp_assert(buf->is_valid(c));
+
+    auto inp = motion[0];
+    if (inp.is_key) {
+
+    } else {
+        switch (inp.ch) {
+        case 'g': {
+            if (motion.len < 2) break;
+
+            auto inp2 = motion[1];
+            if (inp2.is_key) break;
+
+            switch (inp2.ch) {
+            case 'g':
+                ret->new_dest = new_cur2(0, 0);
+                ret->type = MOTION_LINE;
+                return ret;
+            case 'o':
+                ret->new_dest = buf->offset_to_cur(count - 1);
+                ret->type = MOTION_CHAR_EXCL;
+                return ret;
+            }
+            break;
+        }
+
+        case '{':
+        case '}': {
+            auto isempty = [&](int y) {
+                return !lines[y].len;
+            };
+
+            auto isok = [&](int y) {
+                return 0 <= y && y < lines.len;
+            };
+
+            cur2 pos = c;
+
+            for (int i = 0; i < count; i++) {
+                int y = pos.y;
+                if (isempty(y))
+                    while (isok(y) && isempty(y))
+                        y += (inp.ch == '{' ? -1 : 1);
+
+                while (isok(y) && !isempty(y))
+                    y += (inp.ch == '{' ? -1 : 1);
+
+                if (y == -1) {
+                    pos = new_cur2(0, 0);
+                    break;
+                }
+
+                if (y >= lines.len) {
+                    y = lines.len-1;
+                    pos = new_cur2(relu_sub(lines[y].len, 1), y);
+                    break;
+                }
+
+                pos = new_cur2(0, y);
+            }
+
+            ret->new_dest = pos;
+            ret->type = MOTION_CHAR_EXCL;
+            return ret;
+        }
+
+        case 'f':
+        case 't': {
+            if (motion.len < 2) break;
+
+            auto inp2 = motion[1];
+            if (inp2.is_key) break;
+
+            auto it = gr_iter();
+
+            cur2 last;
+
+            for (int i = 0; i < count && !it.eol(); i++) {
+                // ignore the first character
+                if (!it.eol()) {
+                    it.read();
+                    last = it.pos();
+                    it.eat();
+                }
+
+                while (!it.eol()) {
+                    auto graph = it.read();
+                    if (graph->len == 1)
+                        if (inp2.ch == graph->at(0))
+                            break;
+                    last = it.pos();
+                    it.eat();
+                }
+            }
+
+            if (it.eol()) break;
+
+            ret->new_dest = inp.ch == 't' ? last : it.pos();
+            ret->type = MOTION_CHAR_INCL;
+            return ret;
+        }
+
+        case 'F':
+        case 'T': {
+            if (motion.len < 2) break;
+
+            auto inp2 = motion[1];
+            if (inp2.is_key) break;
+
+            break;
+        }
+
+        case 'G': {
+            int y;
+            if (!cmd->o_count && !cmd->m_count) {
+                y = lines.len-1;
+            } else {
+                cp_assert(count > 0); // shouldn't be able to enter 0 as a count
+                y = count-1;
+            }
+
+            int x = find_first_nonspace_cp(y);
+
+            // TODO: update view, shit like nthat
+
+            ret->new_dest = new_cur2(x, y);
+            ret->type = MOTION_LINE;
+            return ret;
+        }
+
+        case '0':
+            ret->new_dest = new_cur2(0, c.y);
+            ret->type = MOTION_CHAR_EXCL;
+            return ret;
+
+        case '^': {
+            int x = find_first_nonspace_cp(c.y);
+            ret->new_dest = new_cur2(x, c.y);
+            ret->type = MOTION_CHAR_EXCL;
+            return ret;
+        }
+
+        case '$': {
+            int newy = min(lines.len-1, c.y + count-1);
+            ret->new_dest = new_cur2(lines[newy].len, newy);
+            ret->type = MOTION_CHAR_INCL;
+            return ret;
+        }
+
+        case 'c':
+        case 'y':
+        case 'd': {
+            if (!is_op(cp_sprintf("%c", (char)inp.ch))) break;
+
+            int y = min(c.y + count-1, lines.len-1);
+            ret->new_dest = new_cur2(0, y);
+            ret->type = MOTION_LINE;
+            return ret;
+        }
+
+        case 'j':
+        case 'k': {
+            int newy = c.y + count * (inp.ch == 'j' ? 1 : -1);
+            if (newy < 0) newy = 0;
+            if (newy >= lines.len) newy = lines.len-1;
+            if (newy == c.y) break;
+
+            auto vx = buf->idx_cp_to_vcp(c.y, c.x);
+            auto newvx = max(vx, vim.hidden_vx);
+
+            auto newx = buf->idx_vcp_to_cp(newy, newvx);
+            if (newx >= lines[newy].len && lines[newy].len > 0)
+                newx = lines[newy].len-1;
+
+            ret->new_dest = new_cur2(newx, newy);
+            ret->type = MOTION_LINE;
+            return ret;
+        }
+        case 'h':
+        case 'l': {
+            auto grx = buf->idx_cp_to_gr(c.y, c.x);
+
+            if (inp.ch == 'h') {
+                if (grx) grx--;
+            } else {
+                grx++;
+            }
+
+            auto x = buf->idx_gr_to_cp(c.y, grx);
+            if (x == lines[c.y].len && lines[c.y].len > 0)
+                x = lines[c.y].len-1;
+
+            vim.hidden_vx = buf->idx_cp_to_vcp(c.y, x);
+            ret->new_dest = new_cur2(x, c.y);
+            ret->type = MOTION_CHAR_EXCL;
+            return ret;
+        }
+        case 'w':
+        case 'W': {
+            auto it = gr_iter();
+
+            for (int i = 0; i < count && !it.eof(); i++) {
+                auto graph = it.read();
+                it.eat();
+
+                auto type = gr_type(graph);
+                while (!it.eof()) {
+                    graph = it.read();
+                    if (inp.ch == 'w') {
+                        if (gr_type(graph) != type)
+                            break;
+                    } else {
+                        if (gr_isspace(graph) != (type == GR_SPACE))
+                            break;
+                    }
+                    it.eat();
+                }
+
+                if (type != GR_SPACE) {
+                    while (!it.eof()) {
+                        auto graph = it.read();
+                        if (!gr_isspace(graph)) break;
+                        it.eat();
+                    }
+                }
+            }
+
+            ret->new_dest = it.pos();
+            ret->type = MOTION_CHAR_EXCL;
+            return ret;
+        }
+        case 'e':
+        case 'E': {
+            auto it = gr_iter();
+
+            for (int i = 0; i < count && !it.eof(); i++) {
+                auto graph = it.read();
+                it.eat();
+
+                auto type = gr_type(graph);
+                bool eat_spaces = false;
+
+                auto is_end = [&](List<uchar> *next_graph, Gr_Type current_type) {
+                    if (inp.ch == 'e')
+                        return gr_type(next_graph) != type;
+                    return gr_isspace(next_graph);
+                };
+
+                if (type == GR_SPACE || is_end(it.read(), type)) {
+                    while (!it.eof()) {
+                        graph = it.read();
+                        if (!gr_isspace(graph))
+                            break;
+                        it.eat();
+                    }
+                }
+
+                // now go to the end of the next word
+                graph = it.read();
+                type = gr_type(graph);
+
+                auto prev = it.pos();
+                it.eat();
+
+                while (!it.eof()) {
+                    graph = it.read();
+                    if (is_end(graph, type))
+                        break;
+                    prev = it.pos();
+                    it.eat();
+                }
+
+                it.it.pos = prev;
+            }
+
+            ret->new_dest = it.pos();
+            ret->type = MOTION_CHAR_INCL;
+            return ret;
+        }
+
+        }
+    }
+
+    return NULL;
+}
+
+bool Editor::vim_exec_command(Vim_Command *cmd) {
+    auto mode = world.vim.mode;
+    auto motion_result = vim_eval_motion(cmd);
+
+    auto &c = cur;
+    auto &lines = buf->lines;
+
+    int o_count = cmd->o_count == 0 ? 1 : cmd->o_count;
+
+    auto &op = cmd->op;
+    if (!op.len) {
+        if (!motion_result) return false;
+
+        auto pos = motion_result->new_dest;
+        if (pos.y >= lines.len) {
+            pos.y = lines.len-1;
+            pos.x = lines[pos.y].len-1;
+        }
+
+        int len = lines[pos.y].len;
+        if (pos.x >= len && len > 0) pos.x = len-1;
+
+        move_cursor(pos);
+        return true;
+    }
+
+    auto inp = op[0];
+    if (inp.is_key) {
+        switch (inp.mods) {
+        case CP_MOD_CTRL:
+            switch (inp.key) {
+            case CP_KEY_R: {
+                cur2 pos;
+                for (int i = 0; i < o_count; i++)
+                    pos = buf->hist_redo();
+                move_cursor(pos);
+                return true;
+            }
+            }
+            break;
+        }
+    } else {
+        switch (inp.ch) {
+        case 'i':
+        case 'a':
+        case 'o':
+        case 'O':
+        case 's':
+        case 'S':
+            switch (inp.ch) {
+            case 'a': {
+                auto gr = buf->idx_cp_to_gr(c.y, c.x);
+                auto x = buf->idx_gr_to_cp(c.y, gr+1);
+                move_cursor(new_cur2(x, c.y));
+                break;
+            }
+            case 'o':
+            case 'O': {
+                int y = inp.ch == 'o' ? c.y + 1 : c.y;
+
+                auto indent_chars = get_autoindent(y);
+                int indent_len = strlen(indent_chars);
+
+                auto text = new_list(uchar);
+                for (int i = 0; i < indent_len; i++)
+                    text->append((uchar)indent_chars[i]);
+                text->append((uchar)'\n');
+                buf->insert(new_cur2(0, y), text->items, text->len);
+
+                move_cursor(new_cur2(indent_len, y));
+                break;
+            }
+            case 's':
+            case 'S': {
+                cur2 start, end;
+                if (inp.ch == 's') {
+                    start = c;
+
+                    auto gr = buf->idx_cp_to_gr(c.y, c.x);
+                    auto cp = buf->idx_gr_to_cp(c.y, gr+1);
+                    end = new_cur2(cp, c.y);
+                } else {
+                    start = new_cur2(find_first_nonspace_cp(c.y), c.y);
+                    end = new_cur2(lines[c.y].len, c.y);
+                }
+
+                buf->remove(start, end);
+                move_cursor(start);
+                break;
+            }
+            }
+
+            vim.insert_start = cur;
+            world.vim.mode = VI_INSERT;
+
+            // copy the command over
+            vim.insert_command.m_count = cmd->m_count;
+            vim.insert_command.o_count = cmd->o_count;
+            For (&cmd->op) vim.insert_command.op.append(it);
+            For (&cmd->motion) vim.insert_command.motion.append(it);
+            return true;
+
+        case 'u': {
+            cur2 pos;
+            for (int i = 0; i < o_count; i++)
+                pos = buf->hist_undo();
+            move_cursor(pos);
+            return true;
+        }
+        case 'J':
+            break;
+        case 'c':
+            break;
+        case 'd': {
+            switch (mode) {
+            case VI_NORMAL: {
+                cp_assert(motion_result);
+
+                switch (motion_result->type) {
+                case MOTION_CHAR_INCL:
+                case MOTION_CHAR_EXCL: {
+                    cur2 a = c, b = motion_result->new_dest;
+                    if (a > b) {
+                        auto tmp = a;
+                        a = b;
+                        b = tmp;
+                    }
+
+                    if (motion_result->type == MOTION_CHAR_INCL) {
+                        auto it = gr_iter(b);
+                        it.read();
+                        it.eat();
+                        b = it.pos();
+                    }
+
+                    buf->remove(a, b);
+                    move_cursor(a);
+                    break;
+                }
+                case MOTION_LINE: {
+                    int y1 = c.y;
+                    int y2 = motion_result->new_dest.y;
+
+                    cur2 start = new_cur2(0, y1);
+                    cur2 end = new_cur2(0, y2+1);
+
+                    if (y2 == lines.len-1) {
+                        start = buf->dec_cur(start);
+                        end = new_cur2(lines[y2].len, y2);
+                    }
+
+                    buf->remove(start, end);
+
+                    auto to = new_cur2(0, y1);
+                    if (y1 >= lines.len) {
+                        // TODO: find first non whitespace
+                        to = new_cur2(0, lines.len-1);
+                    }
+                    move_cursor(to);
+                }
+                }
+                return true;
+            }
+            }
+            break;
+        }
+        case 'y':
+            break;
+        case '~':
+            break;
+        case '!':
+            break;
+        case '=':
+            break;
+        case '<':
+            break;
+        case '>':
+            break;
+        case 'g': {
+            auto it2 = op[1];
+            if (!it2.is_key) {
+                switch (it2.ch) {
+                case 'q':
+                case 'w':
+                case '?':
+                case '@':
+                case '~':
+                case 'u':
+                case 'U':
+                    break;
+                }
+            }
+            break;
+        }
+        case 'z': {
+            auto it2 = op[1];
+            if (!it2.is_key) {
+                switch (it2.ch) {
+                case 'f': {
+                    break;
+                }
+                }
+            }
+            break;
+        }
+        }
+    }
+    return false;
+}
+
+bool Editor::vim_handle_input(Vim_Command_Input *input) {
+    switch (world.vim.mode) {
+    case VI_NORMAL: {
+        vim.command_buffer->append(input);
+
+        print("%s", render_command_buffer(vim.command_buffer));
+
+        Vim_Command cmd; ptr0(&cmd);
+        cmd.op.init();
+        cmd.motion.init();
+
+        auto status = vim_parse_command(&cmd);
+        if (status == VIM_PARSE_WAIT) break;
+
+        vim.command_buffer->len = 0;
+        if (status == VIM_PARSE_DISCARD) {
+            print("command discarded");
+            break;
+        }
+
+        print("command done");
+        print("%s", render_command(&cmd));
+        return vim_exec_command(&cmd);
     }
     }
+    return false;
+}
+
+bool Editor::vim_handle_char(u32 ch) {
+    Vim_Command_Input input; ptr0(&input);
+    input.is_key = false;
+    input.ch = ch;
+    return vim_handle_input(&input);
 }
 
 bool Editor::vim_handle_key(int key, int mods) {
+    Vim_Command_Input input; ptr0(&input);
+    input.is_key = true;
+    input.key = key;
+    input.mods = mods;
+    return vim_handle_input(&input);
 }

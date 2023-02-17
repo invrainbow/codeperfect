@@ -424,8 +424,8 @@ struct World {
     Searcher searcher;
     Go_Indexer indexer;
 
-    bool enable_vim;
     struct {
+        bool on;
         Vim_Mode mode;
     } vim;
 
