@@ -2695,7 +2695,9 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
         case 'u':
         case 'J':
         case 'i':
+        case 'I':
         case 'a':
+        case 'A':
         case 'o':
         case 'O':
         case 's':
@@ -3486,7 +3488,16 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
             enter_insert_mode();
             return true;
         }
-
+        case 'A': {
+            move_cursor(new_cur2(lines[c.y].len, c.y));
+            enter_insert_mode();
+            return true;
+        }
+        case 'I': {
+            move_cursor(new_cur2(find_first_nonspace_cp(c.y), c.y));
+            enter_insert_mode();
+            return true;
+        }
         case 'o':
         case 'O':
             switch (world.vim.mode) {
