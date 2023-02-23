@@ -1267,10 +1267,20 @@ bool Editor::trigger_escape(cur2 go_here_after) {
         switch (world.vim.mode) {
         case VI_INSERT: {
             handled = true;
-            auto gr = buf->idx_cp_to_gr(cur.y, cur.x);
-            if (gr) {
-                auto x = buf->idx_gr_to_cp(cur.y, gr-1);
-                move_cursor(new_cur2(x, cur.y));
+
+            auto &ref = vim.inserted_indent;
+            if (ref.inserted && ref.buf_tree_version == buf->tree_version) {
+                buf->remove(ref.start, ref.end);
+
+                // It's expected that ref.start.x == 0 and the line is now empty,
+                // so we don't need to subtract 1.
+                move_cursor(ref.start);
+            } else {
+                auto gr = buf->idx_cp_to_gr(cur.y, cur.x);
+                if (gr) {
+                    auto x = buf->idx_gr_to_cp(cur.y, gr-1);
+                    move_cursor(new_cur2(x, cur.y));
+                }
             }
             world.vim.mode = VI_NORMAL;
             break;
@@ -2080,6 +2090,15 @@ void Editor::type_char_in_insert_mode(uchar ch) {
             trigger_autocomplete(false, isident(ch), ch);
 
     if (!did_parameter_hint) update_parameter_hint();
+}
+
+void Editor::vim_save_inserted_indent(cur2 start, cur2 end) {
+    if (!world.vim.on) return;
+
+    vim.inserted_indent.inserted = true;
+    vim.inserted_indent.buf_tree_version = buf->tree_version;
+    vim.inserted_indent.start = start;
+    vim.inserted_indent.end = end;
 }
 
 void Editor::update_autocomplete(bool triggered_by_ident) {
@@ -3764,7 +3783,11 @@ cur2 Editor::open_newline(int y) {
     for (int i = 0; i < indent_len; i++)
         text->append((uchar)indent_chars[i]);
     buf->insert(new_cur2(buf->lines[yp].len, yp), text->items, text->len);
-    return new_cur2(indent_len, y);
+
+    auto start = new_cur2(0, y);
+    auto end = new_cur2(indent_len, y);
+    vim_save_inserted_indent(start, end);
+    return end;
 }
 
 bool Editor::vim_handle_input(Vim_Command_Input *input) {

@@ -478,6 +478,8 @@ void Buffer::write(File *f) {
 // .remove() has been tested to work -- the entire reason we made
 // internal_...() functions was to stop us from calling them directly, because
 // it would lead to bugs.
+//
+// Update: Also, .remove() handles tree updating correctly.
 // 
 // Also, y1 and y2 are inclusive, whereas internal_delete_lines() is exclusive.
 void Buffer::remove_lines(u32 y1, u32 y2) {

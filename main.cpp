@@ -513,7 +513,10 @@ void handle_key_event(Window_Event *it) {
         editor->type_char_in_insert_mode('\n');
 
         auto indent_chars = editor->get_autoindent(editor->cur.y);
+        auto start = editor->cur;
         editor->insert_text_in_insert_mode(indent_chars);
+        auto end = editor->cur;
+        editor->vim_save_inserted_indent(start, end);
         return;
     }
     case CP_KEY_BACKSPACE: {

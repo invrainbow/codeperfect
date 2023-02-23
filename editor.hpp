@@ -216,6 +216,12 @@ struct Editor {
                 Selection_Type visual_type;
             };
         };
+        struct {
+            bool inserted;
+            int buf_tree_version;
+            cur2 start;
+            cur2 end;
+        } inserted_indent;
     } vim;
 
     Client_Parameter_Hint parameter_hint;
@@ -293,6 +299,7 @@ struct Editor {
     cur2 vim_delete_selection(Selection *selection);
     cur2 vim_delete_range(cur2 start, cur2 end);
     void vim_delete_lines(int y1, int y2);
+    void vim_save_inserted_indent(cur2 start, cur2 end);
 };
 
 Parse_Lang determine_lang(ccstr filepath);
