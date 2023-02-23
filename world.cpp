@@ -1673,15 +1673,10 @@ bool is_command_enabled(Command cmd) {
         return editor && editor->lang == LANG_GO && editor->buf->tree;
     }
 
-    case CMD_GO_FORWARD: {
-        auto &hist = world.history;
-        return hist.curr != hist.top;
-    }
-
-    case CMD_GO_BACK: {
-        auto &hist = world.history;
-        return hist.curr != hist.start;
-    }
+    case CMD_GO_FORWARD:
+        return world.history.curr != world.history.top;
+    case CMD_GO_BACK:
+        return world.history.curr != world.history.start;
 
     case CMD_FIND:
         return (bool)get_current_editor();
