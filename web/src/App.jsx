@@ -608,15 +608,14 @@ const faqs = [
     a: (
       <>
         <p>
-          There isn't any one thing or algorithm or technique. CodePerfect is
-          fast compared to modern software because it declines to copy the
-          numerous things that make modern software slow.
+          There isn't any one thing. CodePerfect manages to be fast compared to
+          modern software by declining to copy what makes modern software slow.
         </p>
 
         <p>
-          The modern tech stack has extreme bloat everywhere. We eschewed that
-          and instead use a low level language (C/C++) and manage our own memory
-          with amortized bulk arena allocation. We write straightforward,{" "}
+          The modern tech stack has extreme bloat everywhere. We eschewed all
+          that in favor of a low level language (C/C++) and managing our own
+          memory with amortized arena allocation. We write straightforward,{" "}
           <A href={LINKS.nonPessimized}>non-pessimized</A> code that just
           executes the actual CPU instructions that do the thing it's supposed
           to.
@@ -624,10 +623,10 @@ const faqs = [
 
         <p>
           We're not writing crazy inline assembly or SIMD intrinsics or
-          whatever. We do some optimization, like using file mappings and
-          multithreading stuff where it makes sense, but mostly we are just
-          writing straightforward code that performs the actual task of
-          executing an IDE. Modern computers are just fast.
+          discovering new algorithms or whatever. We do some optimization, like
+          using file mappings and multithreading stuff where it makes sense, but
+          mostly we are just writing straightforward code that performs the
+          actual task of executing an IDE. Modern computers are just fast.
         </p>
       </>
     ),
@@ -642,11 +641,14 @@ const faqs = [
         </p>
 
         <p>
-          Right now we're targeting people who want a code editor as fast as Vim
-          or Sublime Text, but comes with code intelligence and other IDE
-          features you need to program productively. Our users spend substantial
-          amounts of time in their editor, and derive significant value and joy
-          from a seamless, latency-free workflow.
+          Right now we're targeting people who want an IDE as fast as Vim, but
+          comes with code intelligence and other IDE features to program
+          productively. Our users spend a lot of time in their editor, and get
+          significant value and joy from a seamless, latency-free workflow.
+        </p>
+        <p>
+          In exchange, CodePerfect has fewer features, is not free, and provides
+          limited customization.
         </p>
       </>
     ),
@@ -655,28 +657,23 @@ const faqs = [
     q: "What's the long term goal?",
     a: (
       <>
-        <p>
-          We are trying to build a custom power tool for the specific task of
-          programming.
-        </p>
+        <p>We are trying to build the best power tool for programming.</p>
         <p>
           New programming tools today tend to have ambitious goals like making
           programming more collaborative, or involve less code, or more
-          integrated with third-party tools. We're aiming in a boring orthogonal
-          direction: building the best tool for literally editing, compiling,
-          and debugging code. CodePerfect is tightly integrated and optimized
-          around that use case.
+          integrated with third-party tools. We have a more boring goal: to
+          build the best tool for editing, compiling, and debugging code.
+          CodePerfect is tightly integrated and optimized around that workflow.
         </p>
 
         <p>
           We want to be <A href="https://sesuperhuman.com">Superhuman</A> for
-          programming. Programmers use their IDE all day, and small improvements
-          add up. We want to make big improvements.
+          programming. Business people are in their email all day, and small
+          improvements add up. An IDE is the same.
         </p>
         <p>
-          A big part of this is building a smooth experience. But up to a point,
-          smoothness means speed (or low latency), so that's a big initial
-          focus.
+          A big part of this is building a smooth experience. Up to a point,
+          that means speed, or low latency, so that's a big initial focus.
         </p>
       </>
     ),
@@ -686,7 +683,7 @@ const faqs = [
     a: (
       <>
         <p>
-          Because we have to pay our rent, which is a recurring subscription :)
+          The short answer is, because our rent is a recurring subscription.
         </p>
         <p>
           CodePerfect is also in{" "}
@@ -696,8 +693,8 @@ const faqs = [
         <p>
           We understand some users adamantly oppose subscription models and
           require a perpetual license. We sell one for the cost of four years:
-          $200 for individuals, $400 if you're expensing. Please{" "}
-          <A href={`mailto:${SUPPORT_EMAIL}`}>email us</A> to initiate this
+          $200 for individuals, $400 expensed.{" "}
+          <A href={`mailto:${SUPPORT_EMAIL}`}>Email us</A> to initiate this
           process.
         </p>
       </>
@@ -710,7 +707,7 @@ const faqs = [
         <p>
           It's a throwback to an era when software was way{" "}
           <A href={LINKS.oldSoftwareOpenedInstantly}>faster</A>, despite running
-          on hardware orders of magnitude slower than a phone today.
+          on hardware much slower than a phone today.
         </p>
       </>
     ),
@@ -729,7 +726,7 @@ function FAQ() {
             className="prose md:p-6 md:border-0 mb-12 md:mb-4 last:mb-0 md:bg-white md:rounded-lg md:shadow-sm"
             key={it.q}
           >
-            <p className="text-lg font-bold">{it.q}</p>
+            <p className="font-bold">{it.q}</p>
             {it.a}
           </div>
         ))}
