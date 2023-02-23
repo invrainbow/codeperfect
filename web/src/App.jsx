@@ -611,29 +611,25 @@ const faqs = [
     a: (
       <>
         <p>
-          It's actually not particularly fast, just fast compared to modern
-          software. Why modern software is slow is complicated, but suffice it
-          to say it's a hundred different reasons, and CodePerfect achieves
-          relative fastness mostly by declining to copy them.
+          There isn't any one thing. CodePerfect manages to be fast compared to
+          modern software by declining to copy what makes modern software slow.
         </p>
 
         <p>
-          The biggest of these reasons is extreme bloat everywhere in the modern
-          tech stack. We eschewed all that in favor of a low level language
-          (C/C++) and managing our own memory by doing amortized bulk allocation
-          with arena allocators. We write straightforward,{" "}
-          <A href={LINKS.nonPessimized}>non-pessimized</A> code that more or
-          less just executes the actual CPU instructions that it needs to in
-          order to do the thing it's supposed to do.
+          The modern tech stack has extreme bloat everywhere. We eschewed all
+          that in favor of a low level language (C/C++) and managing our own
+          memory with amortized arena allocation. We write straightforward,{" "}
+          <A href={LINKS.nonPessimized}>non-pessimized</A> code that just
+          executes the actual CPU instructions that do the thing it's supposed
+          to.
         </p>
 
         <p>
-          CodePerfect's speed is really just the speed of modern computers. We
-          aren't hyperoptimizing by writing crazy inline assembly or anything.
-          There are some techniques we use, like using file mappings and
-          multithreading some things where it makes sense, but overall it's just
-          straightforward C code that performs the actual task of executing an
-          IDE, which as it turns out modern computers can do quite efficiently.
+          We're not writing crazy inline assembly or SIMD intrinsics or
+          discovering new algorithms or whatever. We do some optimization, like
+          using file mappings and multithreading stuff where it makes sense, but
+          mostly we are just writing straightforward code that performs the
+          actual task of executing an IDE. Modern computers are just fast.
         </p>
       </>
     ),
@@ -648,16 +644,14 @@ const faqs = [
         </p>
 
         <p>
-          Right now we're targeting people who want a code editor as fast as
-          alacritty/tmux/vim or Sublime Text, but comes with code intelligence
-          and other IDE features you need to program productively. Our users
-          spend substantial amounts of time in their editor, and derive
+          Right now we're targeting people who want an IDE as fast as Vim, but
+          comes with code intelligence and other IDE features to program
+          productively. Our users spend a lot of time in their editor, and get
           significant value and joy from a seamless, latency-free workflow.
         </p>
         <p>
-          We want to be <A href="https://sesuperhuman.com">Superhuman</A> for
-          programming. Much like business people and email, programmers use
-          their IDE all day.
+          In exchange, CodePerfect has fewer features, is not free, and provides
+          limited customization.
         </p>
       </>
     ),
@@ -693,7 +687,7 @@ const faqs = [
     a: (
       <>
         <p>
-          Because we have rent to pay, and our rent is a subscription model :)
+          The short answer is, because our rent is a recurring subscription.
         </p>
         <p>
           CodePerfect is also in active development and shipping{" "}
@@ -702,9 +696,9 @@ const faqs = [
         </p>
         <p>
           We understand some users adamantly oppose subscription models and
-          strongly prefer a perpetual license. We sell one for the cost of four
-          years: $200 for individuals, or $400 if you're expensing it. Please{" "}
-          <A href={`mailto:${SUPPORT_EMAIL}`}>email us</A> to initiate this
+          require a perpetual license. We sell one for the cost of four years:
+          $200 for individuals, $400 expensed.{" "}
+          <A href={`mailto:${SUPPORT_EMAIL}`}>Email us</A> to initiate this
           process.
         </p>
       </>
@@ -715,9 +709,9 @@ const faqs = [
     a: (
       <>
         <p>
-          It's a throwback to an era when somehow, on hardware way slower than
-          today's, software was way{" "}
-          <A href={LINKS.oldSoftwareOpenedInstantly}>faster</A>.
+          It's a throwback to an era when software was way{" "}
+          <A href={LINKS.oldSoftwareOpenedInstantly}>faster</A>, despite running
+          on hardware much slower than a phone today.
         </p>
       </>
     ),
@@ -736,7 +730,7 @@ function FAQ() {
             className="prose md:p-6 md:border-0 mb-12 md:mb-4 last:mb-0 md:bg-white md:rounded-lg md:shadow-sm"
             key={it.q}
           >
-            <p className="text-lg font-bold">{it.q}</p>
+            <p className="font-bold">{it.q}</p>
             {it.a}
           </div>
         ))}
