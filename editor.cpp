@@ -3501,27 +3501,16 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
         case 'o':
         case 'O':
             switch (world.vim.mode) {
-            case VI_NORMAL:
-                switch (inp.ch) {
-                case 'a': {
-                    auto gr = buf->idx_cp_to_gr(c.y, c.x);
-                    auto x = buf->idx_gr_to_cp(c.y, gr+1);
-                    move_cursor(new_cur2(x, c.y));
-                    break;
-                }
-                case 'o':
-                case 'O': {
-                    int y = inp.ch == 'o' ? c.y + 1 : c.y;
-                    move_cursor(open_newline(y));
-                    break;
-                }
-                }
-                break;
-            case VI_VISUAL:
-                break;
+            case VI_NORMAL: {
+                int y = inp.ch == 'o' ? c.y + 1 : c.y;
+                move_cursor(open_newline(y));
+                enter_insert_mode();
+                return true;
             }
-            enter_insert_mode();
-            return true;
+            case VI_VISUAL:
+                return true;
+            }
+            break;
 
         case 's':
         case 'S':
