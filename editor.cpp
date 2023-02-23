@@ -3289,7 +3289,7 @@ void Editor::vim_handle_visual_mode_key(Selection_Type type) {
 }
 
 // mirrors buf->remove_lines, y1-y2 are inclusive
-cur2 Editor::vim_delete_lines(int y1, int y2) {
+void Editor::vim_delete_lines(int y1, int y2) {
     // TODO: pick up here, this ties into clipboard support
     buf->remove_lines(y1, y2);
 }
@@ -3312,8 +3312,7 @@ cur2 Editor::vim_delete_selection(Selection *selection) {
 
     int len = selection->ranges->len;
     for (int i = len-1; i >= 0; i--) {
-        aasdfuto &it = selection->ranges->at(i);
-
+        auto &it = selection->ranges->at(i);
         buf->remove(it.start, it.end);
     }
 

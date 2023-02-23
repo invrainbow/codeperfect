@@ -292,6 +292,7 @@ struct Editor {
     void vim_handle_visual_mode_key(Selection_Type type);
     cur2 vim_delete_selection(Selection *selection);
     cur2 vim_delete_range(cur2 start, cur2 end);
+    void vim_delete_lines(int y1, int y2);
 };
 
 Parse_Lang determine_lang(ccstr filepath);
