@@ -166,7 +166,7 @@ void Editor::insert_text_in_insert_mode(ccstr s) {
     for (u32 i = 0; i < text->len; i++)
         c = buf->inc_cur(c);
 
-    raw_move_cursor(c);
+    move_cursor(c);
 }
 
 void Editor::perform_autocomplete(AC_Result *result) {
@@ -178,7 +178,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
         // also what if we just forced you to be in insert mode for autocomplete lol
 
         // remove everything but the operator
-        raw_move_cursor(ac.operand_end);
+        move_cursor(ac.operand_end);
         buf->remove(ac.operand_end, ac.keyword_end);
 
         // nice little dsl here lol
@@ -245,7 +245,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
         auto initialize_everything = [&]() {
             operand_text = buf->get_text(ac.operand_start, ac.operand_end);
 
-            raw_move_cursor(ac.operand_start);
+            move_cursor(ac.operand_start);
             buf->remove(ac.operand_start, ac.operand_end);
 
             curr_postfix = postfix_stack.append();
@@ -835,7 +835,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
         buf->insert(ac_start, name->items, name->len);
 
         // move cursor forward
-        raw_move_cursor(new_cur2(ac_start.x + name->len, ac_start.y));
+        move_cursor(new_cur2(ac_start.x + name->len, ac_start.y));
 
         // clear out last_closed_autocomplete
         last_closed_autocomplete = new_cur2(-1, -1);
@@ -855,7 +855,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
 void Editor::add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end) {
     auto dy = new_end.y - old_end.y;
-    raw_move_cursor(new_cur2(cur.x, cur.y + dy));
+    move_cursor(new_cur2(cur.x, cur.y + dy));
 }
 
 bool Editor::is_current_editor() {
@@ -870,13 +870,12 @@ Move_Cursor_Opts *default_move_cursor_opts() {
     auto ret = new_object(Move_Cursor_Opts);
 
     // set defaults
-    ret->dont_add_to_history = false;
     ret->is_user_movement = false;
 
     return ret;
 }
 
-void Editor::raw_move_cursor(cur2 c, Move_Cursor_Opts *opts) {
+void Editor::move_cursor(cur2 c, Move_Cursor_Opts *opts) {
     if (!is_main_thread) cp_panic("can't call this from outside main thread");
 
     if (!opts) opts = default_move_cursor_opts();
@@ -987,10 +986,6 @@ void Editor::ensure_cursor_on_screen() {
     if (cur.y + options.scrolloff >= view.y + view.h)
         move_cursor(new_cur2(cur.x, relu_sub(view.y + view.h,  1 + options.scrolloff)));
     // TODO: handle x
-}
-
-void Editor::move_cursor(cur2 c, Move_Cursor_Opts *opts) {
-    raw_move_cursor(c, opts);
 }
 
 void Editor::reset_state() {
@@ -1812,7 +1807,7 @@ void Editor::type_char(uchar uch) {
     auto old_cur = cur;
     auto new_cur = buf->inc_cur(cur);
 
-    raw_move_cursor(new_cur);
+    move_cursor(new_cur);
 }
 
 void Editor::update_parameter_hint() {
@@ -2075,7 +2070,7 @@ void Editor::type_char_in_insert_mode(uchar ch) {
         pos.x++;
 
         // move cursor after everything we typed
-        raw_move_cursor(pos);
+        move_cursor(pos);
         break;
     }
     }
@@ -2160,7 +2155,7 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
     }
 
     buf->remove(start, cur);
-    raw_move_cursor(start);
+    move_cursor(start);
 
     last_closed_autocomplete = new_cur2(-1, -1);
 }
@@ -2320,7 +2315,7 @@ bool Editor::optimize_imports() {
             if (c.x > buf->lines[c.y].len)
                 c.x = buf->lines[cur.y].len;
 
-            move_cursor(c); // use raw_move_cursor()?
+            move_cursor(c);
         }
     } while (0);
 

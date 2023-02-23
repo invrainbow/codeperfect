@@ -438,7 +438,7 @@ void handle_key_event(Window_Event *it) {
             auto buf = editor->buf;
             int y = buf->lines.len-1;
             int x = buf->lines[y].len;
-            editor->raw_move_cursor(new_cur2(x, y));
+            editor->move_cursor(new_cur2(x, y));
 
             if (editor->select_start != editor->cur)
                 editor->selecting = true;
@@ -475,7 +475,7 @@ void handle_key_event(Window_Event *it) {
                 ORDER(a, b);
 
                 editor->buf->remove(a, b);
-                editor->raw_move_cursor(a);
+                editor->move_cursor(a);
                 editor->selecting = false;
             }
 

@@ -228,7 +228,6 @@ struct Editor {
     bool is_unsaved() { return is_modifiable() && (file_was_deleted || buf->dirty); }
     bool is_modifiable();
 
-    void raw_move_cursor(cur2 c, Move_Cursor_Opts *opts = NULL);
     void move_cursor(cur2 c, Move_Cursor_Opts *opts = NULL);
     void reset_state();
     bool load_file(ccstr new_filepath);

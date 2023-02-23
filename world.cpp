@@ -2386,7 +2386,7 @@ void handle_command(Command cmd, bool from_menu) {
         if (pos.x != -1) {
             auto opts = default_move_cursor_opts();
             opts->is_user_movement = true;
-            editor->raw_move_cursor(pos, opts);
+            editor->move_cursor(pos, opts);
         }
 
         break;
