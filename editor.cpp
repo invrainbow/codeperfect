@@ -936,34 +936,9 @@ void Editor::move_cursor(cur2 c, Move_Cursor_Opts *opts) {
         buf->hist_force_push_next_change = true;
     }
 
-    bool push_to_history = true;
-
-    // what the fuck is this stupid pyramid of shit
-    auto &nq = world.navigation_queue;
-    if (nq.len) {
-        auto &top = nq[0];
-        if (top.editor_id == id) {
-            if (top.pos == c) {
-                push_to_history = false;
-            } else {
-                nq.remove(&nq[0]);
-                if (nq.len) {
-                    auto top = nq[0];
-                    if (top.editor_id == id) {
-                        if (top.pos == c)
-                            push_to_history = false;
-                        else
-                            nq.len = 0;
-                    }
-                }
-            }
-        }
-    }
-
-    if (!opts->dont_add_to_history)
-        if (push_to_history)
-            if (get_current_editor() == this)
-                world.history.push(id, c);
+    if (!world.dont_push_history)
+        if (get_current_editor() == this)
+            world.history.push(id, c);
 }
 
 void Editor::ensure_cursor_on_screen_by_moving_view(Ensure_Cursor_Mode mode) {
@@ -1376,6 +1351,8 @@ Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos, bool pos_in_byte_format) 
 
     if (pos.x != -1) {
         editor.move_cursor(cppos);
+    } else {
+        world.history.push(editor.id, editor.cur);
     }
 
     return &editor;

@@ -88,10 +88,9 @@ void History::actually_go(History_Loc *it) {
 
     auto pos = it->mark->pos(); // it->pos
 
-    world.navigation_queue.len = 0;
-    auto dest = world.navigation_queue.append();
-    dest->editor_id = it->editor_id;
-    dest->pos = pos;
+    auto old = world.dont_push_history;
+    world.dont_push_history = true;
+    defer { world.dont_push_history = old; };
 
     focus_editor_by_id(it->editor_id, pos);
 }

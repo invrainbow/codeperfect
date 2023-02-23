@@ -418,6 +418,8 @@ struct World {
 
     bool cmd_unfocus_all_windows;
 
+    bool dont_push_history;
+
     Message_Queue<Main_Thread_Message> message_queue;
     Searcher searcher;
     Go_Indexer indexer;
