@@ -100,6 +100,29 @@ uchar Buffer_It::next() {
     return ret;
 }
 
+List<uchar>* Gr_Iter::read() {
+    if (eof()) return NULL;
+
+    cur2 start = it.pos;
+
+    Grapheme_Clusterer gc;
+    gc.init();
+    gc.feed(it.peek());
+
+    auto ret = new_list(uchar);
+    do {
+        ret->append(it.next());
+    } while (!eof() && !gc.feed(it.peek()));
+
+    gr_end = it.pos;
+    it.pos = start;
+    return ret;
+}
+
+void Gr_Iter::eat() {
+    it.pos = gr_end;
+}
+
 void Cstr_To_Ustr::init() {
     len = 0;
     buflen = 0;
@@ -448,6 +471,30 @@ void Buffer::write(File *f) {
         for (auto ch : it)
             write_char(ch);
     }
+}
+
+// This function produces the same result as internal_delete_lines(), except it
+// mimics the behavior through remove(). This is because doing this via
+// .remove() has been tested to work -- the entire reason we made
+// internal_...() functions was to stop us from calling them directly, because
+// it would lead to bugs.
+// 
+// Also, y1 and y2 are inclusive, whereas internal_delete_lines() is exclusive.
+void Buffer::remove_lines(u32 y1, u32 y2) {
+    auto start = new_cur2(0, y1);
+    auto end = new_cur2(0, y2+1);
+
+    if (y2 == lines.len-1) {
+        // when would this happen? and is this how we should handle?
+        // if (!y1) return;
+
+        start = dec_cur(start);
+        end = new_cur2(lines[lines.len-1].len, lines.len-1);
+    } else {
+        end = new_cur2(0, y2+1);
+    }
+
+    remove(start, end);
 }
 
 void Buffer::internal_delete_lines(u32 y1, u32 y2) {
@@ -927,6 +974,21 @@ cur2 Buffer::inc_cur(cur2 c) {
     auto it = iter(c);
     it.next();
     return it.pos;
+}
+
+Gr_Iter Buffer::gr_iter(cur2 c) {
+    Gr_Iter ret;
+    ret.init(iter(c));
+    return ret;
+}
+
+cur2 Buffer::inc_gr(cur2 c) {
+    auto it = gr_iter(c);
+    if (!it.eof()) {
+        it.read();
+        it.eat();
+    }
+    return it.pos();
 }
 
 cur2 Buffer::dec_cur(cur2 c) {

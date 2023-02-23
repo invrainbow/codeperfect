@@ -19,6 +19,9 @@ ccstr str_replace(ccstr s, ccstr find, ccstr replace);
 
 #define cp_strcpy_fixed(x, y) cp_strcpy(x, _countof(x), y)
 
+#define SWAP(a, b) do { auto tmp = a; a = b; b = tmp; } while (0)
+#define ORDER(a, b) do { if (a > b) SWAP(a, b); } while (0)
+
 struct Text_Renderer {
     List<char> chars;
 

@@ -2205,11 +2205,7 @@ void trigger_file_search(int limit_start, int limit_end) {
 
         auto a = ed->select_start;
         auto b = ed->cur;
-        if (a > b) {
-            auto tmp = a;
-            a = b;
-            b = tmp;
-        }
+        ORDER(a, b);
 
         wnd.sess.limit_start = ed->cur_to_offset(a);
         wnd.sess.limit_end = ed->cur_to_offset(b);
@@ -2579,7 +2575,11 @@ void UI::draw_everything() {
             im::MenuItem("Show frame index", NULL, &world.show_frame_index);
             im::MenuItem("Show frameskips", NULL, &world.show_frameskips);
             im::MenuItem("Poor man's GPU debugger", NULL, &world.wnd_poor_mans_gpu_debugger.show);
-            im::MenuItem("Escape flashes cursor red", NULL, &world.escape_flashes_cursor_red);
+
+            if (im::MenuItem("Flash cursor red")) {
+                auto editor = get_current_editor();
+                if (editor) editor->flash_cursor_error();
+            }
 
             im::Separator();
 
@@ -6709,20 +6709,20 @@ void UI::draw_everything() {
                     }
                 }
             }
-
+            
+            auto editor_selection = editor->get_selection();
+            int editor_curr_range = 0;
+            /*
             cur2 select_start, select_end;
             if (editor->selecting) {
                 auto a = editor->select_start;
                 auto b = editor->cur;
-                if (a > b) {
-                    auto tmp = a;
-                    a = b;
-                    b = tmp;
-                }
+                ORDER(a, b);
 
                 select_start = a;
                 select_end = b;
             }
+            */
 
             struct {
                 bool on;
@@ -7022,11 +7022,23 @@ void UI::draw_everything() {
                             draw_highlight(highlight_snippet.color, glyph_width);
                     }
 
-                    if (editor->selecting) {
+                    if (editor_selection) {
                         auto pos = new_cur2(curr_cp_idx, y);
-                        if (select_start <= pos && pos < select_end) {
-                            draw_highlight(rgba(global_colors.visual_background), glyph_width, true);
-                            text_color = rgba(global_colors.visual_foreground);
+
+                        auto ranges = editor_selection->ranges;
+                        if (editor_curr_range < ranges->len) {
+                            auto range = &ranges->at(editor_curr_range);
+                            while (pos > range->end) {
+                                editor_curr_range++;
+                                if (editor_curr_range >= ranges->len)
+                                    break;
+                                range = &ranges->at(editor_curr_range);
+                            }
+
+                            if (range->start <= pos && pos < range->end) {
+                                draw_highlight(rgba(global_colors.visual_background), glyph_width, true);
+                                text_color = rgba(global_colors.visual_foreground);
+                            }
                         }
                     }
 
@@ -7061,9 +7073,11 @@ void UI::draw_everything() {
                         }
                     }
 
-                    if (editor->selecting) {
+                    if (editor_selection && editor_selection->type != SEL_BLOCK) {
+                        auto range = editor_selection->ranges->at(0);
+
                         auto pos = new_cur2(0, y);
-                        if (select_start <= pos && pos < select_end)
+                        if (range.start <= pos && pos < range.end)
                             draw_highlight(rgba(global_colors.visual_background), 1, true);
                     }
                 }
@@ -7297,11 +7311,17 @@ void UI::draw_everything() {
                     ccstr mode_str = NULL;
                     switch (world.vim.mode) {
                     case VI_NORMAL: mode_str = "NORMAL"; break;
-                    case VI_VISUAL: mode_str = "VISUAL"; break;
                     case VI_INSERT: mode_str = "INSERT"; break;
                     case VI_REPLACE: mode_str = "REPLACE"; break;
                     case VI_OPERATOR: mode_str = "OPERATOR"; break;
                     case VI_CMDLINE: mode_str = "CMDLINE"; break;
+                    case VI_VISUAL:
+                        switch (editor->vim.visual_type) {
+                        case SEL_CHAR: mode_str = "VISUAL"; break;
+                        case SEL_LINE: mode_str = "VISUAL_LINE"; break;
+                        case SEL_BLOCK: mode_str = "VISUAL_BLOCK"; break;
+                        }
+                        break;
                     default: mode_str = "UNKNOWN"; break;
                     }
                     draw_status_piece(LEFT, mode_str, rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));

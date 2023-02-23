@@ -614,7 +614,6 @@ void World::init() {
     // if (!use_nvim) world.wnd_history.show = true;
 
     show_frame_index = false;
-    // escape_flashes_cursor_red = true;
 #endif
 
     t.log("rest of shit");
@@ -2324,11 +2323,7 @@ void handle_command(Command cmd, bool from_menu) {
         if (editor->selecting) {
             auto a = editor->select_start.y;
             auto b = editor->cur.y;
-            if (a > b) {
-                auto tmp = a;
-                a = b;
-                b = tmp;
-            }
+            ORDER(a, b);
             editor->toggle_comment(a, b);
         } else {
             editor->toggle_comment(editor->cur.y, editor->cur.y);

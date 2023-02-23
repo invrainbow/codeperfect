@@ -8283,9 +8283,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
 
                 // at this point, a->is_underlying != b->is_underlying
 
-                if (b->is_underlying) {
-                    auto tmp = a; a = b; b = tmp;
-                }
+                if (b->is_underlying) SWAP(a, b);
 
                 // at this point, a is underlying, b is not
 

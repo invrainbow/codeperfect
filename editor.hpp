@@ -22,8 +22,6 @@ enum Vim_Mode {
     VI_NONE,
     VI_NORMAL,
     VI_VISUAL,
-    VI_VISUAL_LINE,
-    VI_VISUAL_BLOCK,
     VI_INSERT,
     VI_REPLACE,
     VI_OPERATOR,
@@ -86,8 +84,8 @@ struct Vim_Command_Input {
 
 enum Vim_Parse_Status {
     VIM_PARSE_DONE,
-    VIM_PARSE_DISCARD,
     VIM_PARSE_WAIT,
+    VIM_PARSE_DISCARD,
 };
 
 struct Vim_Command {
@@ -109,23 +107,21 @@ struct Eval_Motion_Result {
     bool inclusive;
 };
 
-struct Editor;
+enum Selection_Type {
+    SEL_CHAR,
+    SEL_LINE,
+    SEL_BLOCK,
+    SEL_NONE = -1, // sentinel
+};
 
-struct Gr_Iter {
-    Buffer_It it;
-    cur2 gr_end;
+struct Selection_Range {
+    cur2 start;
+    cur2 end;
+};
 
-    void init(Buffer_It _it) {
-        ptr0(this);
-        it = _it;
-    }
-
-    cur2 pos() { return it.pos; };
-    bool eof() { return it.eof(); };
-    bool eol() { return it.eol() || it.eof(); };
-
-    List<uchar>* read();
-    void eat();
+struct Selection {
+    Selection_Type type;
+    List<Selection_Range> *ranges;
 };
 
 struct Editor {
@@ -146,6 +142,7 @@ struct Editor {
     // only used when !world.use_nvim
     bool selecting;
     cur2 select_start;
+
     bool mouse_selecting;
     u64 mouse_drag_last_time_ms;
     i64 mouse_drag_accum;
@@ -208,11 +205,18 @@ struct Editor {
         List<Vim_Command_Input> *command_buffer;
         int hidden_vx;
         union {
+            // Right now the mode is stored in world, but the mode-specific
+            // shit is stored here in editor. This is going to break things if
+            // the user somehow switches editors without changing back to
+            // normal mode. That seems really stupid.
             struct {
                 cur2 insert_start;
                 Vim_Command insert_command;
             };
-            cur2 visual_start;
+            struct {
+                cur2 visual_start;
+                Selection_Type visual_type;
+            };
         };
     } vim;
 
@@ -250,7 +254,6 @@ struct Editor {
 
     void apply_edits(List<TSInputEdit> *edits);
     void reload_file(bool because_of_file_watcher = false);
-    void update_lines(int firstline, int lastline, List<uchar*> *lines, List<s32> *line_lengths);
     bool trigger_escape(cur2 go_here_after = {-1, -1});
     bool optimize_imports();
     void format_on_save(bool fix_imports);
@@ -279,13 +282,19 @@ struct Editor {
     bool vim_handle_key(int key, int mods);
     bool vim_handle_input(Vim_Command_Input *input);
 
-    Gr_Iter gr_iter(cur2 c);
-    Gr_Iter gr_iter() { return gr_iter(cur); }
+    Gr_Iter gr_iter(cur2 c) { return buf->gr_iter(c); };
+    Gr_Iter gr_iter() { return buf->gr_iter(cur); };
 
     Eval_Motion_Result* vim_eval_motion(Vim_Command *cmd);
     bool vim_exec_command(Vim_Command *cmd);
     int find_first_nonspace_cp(int y);
     cur2 open_newline(int y);
+    cur2 handle_alt_move(bool back, bool backspace);
+    Selection* get_selection(Selection_Type override_type = SEL_NONE);
+    ccstr get_selection_text(Selection *selection);
+    void vim_handle_visual_mode_key(Selection_Type type);
+    cur2 vim_delete_selection(Selection *selection);
+    cur2 vim_delete_range(cur2 start, cur2 end);
 };
 
 Parse_Lang determine_lang(ccstr filepath);
