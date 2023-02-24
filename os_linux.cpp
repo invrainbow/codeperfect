@@ -72,7 +72,7 @@ bool Fs_Watcher::platform_init() {
 
     {
         SCOPED_MEM(&mem);
-        auto table = alloc_object(Table<int>);
+        auto table = new_object(Table<int>);
         table->init();
         wd_table = (void*)table;
     }
@@ -207,7 +207,7 @@ Font_Data* load_font_data_by_name(ccstr name, bool dont_check_name) {
     auto fm = map_file_into_memory((char*)filepath);
     if (!fm) return NULL;
 
-    auto ret = alloc_object(Font_Data);
+    auto ret = new_object(Font_Data);
     ret->type = FONT_DATA_MMAP;
     ret->fm = fm;
     return ret;
@@ -308,7 +308,7 @@ bool let_user_select_file(Select_File_Opts* opts) {
 }
 
 ccstr get_executable_path() {
-    auto ret = alloc_array(char, PATH_MAX);
+    auto ret = new_array(char, PATH_MAX);
     auto count = readlink("/proc/self/exe", ret, PATH_MAX);
     if (count == -1) return NULL;
     return ret;

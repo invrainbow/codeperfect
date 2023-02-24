@@ -43,7 +43,7 @@ serde_string Serde::read_string() {
     auto len = read_int();
     if (!ok) return NULL;
 
-    auto ret = alloc_array(char, len+1);
+    auto ret = new_array(char, len+1);
     readn(ret, len);
     if (!ok) return NULL;
 

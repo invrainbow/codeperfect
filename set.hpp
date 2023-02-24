@@ -15,7 +15,7 @@ struct String_Set {
 
     List<ccstr> *items() {
         u32 count = HASH_COUNT(table);
-        auto ret = alloc_list<ccstr>(count);
+        auto ret = new_list(ccstr, count);
         Item *curr, *tmp;
 
         HASH_ITER(hh, table, curr, tmp) { ret->append(curr->name); }
@@ -36,7 +36,7 @@ struct String_Set {
         if (has(s)) return;
 
         len++;
-        auto item = alloc_object(Item);
+        auto item = new_object(Item);
         item->name = s;
         HASH_ADD_KEYPTR(hh, table, s, strlen(s), item);
     }

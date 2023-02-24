@@ -85,14 +85,12 @@ void History::actually_go(History_Loc *it) {
 
     auto editor = find_editor_by_id(it->editor_id);
     if (!editor) return;
-    if (!editor->is_nvim_ready()) return;
 
     auto pos = it->mark->pos(); // it->pos
 
-    world.navigation_queue.len = 0;
-    auto dest = world.navigation_queue.append();
-    dest->editor_id = it->editor_id;
-    dest->pos = pos;
+    auto old = world.dont_push_history;
+    world.dont_push_history = true;
+    defer { world.dont_push_history = old; };
 
     focus_editor_by_id(it->editor_id, pos);
 }
@@ -260,7 +258,7 @@ void crawl_path_into_ftnode(ccstr path, FT_Node *parent, int depth = 0) {
             auto fullpath = path_join(path, ent->name);
             if (exclude_from_file_tree(fullpath)) break;
 
-            auto file = alloc_object(FT_Node);
+            auto file = new_object(FT_Node);
             file->name = cp_strdup(ent->name);
             file->is_directory = (ent->type & FILE_TYPE_DIRECTORY);
             file->num_children = 0;
@@ -305,7 +303,7 @@ void fill_file_tree() {
         world.file_explorer.last_file_copied = NULL;
         world.file_explorer.last_file_cut = NULL;
 
-        world.file_tree = alloc_object(FT_Node);
+        world.file_tree = new_object(FT_Node);
         world.file_tree->is_directory = true;
         world.file_tree->depth = -1;
 
@@ -477,7 +475,7 @@ void World::init() {
         serde.read_type(&options, SERDE_OPTIONS);
     } while (0);
 
-    world.use_nvim = options.enable_vim_mode;
+    world.vim.on = options.enable_vim_mode;
 
     if (make_testing_headless) {
         if (!jblow_tests.on)
@@ -505,7 +503,7 @@ void World::init() {
                 if (!fm) break;
                 defer { fm->cleanup(); };
 
-                auto result = alloc_list<char>();
+                auto result = new_list(char);
                 for (int i = 0; i < fm->len; i++) {
                     auto it = fm->data[i];
                     if (it == '\n' || it == '\0')
@@ -578,7 +576,6 @@ void World::init() {
 
     indexer.init();
     t.log("init indexer");
-    if (use_nvim) nvim.init();
     dbg.init();
     t.log("init debugger");
     history.init();
@@ -616,16 +613,19 @@ void World::init() {
     // if (!use_nvim) world.wnd_history.show = true;
 
     show_frame_index = false;
-    // escape_flashes_cursor_red = true;
 #endif
 
     t.log("rest of shit");
+
+    if (vim.on) {
+        // anything else?
+        vim.mode = VI_NORMAL;
+    }
 }
 
 void World::start_background_threads() {
     indexer.start_background_thread();
 
-    if (use_nvim) nvim.start_running();
     dbg.start_loop();
 
 #ifdef DEBUG_BUILD
@@ -722,18 +722,6 @@ void activate_pane_by_index(u32 idx) {
     }
 
     world.current_pane = idx;
-
-    if (world.use_nvim) {
-        auto pane = get_current_pane();
-        if (pane->current_editor != -1)
-            pane->focus_editor_by_index(pane->current_editor);
-        /*
-        auto editor = pane->get_current_editor();
-        if (editor)
-            world.nvim.set_current_window(editor);
-        */
-    }
-
     world.cmd_unfocus_all_windows = true;
 }
 
@@ -749,8 +737,8 @@ void init_goto_file() {
     auto &wnd = world.wnd_goto_file;
     ptr0(&wnd);
 
-    wnd.filepaths = alloc_list<ccstr>();
-    wnd.filtered_results = alloc_list<int>();
+    wnd.filepaths = new_list(ccstr);
+    wnd.filtered_results = new_list(int);
 
     fstlog("init_goto_file - start");
 
@@ -1034,7 +1022,7 @@ void delete_ft_node(FT_Node *it, bool delete_on_disk) {
 }
 
 ccstr ft_node_to_path(FT_Node *node) {
-    auto path = alloc_list<FT_Node*>();
+    auto path = new_list(FT_Node*);
     for (auto curr = node; curr; curr = curr->parent)
         path->append(curr);
     path->len--; // remove root
@@ -1085,7 +1073,7 @@ void add_ft_node(FT_Node *parent, fn<void(FT_Node* it)> cb) {
     {
         SCOPED_MEM(&world.file_tree_mem);
 
-        node = alloc_object(FT_Node);
+        node = new_object(FT_Node);
         node->num_children = 0;
         node->depth = parent->depth + 1;
         node->parent = parent;
@@ -1229,7 +1217,7 @@ void reload_file_subtree(ccstr relpath) {
         {
             SCOPED_MEM(&world.file_tree_mem);
 
-            auto ret = alloc_object(FT_Node);
+            auto ret = new_object(FT_Node);
             ret->is_directory = true;
             ret->name = cp_basename(relpath);
             ret->depth = parent->depth + 1;
@@ -1309,7 +1297,7 @@ void reload_file_subtree(ccstr relpath) {
         For (new_files.items()) {
             SCOPED_MEM(&world.file_tree_mem);
 
-            auto child = alloc_object(FT_Node);
+            auto child = new_object(FT_Node);
             child->name = cp_strdup(it);
             child->is_directory = false;
             child->num_children = 0;
@@ -1325,7 +1313,7 @@ void reload_file_subtree(ccstr relpath) {
 
             // TODO: recurse into directory
 
-            auto child = alloc_object(FT_Node);
+            auto child = new_object(FT_Node);
             child->name = cp_strdup(it);
             child->is_directory = true;
             child->num_children = 0;
@@ -1685,15 +1673,10 @@ bool is_command_enabled(Command cmd) {
         return editor && editor->lang == LANG_GO && editor->buf->tree;
     }
 
-    case CMD_GO_FORWARD: {
-        auto &hist = world.history;
-        return hist.curr != hist.top;
-    }
-
-    case CMD_GO_BACK: {
-        auto &hist = world.history;
-        return hist.curr != hist.start;
-    }
+    case CMD_GO_FORWARD:
+        return world.history.curr != world.history.top;
+    case CMD_GO_BACK:
+        return world.history.curr != world.history.start;
 
     case CMD_FIND:
         return (bool)get_current_editor();
@@ -2037,7 +2020,7 @@ void do_find_interfaces() {
         {
             SCOPED_MEM(&world.find_interfaces_mem);
 
-            auto newresults = alloc_list<Find_Decl*>(results->len);
+            auto newresults = new_list(Find_Decl*, results->len);
             For (results) newresults->append(it.copy());
 
             wnd.results = newresults;
@@ -2083,16 +2066,16 @@ void init_goto_symbol() {
 
         SCOPED_MEM(&wnd.fill_thread_pool);
 
-        auto symbols = alloc_list<Go_Symbol>();
+        auto symbols = new_list(Go_Symbol);
         world.indexer.fill_goto_symbol(symbols);
         if (!symbols->len) return;
 
         {
             SCOPED_MEM(&world.goto_symbol_mem);
-            wnd.symbols = alloc_list<Go_Symbol>(symbols->len);
+            wnd.symbols = new_list(Go_Symbol, symbols->len);
             For (symbols) wnd.symbols->append(it.copy());
 
-            wnd.filtered_results = alloc_list<int>();
+            wnd.filtered_results = new_list(int);
             wnd.workspace = world.indexer.index.workspace->copy();
         }
 
@@ -2138,7 +2121,7 @@ void do_find_implementations() {
         {
             SCOPED_MEM(&world.find_implementations_mem);
 
-            auto newresults = alloc_list<Find_Decl*>(results->len);
+            auto newresults = new_list(Find_Decl*, results->len);
             For (results) newresults->append(it.copy());
 
             wnd.results = newresults;
@@ -2200,7 +2183,7 @@ void handle_command(Command cmd, bool from_menu) {
     }
 
     case CMD_OPEN_FOLDER: {
-        auto buf = alloc_array(char, MAX_PATH);
+        auto buf = new_array(char, MAX_PATH);
 
         Select_File_Opts opts; ptr0(&opts);
         opts.buf = buf;
@@ -2210,7 +2193,7 @@ void handle_command(Command cmd, bool from_menu) {
 
         if (!let_user_select_file(&opts)) break;
 
-        auto args = alloc_list<char*>();
+        auto args = new_list(char*);
         args->append(buf);
         fork_self(args, false);
         break;
@@ -2218,7 +2201,7 @@ void handle_command(Command cmd, bool from_menu) {
 
     case CMD_OPEN_FILE_MANUALLY: {
         Select_File_Opts opts; ptr0(&opts);
-        opts.buf = alloc_array(char, 256);
+        opts.buf = new_array(char, 256);
         opts.bufsize = 256;
         opts.starting_folder = cp_strdup(world.current_path);
         opts.folder = false;
@@ -2237,8 +2220,8 @@ void handle_command(Command cmd, bool from_menu) {
 
         auto &wnd = world.wnd_command;
         wnd.query[0] = '\0';
-        wnd.actions = alloc_list<Command>();
-        wnd.filtered_results = alloc_list<int>();
+        wnd.actions = new_list(Command);
+        wnd.filtered_results = new_list(int);
         wnd.selection = 0;
 
         for (int i = 0; i < _CMD_COUNT_; i++) {
@@ -2322,21 +2305,6 @@ void handle_command(Command cmd, bool from_menu) {
 
             editor->buf->hist_batch_mode = false;
             editor->highlight_snippet(result->highlight_start, result->highlight_end);
-
-            if (world.use_nvim) {
-                // TODO: refactor this
-                editor->skip_next_nvim_update();
-                auto& nv = world.nvim;
-                nv.start_request_message("nvim_buf_set_lines", 5);
-                nv.writer.write_int(editor->nvim_data.buf_id);
-                nv.writer.write_int(miny);
-                nv.writer.write_int(maxy+1);
-                nv.writer.write_bool(false);
-                nv.writer.write_array(maxy-miny+1);
-                for (int y = miny; y <= maxy; y++)
-                    nv.write_line(&editor->buf->lines[y]);
-                nv.end_message();
-            }
         }
         break;
     }
@@ -2346,34 +2314,13 @@ void handle_command(Command cmd, bool from_menu) {
         if (!editor) break;
         if (!editor->is_modifiable()) break;
 
-        if (world.use_nvim) {
-            if (world.nvim.mode == VI_INSERT) {
-                // TODO
-            } else {
-                if (world.nvim.mode == VI_VISUAL) {
-                    auto& nv = world.nvim;
-                    nv.start_request_message("nvim_call_function", 2);
-                    nv.writer.write_string("CPGetVisual");
-                    nv.writer.write_array(1);
-                    nv.writer.write_string("toggle_comment");
-                    nv.end_message();
-                } else {
-                    editor->toggle_comment(editor->cur.y, editor->cur.y);
-                }
-            }
+        if (editor->selecting) {
+            auto a = editor->select_start.y;
+            auto b = editor->cur.y;
+            ORDER(a, b);
+            editor->toggle_comment(a, b);
         } else {
-            if (editor->selecting) {
-                auto a = editor->select_start.y;
-                auto b = editor->cur.y;
-                if (a > b) {
-                    auto tmp = a;
-                    a = b;
-                    b = tmp;
-                }
-                editor->toggle_comment(a, b);
-            } else {
-                editor->toggle_comment(editor->cur.y, editor->cur.y);
-            }
+            editor->toggle_comment(editor->cur.y, editor->cur.y);
         }
         break;
     }
@@ -2424,8 +2371,6 @@ void handle_command(Command cmd, bool from_menu) {
     case CMD_UNDO:
     case CMD_REDO: {
         // TODO: handle this for vim too; do we just use `u` and `C-r`?
-        if (world.use_nvim) break;
-
         auto editor = get_current_editor();
         if (!editor) break;
 
@@ -2435,7 +2380,7 @@ void handle_command(Command cmd, bool from_menu) {
         if (pos.x != -1) {
             auto opts = default_move_cursor_opts();
             opts->is_user_movement = true;
-            editor->raw_move_cursor(pos, opts);
+            editor->move_cursor(pos, opts);
         }
 
         break;
@@ -2455,8 +2400,6 @@ void handle_command(Command cmd, bool from_menu) {
         break;
 
     case CMD_CLOSE_ALL_EDITORS: {
-        if (world.use_nvim) send_nvim_keys("<Esc>");
-
         auto &panes = world.panes;
         while (true) {
             auto pane = panes.last();
@@ -2497,8 +2440,6 @@ void handle_command(Command cmd, bool from_menu) {
             if (!world.dont_prompt_on_close_unsaved_tab)
                 if (!editor->ask_user_about_unsaved_changes())
                     break;
-
-            if (world.use_nvim) send_nvim_keys("<Esc>");
 
             editor->cleanup();
 
@@ -2623,7 +2564,7 @@ void handle_command(Command cmd, bool from_menu) {
             {
                 SCOPED_MEM(&world.find_references_mem);
 
-                auto newfiles = alloc_list<Find_References_File>(files->len);
+                auto newfiles = new_list(Find_References_File, files->len);
                 For (files) newfiles->append(it.copy());
 
                 wnd.results = newfiles;
@@ -2911,7 +2852,7 @@ void handle_command(Command cmd, bool from_menu) {
 
             wnd.file_hash_on_open = gofile->hash;
             wnd.declres = result->decl->copy_decl();
-            wnd.filtered_results = alloc_list<int>();
+            wnd.filtered_results = new_list(int);
 
             auto gotype = wnd.declres->decl->gotype;
             wnd.selected_interface = (gotype->type == GOTYPE_INTERFACE);
@@ -2922,13 +2863,13 @@ void handle_command(Command cmd, bool from_menu) {
 
             SCOPED_MEM(&wnd.fill_thread_pool);
 
-            auto symbols = alloc_list<Go_Symbol>();
+            auto symbols = new_list(Go_Symbol);
             ind.fill_generate_implementation(symbols, wnd.selected_interface);
             if (!symbols->len) return;
 
             {
                 SCOPED_MEM(&world.generate_implementation_mem);
-                wnd.symbols = alloc_list<Go_Symbol>(symbols->len);
+                wnd.symbols = new_list(Go_Symbol, symbols->len);
                 For (symbols) wnd.symbols->append(it.copy());
             }
 
@@ -3003,7 +2944,7 @@ void handle_command(Command cmd, bool from_menu) {
             {
                 SCOPED_MEM(&world.callee_hierarchy_mem);
 
-                auto newresults = alloc_list<Call_Hier_Node>(results->len);
+                auto newresults = new_list(Call_Hier_Node, results->len);
                 For (results) newresults->append(it.copy());
 
                 wnd.results = newresults;
@@ -3085,7 +3026,7 @@ void handle_command(Command cmd, bool from_menu) {
             {
                 SCOPED_MEM(&world.caller_hierarchy_mem);
 
-                auto newresults = alloc_list<Call_Hier_Node>(results->len);
+                auto newresults = new_list(Call_Hier_Node, results->len);
                 For (results) newresults->append(it.copy());
 
                 wnd.results = newresults;
@@ -3215,7 +3156,7 @@ void handle_command(Command cmd, bool from_menu) {
         Parser_It *it = NULL;
         {
             SCOPED_MEM(&nav.mem);
-            it = alloc_object(Parser_It);
+            it = new_object(Parser_It);
             it->init(editor->buf);
         }
 
@@ -3240,7 +3181,7 @@ void handle_command(Command cmd, bool from_menu) {
         nav.tree_version = editor->buf->tree_version;
         {
             SCOPED_MEM(&nav.mem);
-            nav.siblings = alloc_list<Ast_Node*>();
+            nav.siblings = new_list(Ast_Node*);
         }
         editor->update_selected_ast_node(node);
         editor->trigger_escape();
@@ -3328,20 +3269,6 @@ void do_generate_function() {
                 ed->buf->insert(new_cur2(y, ed->buf->lines[y].len), uchars->items, uchars->len);
             } else {
                 ed->buf->insert(result->insert_pos, uchars->items, uchars->len);
-            }
-
-            if (world.use_nvim) {
-                ed->skip_next_nvim_update();
-
-                auto& nv = world.nvim;
-                nv.start_request_message("nvim_buf_set_lines", 5);
-                nv.writer.write_int(ed->nvim_data.buf_id);
-                nv.writer.write_int(0);
-                nv.writer.write_int(-1);
-                nv.writer.write_bool(false);
-                nv.writer.write_array(ed->buf->lines.len);
-                For (&ed->buf->lines) nv.write_line(&it);
-                nv.end_message();
             }
         } else {
             // otherwise, make the change on disk
@@ -3440,11 +3367,11 @@ void do_generate_implementation() {
     auto src_methods = ind.list_interface_methods(src->wrap(src_gotype));
     if (!src_methods) return;
 
-    auto dest_methods = alloc_list<Goresult>();
+    auto dest_methods = new_list(Goresult);
     if (!ind.list_type_methods(dest->decl->name, dest->ctx->import_path, dest_methods))
         return;
 
-    auto methods_to_add = alloc_list<Goresult>();
+    auto methods_to_add = new_list(Goresult);
     For (src_methods) {
         auto &srcmeth = it;
         For (dest_methods)
@@ -3458,7 +3385,7 @@ void do_generate_implementation() {
     auto type_name = dest->decl->name;
 
     auto generate_type_var = [&]() {
-        auto s = alloc_list<char>();
+        auto s = new_list(char);
         for (int i = 0, len = strlen(type_name); i < len && s->len < 3; i++)
             if (isupper(type_name[i]))
                 s->append(tolower(type_name[i]));
@@ -3476,8 +3403,8 @@ void do_generate_implementation() {
         bool declare_explicitly;
     };
 
-    auto imports_to_add = alloc_list<Import_To_Add>();
-    auto errors = alloc_list<ccstr>();
+    auto imports_to_add = new_list(Import_To_Add);
+    auto errors = new_list(ccstr);
 
     auto add_error = [&](ccstr fmt, ...) {
         va_list vl;
@@ -3676,7 +3603,7 @@ done_writing:
 
     // add the imports
     {
-        auto iter = alloc_object(Parser_It);
+        auto iter = new_object(Parser_It);
         iter->init(&buf);
         auto root = new_ast_node(ts_tree_root_node(buf.tree), iter);
 
@@ -3750,7 +3677,7 @@ done_writing:
             old_end = package_node->end();
         }
 
-        auto chars = alloc_list<uchar>();
+        auto chars = new_list(uchar);
         if (!imports_node) {
             // add two newlines, it's going after the package decl
             chars->append('\n');
@@ -3798,8 +3725,8 @@ done_writing:
 }
 
 void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results, fn<ccstr(int)> get_name) {
-    auto names = alloc_array(ccstr, total_results);
-    auto scores = alloc_array(double, total_results);
+    auto names = new_array(ccstr, total_results);
+    auto scores = new_array(double, total_results);
 
     fstlog("fuzzysort - start");
 
@@ -3855,13 +3782,6 @@ bool write_project_settings() {
     serde.init(&f);
     serde.write_type(&project_settings, SERDE_PROJECT_SETTINGS);
     return serde.ok;
-}
-
-void send_nvim_keys(ccstr s) {
-    auto& nv = world.nvim;
-    nv.start_request_message("nvim_input", 1);
-    nv.writer.write_string(s);
-    nv.end_message();
 }
 
 void clear_key_states() {

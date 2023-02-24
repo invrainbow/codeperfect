@@ -61,7 +61,7 @@ void Searcher::cleanup() {
 void Searcher::search_worker() {
     int total_results = 0;
 
-    auto matches = alloc_list<Search_Match>();
+    auto matches = new_list(Search_Match);
 
     while (file_queue.len > 0 && total_results < 1000) {
         auto filepath = *file_queue.last();
@@ -92,7 +92,7 @@ void Searcher::search_worker() {
         auto editor = find_editor_by_filepath(final_filepath);
 
         Searcher_Result_Match sr; ptr0(&sr);
-        auto results = alloc_list<Searcher_Result_Match>(matches->len);
+        auto results = new_list(Searcher_Result_Match, matches->len);
 
         // convert temp matches into search results
         for (int i = 0; i < buflen; i++) {
@@ -108,7 +108,7 @@ void Searcher::search_worker() {
                 if (nextmatch.group_starts) {
                     SCOPED_MEM(&final_mem);
 
-                    sr.groups = alloc_list<ccstr>(nextmatch.group_starts->len);
+                    sr.groups = new_list(ccstr, nextmatch.group_starts->len);
                     Fori (nextmatch.group_starts) {
                         auto start = it;
                         auto end = nextmatch.group_ends->at(i);
@@ -319,11 +319,11 @@ bool Searcher::start_replace(ccstr _replace_with) {
 
 List<Replace_Part> *Search_Session::parse_replacement(ccstr replace_text) {
     int k = 0, rlen = strlen(replace_text);
-    auto ret = alloc_list<Replace_Part>();
+    auto ret = new_list(Replace_Part);
 
     while (k < rlen) {
         bool is_dollar = false;
-        auto chars = alloc_list<char>();
+        auto chars = new_list(char);
 
         Replace_Part rp; ptr0(&rp);
 
@@ -355,7 +355,7 @@ ccstr Searcher::get_replacement_text(Searcher_Result_Match *sr, ccstr replace_te
     if (opts.literal) return replace_text;
     if (!sr->groups) return replace_text;
 
-    auto chars = alloc_list<char>();
+    auto chars = new_list(char);
     auto parts = sess.parse_replacement(replace_text);
 
     For (parts) {
@@ -457,8 +457,8 @@ void Search_Session::search(char *buf, u32 buflen, List<Search_Match> *out, int 
                 if (!m) break;
 
                 if (results > 1) {
-                    m->group_starts = alloc_list<int>(results);
-                    m->group_ends = alloc_list<int>(results);
+                    m->group_starts = new_list(int, results);
+                    m->group_ends = new_list(int, results);
                     for (int i = 1; i < results; i++) {
                         m->group_starts->append(offvec[2*i + 0]);
                         m->group_ends->append(offvec[2*i + 1]);
@@ -487,8 +487,8 @@ void Search_Session::cleanup() {
 
 bool Search_Session::start() {
     if (literal) {
-        find_skip = alloc_array(s32, qlen);
-        alpha_skip = alloc_array(s32, 256);
+        find_skip = new_array(s32, qlen);
+        alpha_skip = new_array(s32, 256);
 
         // generate find skip
         for (int last_prefix = qlen, i = qlen; i > 0; i--) {

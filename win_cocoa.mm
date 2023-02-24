@@ -770,7 +770,7 @@ void Window::swap_interval(int interval) {
 }
 
 void Window::create_nsgl_context() {
-    auto attribs = alloc_list<NSOpenGLPixelFormatAttribute>();
+    auto attribs = new_list(NSOpenGLPixelFormatAttribute);
 
     auto set_attrib = [&](auto a, auto v) {
         attribs->append(a);
@@ -1054,7 +1054,7 @@ static NSOpenGLContext *bootstrap_context = nil;
 
 // pretty much copy pasted from Window::create_nsgl_context()
 void _make_bootstrap_context() {
-    auto attribs = alloc_list<NSOpenGLPixelFormatAttribute>();
+    auto attribs = new_list(NSOpenGLPixelFormatAttribute);
     auto set_attrib = [&](auto a, auto v) {
         attribs->append(a);
         attribs->append(v);

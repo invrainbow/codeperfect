@@ -1,4 +1,5 @@
 #include "editor.hpp"
+#include "enums.hpp"
 #include "os.hpp"
 #include "world.hpp"
 #include "ui.hpp"
@@ -16,6 +17,86 @@ bool Editor::is_modifiable() {
     if (!world.workspace) return false;
     if (world.workspace->find_module_containing_resolved(filepath)) return true;
     return false;
+}
+
+Selection *Editor::get_selection(Selection_Type sel_type) {
+    if (sel_type == SEL_NONE)
+        sel_type = vim.visual_type;
+
+    auto ret = new_object(Selection);
+    ret->ranges = new_list(Selection_Range);
+
+    auto add_range = [&](cur2 start, cur2 end) {;
+        Selection_Range sr; ptr0(&sr);
+        sr.start = start;
+        sr.end = end;
+        ret->ranges->append(&sr);
+    };
+
+    if (world.vim.on) {
+        if (world.vim.mode != VI_VISUAL) return NULL;
+
+        ret->type = sel_type;
+        switch (sel_type) {
+        case SEL_CHAR: {
+            auto a = vim.visual_start;
+            auto b = cur;
+            ORDER(a, b);
+            b = buf->inc_gr(b);
+
+            add_range(a, b);
+            return ret;
+        }
+        case SEL_LINE: {
+            auto a = vim.visual_start.y;
+            auto b = cur.y;
+            ORDER(a, b);
+
+            auto &lines = buf->lines;
+
+            auto start = new_cur2(0, a);
+            auto end = new_cur2(lines[b].len, b);
+            add_range(start, end);
+            return ret;
+        }
+        case SEL_BLOCK: {
+            auto a = vim.visual_start;
+            auto b = cur;
+
+            auto avx = buf->idx_cp_to_vcp(a.y, a.x);
+            auto ay = a.y;
+
+            // Originally we had max(vim.hidden_vx, ...). Turns out neovim
+            // doesn't do this so we didn't either. But maybe it's superior
+            // experience.
+            auto bvx = buf->idx_cp_to_vcp(b.y, b.x);
+            auto by = b.y;
+
+            ORDER(avx, bvx);
+            ORDER(ay, by);
+
+            for (int y = ay; y <= by; y++) {
+                auto ax = buf->idx_vcp_to_cp(y, avx);
+                int len = buf->lines[y].len;
+                if (ax > len) continue;
+
+                auto bx = min(buf->idx_vcp_to_cp(y, bvx), len);
+                add_range(new_cur2(ax, y), new_cur2(bx, y));
+            }
+            return ret;
+        }
+        }
+        return NULL;
+    }
+
+    if (!selecting) return NULL;
+
+    ret->type = SEL_CHAR;
+    auto a = select_start;
+    auto b = cur;
+    ORDER(a, b);
+    add_range(a, b);
+    return ret;
 }
 
 ccstr Editor::get_autoindent(int for_y) {
@@ -44,7 +125,7 @@ done:
     }
 
     // copy first `copy_spaces_until` chars of line y
-    auto ret = alloc_list<char>();
+    auto ret = new_list(char);
     for (u32 x = 0; x < copy_spaces_until; x++)
         ret->append((char)line[x]); // has to be ' ' or '\t'
 
@@ -85,7 +166,7 @@ void Editor::insert_text_in_insert_mode(ccstr s) {
     for (u32 i = 0; i < text->len; i++)
         c = buf->inc_cur(c);
 
-    raw_move_cursor(c);
+    move_cursor(c);
 }
 
 void Editor::perform_autocomplete(AC_Result *result) {
@@ -97,7 +178,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
         // also what if we just forced you to be in insert mode for autocomplete lol
 
         // remove everything but the operator
-        raw_move_cursor(ac.operand_end);
+        move_cursor(ac.operand_end);
         buf->remove(ac.operand_end, ac.keyword_end);
 
         // nice little dsl here lol
@@ -128,7 +209,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 copy_spaces_until = x;
             }
 
-            auto ret = alloc_list<char>(copy_spaces_until + 1);
+            auto ret = new_list(char, copy_spaces_until + 1);
 
             // copy first `copy_spaces_until` chars of line y
             for (u32 x = 0; x < copy_spaces_until; x++)
@@ -164,7 +245,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
         auto initialize_everything = [&]() {
             operand_text = buf->get_text(ac.operand_start, ac.operand_end);
 
-            raw_move_cursor(ac.operand_start);
+            move_cursor(ac.operand_start);
             buf->remove(ac.operand_start, ac.operand_end);
 
             curr_postfix = postfix_stack.append();
@@ -537,10 +618,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
         if (curr_postfix) {
             if (curr_postfix->insert_positions.len > 1) {
-                if (world.use_nvim)
-                    trigger_escape(curr_postfix->insert_positions[0]);
-                else
-                    move_cursor(curr_postfix->insert_positions[0]);
+                move_cursor(curr_postfix->insert_positions[0]);
                 curr_postfix->current_insert_position++;
             } else {
                 postfix_stack.len--;
@@ -624,12 +702,12 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
         auto import_to_add = see_if_we_need_autoimport();
         if (import_to_add) {
-            auto iter = alloc_object(Parser_It);
+            auto iter = new_object(Parser_It);
             iter->init(buf);
             auto root = new_ast_node(ts_tree_root_node(buf->tree), iter);
 
             Ast_Node *package_node = NULL;
-            auto import_nodes = alloc_list<Ast_Node*>();
+            auto import_nodes = new_list(Ast_Node*);
 
             FOR_NODE_CHILDREN (root) {
                 if (it->type() == TS_PACKAGE_CLAUSE) {
@@ -644,7 +722,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
                 auto already_exists = [&]() {
                     For (import_nodes) {
-                        auto imports = alloc_list<Go_Import>();
+                        auto imports = new_list(Go_Import);
                         world.indexer.import_decl_to_goimports(it, imports);
 
                         auto imp = imports->find([&](auto it) { return streq(it->import_path, import_to_add); });
@@ -664,7 +742,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 rend.write("\"%s\"\n", import_to_add);
                 {
                     if (firstnode && cur > firstnode->end()) {
-                        auto imports = alloc_list<Go_Import>();
+                        auto imports = new_list(Go_Import);
                         world.indexer.import_decl_to_goimports(firstnode, imports);
 
                         For (imports) {
@@ -700,15 +778,13 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 if (firstnode) {
                     start = firstnode->start();
                     old_end = firstnode->end();
-                    if (world.use_nvim)
-                        if (old_end.y >= nvim_insert.start.y) break;
                 } else {
                     start = package_node->end();
                     old_end = package_node->end();
                 }
                 new_end = start;
 
-                auto chars = alloc_list<uchar>();
+                auto chars = new_list(uchar);
                 if (!firstnode) {
                     // add two newlines, it's going after the package decl
                     chars->append('\n');
@@ -759,7 +835,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
         buf->insert(ac_start, name->items, name->len);
 
         // move cursor forward
-        raw_move_cursor(new_cur2(ac_start.x + name->len, ac_start.y));
+        move_cursor(new_cur2(ac_start.x + name->len, ac_start.y));
 
         // clear out last_closed_autocomplete
         last_closed_autocomplete = new_cur2(-1, -1);
@@ -778,35 +854,8 @@ void Editor::perform_autocomplete(AC_Result *result) {
 }
 
 void Editor::add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end) {
-    if (world.use_nvim) {
-        auto change = nvim_insert.other_changes.append();
-        change->start = start;
-        change->end = old_end;
-
-        {
-            SCOPED_MEM(&nvim_insert.mem);
-
-            change->lines.init(LIST_POOL, new_end.y - start.y + 1);
-            for (int i = start.y; i <= new_end.y; i++) {
-                auto line = change->lines.append();
-                line->init(LIST_POOL, buf->lines[i].len);
-                line->len = buf->lines[i].len;
-                memcpy(line->items, buf->lines[i].items, sizeof(uchar) * line->len);
-            }
-        }
-
-        if (old_end.y >= nvim_insert.start.y)
-            cp_panic("can only add changes in insert mode before current change");
-    }
-
     auto dy = new_end.y - old_end.y;
-
-    if (world.use_nvim) {
-        nvim_insert.start.y += dy;
-        nvim_insert.old_end.y += dy;
-    }
-
-    raw_move_cursor(new_cur2(cur.x, cur.y + dy));
+    move_cursor(new_cur2(cur.x, cur.y + dy));
 }
 
 bool Editor::is_current_editor() {
@@ -818,16 +867,15 @@ bool Editor::is_current_editor() {
 }
 
 Move_Cursor_Opts *default_move_cursor_opts() {
-    auto ret = alloc_object(Move_Cursor_Opts);
+    auto ret = new_object(Move_Cursor_Opts);
 
     // set defaults
-    ret->dont_add_to_history = false;
     ret->is_user_movement = false;
 
     return ret;
 }
 
-void Editor::raw_move_cursor(cur2 c, Move_Cursor_Opts *opts) {
+void Editor::move_cursor(cur2 c, Move_Cursor_Opts *opts) {
     if (!is_main_thread) cp_panic("can't call this from outside main thread");
 
     if (!opts) opts = default_move_cursor_opts();
@@ -838,10 +886,7 @@ void Editor::raw_move_cursor(cur2 c, Move_Cursor_Opts *opts) {
 
     auto line_len = buf->lines[c.y].len;
     if (c.x > line_len) {
-        if (!world.use_nvim || world.nvim.mode == VI_INSERT)
-            c.x = line_len;
-        else
-            c.x = relu_sub(line_len, 1);
+        c.x = line_len;
     }
 
     cur = c;
@@ -883,7 +928,7 @@ void Editor::raw_move_cursor(cur2 c, Move_Cursor_Opts *opts) {
 
     // If we're not using nvim, then we're using this function to trigger
     // certain "on cursor move" actions
-    if (!world.use_nvim && opts->is_user_movement) {
+    if (opts->is_user_movement) {
         // clear out autocomplete
         ptr0(&autocomplete.ac);
 
@@ -891,34 +936,9 @@ void Editor::raw_move_cursor(cur2 c, Move_Cursor_Opts *opts) {
         buf->hist_force_push_next_change = true;
     }
 
-    bool push_to_history = true;
-
-    // what the fuck is this stupid pyramid of shit
-    auto &nq = world.navigation_queue;
-    if (nq.len) {
-        auto &top = nq[0];
-        if (top.editor_id == id) {
-            if (top.pos == c) {
-                push_to_history = false;
-            } else {
-                nq.remove(&nq[0]);
-                if (nq.len) {
-                    auto top = nq[0];
-                    if (top.editor_id == id) {
-                        if (top.pos == c)
-                            push_to_history = false;
-                        else
-                            nq.len = 0;
-                    }
-                }
-            }
-        }
-    }
-
-    if (!opts->dont_add_to_history)
-        if (push_to_history)
-            if (get_current_editor() == this)
-                world.history.push(id, c);
+    if (!world.dont_push_history)
+        if (get_current_editor() == this)
+            world.history.push(id, c);
 }
 
 void Editor::ensure_cursor_on_screen_by_moving_view(Ensure_Cursor_Mode mode) {
@@ -937,77 +957,10 @@ void Editor::ensure_cursor_on_screen_by_moving_view(Ensure_Cursor_Mode mode) {
 
 void Editor::ensure_cursor_on_screen() {
     if (relu_sub(cur.y, options.scrolloff) < view.y)
-        move_cursor(new_cur2((u32)cur.x, (u32)min(view.y + options.scrolloff, view.y + view.h)));
+        move_cursor(new_cur2(cur.x, min(view.y + options.scrolloff, view.y + view.h)));
     if (cur.y + options.scrolloff >= view.y + view.h)
-        move_cursor(new_cur2((u32)cur.x, (u32)relu_sub(view.y + view.h,  1 + options.scrolloff)));
-
+        move_cursor(new_cur2(cur.x, relu_sub(view.y + view.h,  1 + options.scrolloff)));
     // TODO: handle x
-}
-
-void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, List<s32> *line_lengths) {
-    if (lastline == -1) lastline = buf->lines.len;
-
-    auto start_cur = new_cur2(0, (i32)firstline);
-    auto old_end_cur = new_cur2(0, (i32)lastline);
-
-    if (lastline >= buf->lines.len && buf->lines.len > 0) {
-        // Say firstline = 4 and lastline = 7. It wants to delete everything
-        // from line 4 onwards. We need to decrement start_cur so it becomes
-        // 3:(last of line 3), so that there isn't an extra empty line 4 at the
-        // end.
-        start_cur = buf->dec_cur(start_cur);
-
-        old_end_cur = new_cur2((i32)buf->lines.last()->len, (i32)buf->lines.len - 1);
-    }
-
-    buf->internal_start_edit(start_cur, old_end_cur);
-
-    buf->internal_delete_lines(firstline, lastline);
-    for (u32 i = 0; i < new_lines->len; i++) {
-        auto line = new_lines->at(i);
-        auto len = line_lengths->at(i);
-        buf->internal_insert_line(firstline + i, line, len);
-    }
-
-    if (!buf->lines.len)
-        buf->internal_append_line(NULL, 0);
-
-    auto new_end_cur = new_cur2(0, firstline + new_lines->len);
-    if (firstline + new_lines->len == buf->lines.len) {
-        if (!buf->lines.len)
-            new_end_cur = new_cur2(0, 0);
-        else
-            new_end_cur = new_cur2((i32)buf->lines.last()->len, (i32)buf->lines.len - 1);
-    }
-
-    buf->internal_finish_edit(new_end_cur);
-}
-
-void Editor::move_cursor(cur2 c, Move_Cursor_Opts *opts) {
-    if (world.use_nvim && world.nvim.mode == VI_INSERT) {
-        nvim_data.waiting_for_move_cursor = true;
-        nvim_data.move_cursor_to = c;
-
-        // clear out last_closed_autocomplete
-        last_closed_autocomplete = new_cur2(-1, -1);
-
-        trigger_escape();
-        return;
-    }
-
-    raw_move_cursor(c, opts);
-
-    if (world.use_nvim) {
-        auto& nv = world.nvim;
-        auto msgid = nv.start_request_message("nvim_win_set_cursor", 2);
-        nv.writer.write_int(nvim_data.win_id);
-        {
-            nv.writer.write_array(2);
-            nv.writer.write_int(cur.y + 1);
-            nv.writer.write_int(buf->idx_cp_to_byte(cur.y, cur.x));
-        }
-        nv.end_message();
-    }
 }
 
 void Editor::reset_state() {
@@ -1065,20 +1018,6 @@ void Editor::reload_file(bool because_of_file_watcher) {
 
     print("=== reloading %s", filepath);
     buf->read(fm, true);
-
-    if (world.use_nvim) {
-        nvim_data.got_initial_lines = false;
-
-        auto& nv = world.nvim;
-        nv.start_request_message("nvim_buf_set_lines", 5);
-        nv.writer.write_int(nvim_data.buf_id);
-        nv.writer.write_int(0);
-        nv.writer.write_int(-1);
-        nv.writer.write_bool(false);
-        nv.writer.write_array(buf->lines.len);
-        For (&buf->lines) nv.write_line(&it);
-        nv.end_message();
-    }
 }
 
 Parse_Lang determine_lang(ccstr filepath) {
@@ -1099,7 +1038,7 @@ bool Editor::load_file(ccstr new_filepath) {
         buf->cleanup();
 
     lang = determine_lang(new_filepath);
-    buf->init(&mem, lang, !world.use_nvim);
+    buf->init(&mem, lang, true);
     buf->editable_from_main_thread_only = true;
 
     FILE* f = NULL;
@@ -1129,16 +1068,6 @@ bool Editor::load_file(ccstr new_filepath) {
         uchar tmp = '\0';
         buf->insert(new_cur2(0, 0), &tmp, 0);
         buf->dirty = false;
-    }
-
-    if (world.use_nvim) {
-        auto& nv = world.nvim;
-        auto msgid = nv.start_request_message("nvim_create_buf", 2);
-        nv.save_request(NVIM_REQ_CREATE_BUF, msgid, id);
-
-        nv.writer.write_bool(false);
-        nv.writer.write_bool(true);
-        nv.end_message();
     }
 
     auto &b = world.build;
@@ -1282,11 +1211,86 @@ Editor *Pane::focus_editor_by_index(u32 idx) {
     return focus_editor_by_index(idx, new_cur2(-1, -1));
 }
 
+// It feels like this is very related to but sufficiently different from w/e/b
+// handling in vim (too many different edge cases) that we can just duplicate
+// it here.
+cur2 Editor::handle_alt_move(bool back, bool backspace) {
+    auto it = iter();
+
+    if (back) {
+        if (it.bof()) return it.pos;
+        it.prev();
+    }
+
+    auto done = [&]() { return back ? it.bof() : it.eof(); };
+    auto advance = [&]() { back ? it.prev() : it.next(); };
+
+    enum { TYPE_SPACE, TYPE_IDENT, TYPE_OTHER };
+
+    auto get_char_type = [](char ch) -> int {
+        if (isspace(ch)) return TYPE_SPACE;
+        if (isident(ch)) return TYPE_IDENT;
+        return TYPE_OTHER;
+    };
+
+    int start_type = get_char_type(it.peek());
+    int chars_moved = 0;
+
+    for (; !done(); advance(), chars_moved++) {
+        if (get_char_type(it.peek()) != start_type) {
+            if (start_type == TYPE_SPACE && chars_moved == 1) {
+                // If we only found one space, start over with the next space type.
+                start_type = get_char_type(it.peek());
+                chars_moved = 0;
+                continue;
+            }
+
+            if (back) it.next();
+            break;
+        }
+    }
+
+    return it.pos;
+}
+
 bool Editor::trigger_escape(cur2 go_here_after) {
     if (go_here_after.x == -1 && go_here_after.y == -1)
         postfix_stack.len = 0;
 
     bool handled = false;
+
+    if (world.vim.on) {
+        // NOTE: was `handled` supposed to just refer to whether it affected
+        // autocomplete/parameter? will setting it to true in the vim handler
+        // here break anything?
+
+        switch (world.vim.mode) {
+        case VI_INSERT: {
+            handled = true;
+
+            auto &ref = vim.inserted_indent;
+            if (ref.inserted && ref.buf_tree_version == buf->tree_version) {
+                buf->remove(ref.start, ref.end);
+
+                // It's expected that ref.start.x == 0 and the line is now empty,
+                // so we don't need to subtract 1.
+                move_cursor(ref.start);
+            } else {
+                auto gr = buf->idx_cp_to_gr(cur.y, cur.x);
+                if (gr) {
+                    auto x = buf->idx_gr_to_cp(cur.y, gr-1);
+                    move_cursor(new_cur2(x, cur.y));
+                }
+            }
+            world.vim.mode = VI_NORMAL;
+            break;
+        }
+        case VI_VISUAL:
+            handled = true;
+            world.vim.mode = VI_NORMAL;
+            break;
+        }
+    }
 
     if (autocomplete.ac.results) {
         handled = true;
@@ -1304,221 +1308,6 @@ bool Editor::trigger_escape(cur2 go_here_after) {
     if (parameter_hint.gotype) {
         handled = true;
         parameter_hint.gotype = NULL;
-    }
-
-    if (world.use_nvim && world.nvim.mode == VI_INSERT) {
-        auto &nv = world.nvim;
-        auto &writer = nv.writer;
-
-        /*
-        auto msgid = nv.start_request_message("nvim_buf_get_changedtick", 1);
-        auto req = nv.save_request(NVIM_REQ_POST_INSERT_GETCHANGEDTICK, msgid, id);
-        nv.writer.write_int(nvim_data.buf_id);
-        nv.end_message();
-        */
-
-        {
-            // skip next update from nvim
-            skip_next_nvim_update(nvim_insert.other_changes.len + 1);
-
-            auto start = nvim_insert.start;
-            auto old_end = nvim_insert.old_end;
-
-            u32 delete_len = nvim_insert.deleted_graphemes;
-
-            post_insert_dotrepeat_time = current_time_nano();
-
-            // set new lines
-            auto msgid = nv.start_request_message("nvim_call_atomic", 1);
-            nv.save_request(NVIM_REQ_POST_INSERT_DOTREPEAT_REPLAY, msgid, id);
-            {
-                writer.write_array(nvim_insert.other_changes.len + 8);
-
-                For (&nvim_insert.other_changes) {
-                    writer.write_array(2);
-                    writer.write_string("nvim_buf_set_lines");
-                    {
-                        writer.write_array(5);
-                        {
-                            writer.write_int(nvim_data.buf_id);
-                            writer.write_int(it.start.y);
-                            writer.write_int(it.end.y + 1);
-                            writer.write_bool(false);
-                            writer.write_array(it.lines.len);
-                            {
-                                For (&it.lines) nv.write_line(&it);
-                            }
-                        }
-                    }
-                }
-
-                writer.write_array(2);
-                writer.write_string("nvim_buf_set_lines");
-                {
-                    writer.write_array(5);
-                    {
-                        writer.write_int(nvim_data.buf_id);
-                        writer.write_int(start.y);
-                        writer.write_int(old_end.y + 1);
-                        writer.write_bool(false);
-                        writer.write_array(cur.y - start.y + 1);
-                        {
-                            for (u32 y = start.y; y <= cur.y; y++)
-                                nv.write_line(&buf->lines[y]);
-                        }
-                    }
-                }
-
-                writer.write_array(2);
-                writer.write_string("nvim_win_set_cursor");
-                {
-                    writer.write_array(2);
-                    {
-                        writer.write_int(nvim_data.win_id);
-                        writer.write_array(2);
-                        {
-                            nv.writer.write_int(cur.y + 1);
-                            nv.writer.write_int(buf->idx_cp_to_byte(cur.y, cur.x));
-                        }
-                    }
-                }
-
-                {
-                    writer.write_array(2);
-                    writer.write_string("nvim_set_option");
-                    {
-                        writer.write_array(2);
-                        writer.write_string("eventignore");
-                        writer.write_string("BufWinEnter,BufEnter,BufLeave");
-                    }
-                }
-
-                {
-                    writer.write_array(2);
-                    writer.write_string("nvim_set_current_win");
-                    {
-                        writer.write_array(1);
-                        writer.write_int(nv.dotrepeat_win_id);
-                    }
-                }
-
-                {
-                    writer.write_array(2);
-                    writer.write_string("nvim_set_option");
-                    {
-                        writer.write_array(2);
-                        writer.write_string("eventignore");
-                        writer.write_string("");
-                    }
-                }
-
-                {
-                    writer.write_array(2);
-                    writer.write_string("nvim_buf_set_lines");
-                    {
-                        writer.write_array(5);
-                        writer.write_int(nv.dotrepeat_buf_id);
-                        writer.write_int(0);
-                        writer.write_int(-1);
-                        writer.write_bool(false);
-                        {
-                            writer.write_array(1);
-                            writer.write1(MP_OP_STRING);
-                            writer.write4(delete_len);
-                            for (u32 i = 0; i < delete_len; i++)
-                                writer.write1('x');
-                        }
-                    }
-                }
-
-                {
-                    writer.write_array(2);
-                    writer.write_string("nvim_win_set_cursor");
-                    {
-                        writer.write_array(2);
-                        writer.write_int(nv.dotrepeat_win_id);
-                        {
-                            writer.write_array(2);
-                            writer.write_int(1);
-                            writer.write_int(delete_len);
-                        }
-                    }
-                }
-
-                {
-                    Text_Renderer r;
-                    r.init();
-
-                    for (u32 i = 0; i < delete_len; i++)
-                        r.writestr("<BS>");
-
-                    auto start = nvim_insert.start;
-
-                    // Honestly, this is such a stupid bandaid, but I still
-                    // don't know why sometimes nvim_insert.start has a value
-                    // that's out of bounds.
-                    //
-                    // I mean, it must be because buf->lines get changed after
-                    // nvim_insert.start is set, but I don't know why that
-                    // happens.
-
-                    if (start.y >= buf->lines.len) {
-                        start.y = buf->lines.len-1;
-                        start.x = buf->lines[start.y].len;
-                    }
-                    if (start.x > buf->lines[start.y].len)
-                        start.x = buf->lines[start.y].len;
-
-                    auto it = buf->iter(start);
-                    while (it.pos < cur) {
-                        // wait, does this take utf-8?
-                        auto ch = it.next();
-                        if (ch == '<') {
-                            r.writestr("<LT>");
-                        } else {
-                            char buf[4];
-                            auto len = uchar_to_cstr(ch, buf);
-                            for (int i = 0; i < len; i++)
-                                r.writechar(buf[i]);
-                        }
-                    }
-
-                    writer.write_array(2);
-                    writer.write_string("nvim_input");
-                    {
-                        writer.write_array(1);
-                        writer.write_string(r.finish());
-                    }
-                }
-            }
-
-            nv.end_message();
-
-            /*
-            // move cursor
-            {
-                auto c = cur;
-                if (c.x) {
-                    int gr_idx = buf->idx_cp_to_gr(c.y, c.x);
-                    c.x = buf->idx_gr_to_cp(c.y, relu_sub(gr_idx, 1));
-                }
-                raw_move_cursor(c);
-            }
-            */
-
-            // reset other_changes and mem
-            nvim_insert.other_changes.len = 0;
-            nvim_insert.mem.reset();
-        }
-
-        handled = true;
-
-        go_here_after_escape = go_here_after;
-        nv.exiting_insert_mode = true;
-        nv.editor_that_triggered_escape = id;
-    } else if (world.use_nvim && world.nvim.mode != VI_NORMAL) {
-        send_nvim_keys("<Esc>");
-        handled = true;
     }
 
     return handled;
@@ -1571,20 +1360,9 @@ Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos, bool pos_in_byte_format) 
     }
 
     if (pos.x != -1) {
-        if (editor.is_nvim_ready()) {
-            editor.move_cursor(cppos);
-        } else {
-            editor.nvim_data.need_initial_pos_set = true;
-            editor.nvim_data.initial_pos = cppos;
-            editor.raw_move_cursor(cppos);
-        }
-    }
-
-    if (world.nvim.current_win_id != editor.id) {
-        if (editor.nvim_data.win_id)
-            world.nvim.set_current_window(&editor);
-        else
-            world.nvim.waiting_focus_window = editor.id;
+        editor.move_cursor(cppos);
+    } else {
+        world.history.push(editor.id, editor.cur);
     }
 
     return &editor;
@@ -1597,39 +1375,34 @@ Editor* Pane::get_current_editor() {
     return &editors[current_editor];
 }
 
-bool Editor::is_nvim_ready() {
-    // will this fix things?
-    if (!world.use_nvim) return true;
-
-    return world.nvim.is_ui_attached
-        && nvim_data.is_buf_attached
-        && nvim_data.buf_id
-        && nvim_data.win_id
-        && nvim_data.got_initial_lines
-        && nvim_data.got_initial_cur;
-}
-
 void Editor::init() {
     ptr0(this);
     id = ++world.next_editor_id;
 
     mem.init("editor mem");
 
+    if (world.vim.on) {
+        vim.mem.init();
+        // TODO: set a limit?
+        SCOPED_MEM(&vim.mem);
+        vim.command_buffer = new_list(Vim_Command_Input);
+        vim.insert_command.op.init();
+        vim.insert_command.motion.init();
+    }
+
     {
         SCOPED_MEM(&mem);
         postfix_stack.init();
-        nvim_insert.other_changes.init();
-        buf = alloc_object(Buffer);
+        buf = new_object(Buffer);
     }
 
-    nvim_insert.mem.init("nvim_insert mem");
     ast_navigation.mem.init("ast_navigation mem");
 }
 
 void Editor::update_selected_ast_node(Ast_Node *node) {
     auto &nav = ast_navigation;
 
-    auto prev_siblings = alloc_list<Ast_Node*>();
+    auto prev_siblings = new_list(Ast_Node*);
     for (auto curr = node->prev(); !isastnull(curr); curr = curr->prev())
         prev_siblings->append(curr);
 
@@ -1731,29 +1504,10 @@ void Editor::ast_navigate_next() {
 }
 
 void Editor::cleanup() {
-    auto &nv = world.nvim;
-
-    if (nvim_data.win_id) {
-        nv.start_request_message("nvim_win_close", 2);
-        nv.writer.write_int(nvim_data.win_id);
-        nv.writer.write_bool(true);
-        nv.end_message();
-    }
-
-    if (nvim_data.buf_id) {
-        nv.start_request_message("nvim_buf_delete", 2);
-        nv.writer.write_int(nvim_data.buf_id);
-        {
-            nv.writer.write_map(2);
-            nv.writer.write_string("force"); nv.writer.write_bool(true);
-            nv.writer.write_string("unload"); nv.writer.write_bool(false);
-        }
-        nv.end_message();
-    }
-
     buf->cleanup();
     mem.cleanup();
-
+    if (world.vim.on)
+        vim.mem.cleanup();
     world.history.remove_invalid_marks();
 }
 
@@ -1840,7 +1594,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             SCOPED_MEM(&world.autocomplete_mem);
 
             // copy results
-            auto new_results = alloc_list<AC_Result>(ac.results->len);
+            auto new_results = new_list(AC_Result, ac.results->len);
             For (ac.results) {
                 auto r = new_results->append();
                 memcpy(r, it.copy(), sizeof(AC_Result));
@@ -1848,7 +1602,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
 
             // copy ac over to autocomplete.ac
             memcpy(&autocomplete.ac, &ac, sizeof(Autocomplete));
-            autocomplete.filtered_results = alloc_list<int>();
+            autocomplete.filtered_results = new_list(int);
             autocomplete.ac.prefix = cp_strdup(ac.prefix);
             autocomplete.ac.results = new_results;
         }
@@ -1883,7 +1637,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             int str_length;
         };
 
-        auto cache = alloc_array(Cached_Stuff, results->len);
+        auto cache = new_array(Cached_Stuff, results->len);
         auto filtered_results = autocomplete.filtered_results;
 
         // lazy load expensive operations
@@ -2040,7 +1794,7 @@ void Editor::type_char(uchar uch) {
     auto old_cur = cur;
     auto new_cur = buf->inc_cur(cur);
 
-    raw_move_cursor(new_cur);
+    move_cursor(new_cur);
 }
 
 void Editor::update_parameter_hint() {
@@ -2078,7 +1832,7 @@ void Editor::update_parameter_hint() {
         find_nodes_containing_pos(pf.root, cur, true, [&](auto it) {
             if (it->type() == TS_ARGUMENT_LIST) {
                 if (!arglist)
-                    arglist = alloc_object(Ast_Node);
+                    arglist = new_object(Ast_Node);
                 memcpy(arglist, it, sizeof(Ast_Node));
             }
             return WALK_CONTINUE;
@@ -2086,7 +1840,7 @@ void Editor::update_parameter_hint() {
 
         if (!arglist) return;
 
-        auto commas = alloc_list<cur2>();
+        auto commas = new_list(cur2);
 
         FOR_ALL_NODE_CHILDREN (arglist) {
             if (it->type() == TS_COMMA)
@@ -2225,7 +1979,7 @@ void Editor::type_char_in_insert_mode(uchar ch) {
 
         auto root_node = new_ast_node(ts_tree_root_node(buf->tree), &it);
 
-        Ast_Node *rbrace_node = alloc_object(Ast_Node);
+        Ast_Node *rbrace_node = new_object(Ast_Node);
         bool rbrace_found = false;
 
         find_nodes_containing_pos(root_node, rbrace_pos, false, [&](auto it) {
@@ -2261,7 +2015,7 @@ void Editor::type_char_in_insert_mode(uchar ch) {
             if (node->is_missing()) return;
 
             SCOPED_FRAME();
-            auto children = alloc_list<Ast_Node*>(node->all_child_count());
+            auto children = new_list(Ast_Node*, node->all_child_count());
             FOR_ALL_NODE_CHILDREN (node) children->append(it);
             for (; children->len > 0; children->len--)
                 process_node(*children->last());
@@ -2282,7 +2036,7 @@ void Editor::type_char_in_insert_mode(uchar ch) {
 
         if (lbrace_line == -1) break;
 
-        auto indentation = alloc_list<uchar>();
+        auto indentation = new_list(uchar);
         For (&buf->lines[lbrace_line]) {
             if (it == '\t' || it == ' ')
                 indentation->append(it);
@@ -2303,7 +2057,7 @@ void Editor::type_char_in_insert_mode(uchar ch) {
         pos.x++;
 
         // move cursor after everything we typed
-        raw_move_cursor(pos);
+        move_cursor(pos);
         break;
     }
     }
@@ -2338,6 +2092,15 @@ void Editor::type_char_in_insert_mode(uchar ch) {
     if (!did_parameter_hint) update_parameter_hint();
 }
 
+void Editor::vim_save_inserted_indent(cur2 start, cur2 end) {
+    if (!world.vim.on) return;
+
+    vim.inserted_indent.inserted = true;
+    vim.inserted_indent.buf_tree_version = buf->tree_version;
+    vim.inserted_indent.start = start;
+    vim.inserted_indent.end = end;
+}
+
 void Editor::update_autocomplete(bool triggered_by_ident) {
     if (autocomplete.ac.results)
         trigger_autocomplete(false, triggered_by_ident);
@@ -2346,10 +2109,6 @@ void Editor::update_autocomplete(bool triggered_by_ident) {
 void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_erase) {
     auto start = cur;
     auto zero = new_cur2(0, 0);
-
-    // does this just solve the whole stupid inconsistency thing?
-    if (start < nvim_insert.start)
-        nvim_insert.start = start;
 
     if (graphemes_to_erase > 0 && codepoints_to_erase > 0)
         cp_panic("backspace_in_insert_mode called with both graphemes and codepoints");
@@ -2360,11 +2119,6 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
 
             if (graphemes_to_erase > 0) graphemes_to_erase--;
             if (codepoints_to_erase > 0) codepoints_to_erase--;
-
-            if (start < nvim_insert.start) {
-                nvim_insert.start = start;
-                nvim_insert.deleted_graphemes++;
-            }
             continue;
         }
 
@@ -2394,22 +2148,10 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
                 codepoints_to_erase = 0;
             }
         }
-
-        // if we backspaced PAST the last nvim_insert...
-        if (start < nvim_insert.start) {
-            // assert that we only acted on current line
-            cp_assert(start.y == nvim_insert.start.y);
-
-            int lo = buf->idx_cp_to_gr(start.y, start.x);
-            int hi = buf->idx_cp_to_gr(start.y, min(old_start, nvim_insert.start.x));
-            nvim_insert.deleted_graphemes += (hi - lo);
-
-            nvim_insert.start = start;
-        }
     }
 
     buf->remove(start, cur);
-    raw_move_cursor(start);
+    move_cursor(start);
 
     last_closed_autocomplete = new_cur2(-1, -1);
 }
@@ -2427,7 +2169,7 @@ bool Editor::optimize_imports() {
 
     // add imports into the file
     do {
-        auto iter = alloc_object(Parser_It);
+        auto iter = new_object(Parser_It);
         iter->init(buf);
         auto root = new_ast_node(ts_tree_root_node(buf->tree), iter);
 
@@ -2435,10 +2177,10 @@ bool Editor::optimize_imports() {
         Ast_Node *first_imports_node = NULL;
         Ast_Node *last_imports_node = NULL;
 
-        auto cgo_imports = alloc_list<Ast_Node*>();
+        auto cgo_imports = new_list(Ast_Node*);
 
         auto is_cgo_import = [&](Ast_Node *it) {
-            auto imports = alloc_list<Go_Import>();
+            auto imports = new_list(Go_Import);
             world.indexer.import_decl_to_goimports(it, imports);
             return imports->len == 1 && streq(imports->at(0).import_path, "C");
         };
@@ -2472,7 +2214,7 @@ bool Editor::optimize_imports() {
                 last_imports_node = first_imports_node;
         }
 
-        auto cgo_imports_text = alloc_list<char>();
+        auto cgo_imports_text = new_list(char);
 
         For (cgo_imports) {
             auto startnode = it;
@@ -2546,7 +2288,7 @@ bool Editor::optimize_imports() {
             old_end = package_node->end();
         }
 
-        auto chars = alloc_list<uchar>();
+        auto chars = new_list(uchar);
         if (!first_imports_node) {
             // add two newlines, it's going after the package decl
             chars->append('\n');
@@ -2569,28 +2311,14 @@ bool Editor::optimize_imports() {
             if (c.x > buf->lines[c.y].len)
                 c.x = buf->lines[cur.y].len;
 
-            move_cursor(c); // use raw_move_cursor()?
-        }
-
-        if (world.use_nvim) {
-            skip_next_nvim_update();
-
-            auto& nv = world.nvim;
-            nv.start_request_message("nvim_buf_set_lines", 5);
-            nv.writer.write_int(nvim_data.buf_id);
-            nv.writer.write_int(0);
-            nv.writer.write_int(-1);
-            nv.writer.write_bool(false);
-            nv.writer.write_array(buf->lines.len);
-            For (&buf->lines) nv.write_line(&it);
-            nv.end_message();
+            move_cursor(c);
         }
     } while (0);
 
     return true;
 }
 
-void Editor::format_on_save(bool fix_imports, bool write_to_nvim) {
+void Editor::format_on_save(bool fix_imports) {
     if (lang != LANG_GO) return; // any more checks needed?
 
     auto old_cur = cur;
@@ -2639,43 +2367,13 @@ void Editor::format_on_save(bool fix_imports, bool write_to_nvim) {
     buf->dirty = true;
 
     // we need to adjust cursor manually
-    if (!world.use_nvim) {
-        if (cur.y >= buf->lines.len) {
-            cur.y = buf->lines.len-1;
-            cur.x = buf->lines[cur.y].len;
-        }
-
-        if (cur.x > buf->lines[cur.y].len)
-            cur.x = buf->lines[cur.y].len;
+    if (cur.y >= buf->lines.len) {
+        cur.y = buf->lines.len-1;
+        cur.x = buf->lines[cur.y].len;
     }
 
-    if (world.use_nvim && write_to_nvim) {
-        auto &nv = world.nvim;
-        auto &writer = nv.writer;
-
-        skip_next_nvim_update();
-
-        auto msgid = nv.start_request_message("nvim_buf_set_lines", 5);
-        auto req = nv.save_request(NVIM_REQ_POST_SAVE_SETLINES, msgid, id);
-        req->post_save_setlines.cur = old_cur;
-
-        writer.write_int(nvim_data.buf_id);
-        writer.write_int(0);
-        writer.write_int(-1);
-        writer.write_bool(false);
-
-        writer.write_array(buf->lines.len);
-        For (&buf->lines) nv.write_line(&it);
-        nv.end_message();
-    }
-}
-
-void Editor::skip_next_nvim_update(int n) {
-    if (nvim_insert.skip_changedticks_until > nvim_data.changedtick) {
-        nvim_insert.skip_changedticks_until += n;
-    } else {
-        nvim_insert.skip_changedticks_until = nvim_data.changedtick + n;
-    }
+    if (cur.x > buf->lines[cur.y].len)
+        cur.x = buf->lines[cur.y].len;
 }
 
 void Editor::handle_save(bool about_to_close) {
@@ -2804,7 +2502,7 @@ void Editor::toggle_comment(int ystart, int yend) {
             }
         }
 
-        auto ret = alloc_list<uchar>();
+        auto ret = new_list(uchar);
         if (x != -1)
             for (int i = x; i < line->len; i++)
                 ret->append(line->at(i));
@@ -2868,26 +2566,7 @@ void Editor::toggle_comment(int ystart, int yend) {
 
     buf->hist_batch_mode = false;
     move_cursor(new_cur);
-
-    if (world.use_nvim) {
-        skip_next_nvim_update();
-
-        auto& nv = world.nvim;
-        nv.start_request_message("nvim_buf_set_lines", 5);
-        nv.writer.write_int(nvim_data.buf_id);
-        nv.writer.write_int(ystart);
-        nv.writer.write_int(yend+1);
-        nv.writer.write_bool(false);
-        nv.writer.write_array(yend-ystart+1);
-        for (int y = ystart; y <= yend; y++)
-            nv.write_line(&buf->lines[y]);
-        nv.end_message();
-
-        // remove highlight
-        trigger_escape();
-    } else {
-        selecting = false;
-    }
+    selecting = false;
 }
 
 void Editor::highlight_snippet(cur2 start, cur2 end) {
@@ -2903,13 +2582,1253 @@ void Editor::delete_selection() {
     // REFACTOR: duplicated in handle_backspace()
     auto a = select_start;
     auto b = cur;
-    if (a > b) {
-        auto tmp = a;
-        a = b;
-        b = tmp;
-    }
+    ORDER(a, b);
 
     buf->remove(a, b);
     selecting = false;
     move_cursor(a);
+}
+
+int Editor::find_first_nonspace_cp(int y) {
+    auto it = iter(new_cur2(0, y));
+    while (!it.eol() && !it.eof() && isspace(it.peek()))
+        it.next();
+    return it.pos.x;
+}
+
+Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
+    int ptr = 0;
+    auto bof = [&]() { return ptr == 0; };
+    auto eof = [&]() { return ptr == vim.command_buffer->len; };
+    auto peek = [&]() { return vim.command_buffer->at(ptr); };
+
+    auto peek_char = [&]() -> char {
+        if (eof()) return 0;
+
+        auto it = peek();
+        if (it.is_key) return 0;
+        return it.ch;
+    };
+
+    auto peek_digit = [&]() -> char {
+        if (eof()) return 0;
+
+        auto it = peek();
+        if (!it.is_key && it.ch < 127 && isdigit(it.ch))
+            return (char)it.ch;
+        return 0;
+    };
+
+    auto read_number = [&]() -> int {
+        auto ret = new_list(char);
+        char digit;
+        while ((digit = peek_digit()) != 0) {
+            ret->append(digit);
+            ptr++;
+        }
+        ret->append('\0');
+        return strtol(ret->items, NULL, 10);
+    };
+
+    auto read_count = [&]() -> int {
+        auto digit = peek_digit();
+        if (digit && digit != '0')
+            return read_number();
+        return 0;
+    };
+
+    auto char_input = [&](char ch) -> Vim_Command_Input {
+        Vim_Command_Input ret; ptr0(&ret);
+        ret.is_key = false;
+        ret.ch = ch;
+        return ret;
+    };
+
+    if (eof()) return VIM_PARSE_WAIT;
+
+    out->o_count = read_count();
+
+    if (eof()) return VIM_PARSE_WAIT;
+
+    bool skip_motion = false;
+    auto it = peek();
+
+    if (it.is_key) {
+        switch (it.mods) {
+        case CP_MOD_NONE:
+            switch (it.key) {
+            case CP_KEY_TAB:
+                out->op.append(it);
+                skip_motion = true;
+                break;
+            }
+            break;
+
+        case CP_MOD_CTRL:
+            switch (it.key) {
+            case CP_KEY_R:
+            case CP_KEY_O:
+            case CP_KEY_I:
+            case CP_KEY_E:
+            case CP_KEY_Y:
+            case CP_KEY_D:
+            case CP_KEY_U:
+            case CP_KEY_B:
+            case CP_KEY_F:
+                out->op.append(it);
+                skip_motion = true;
+                break;
+            case CP_KEY_V:
+                switch (world.vim.mode) {
+                case VI_NORMAL:
+                case VI_VISUAL:
+                    out->op.append(it);
+                    skip_motion = true;
+                    break;
+                }
+                break;
+            }
+            break;
+        }
+    } else {
+        switch (it.ch) {
+        case 'u':
+        case 'J':
+        case 'i':
+        case 'I':
+        case 'a':
+        case 'A':
+        case 'o':
+        case 'O':
+        case 's':
+        case 'S':
+        case 'x':
+        case 'v':
+        case 'V':
+        case 'D':
+        case 'C':
+            skip_motion = true;
+            out->op.append(it);
+            ptr++;
+            break;
+
+        case 'c':
+        case 'd':
+            if (world.vim.mode == VI_VISUAL)
+                skip_motion = true;
+            out->op.append(it);
+            ptr++;
+            break;
+
+        case 'y':
+        case '~':
+        case '!':
+        case '=':
+        case '<':
+        case '>':
+            out->op.append(it);
+            ptr++;
+            break;
+
+        case 'g': {
+            ptr++;
+
+            auto ch = peek_char();
+            switch (ch) {
+            case 'q':
+            case 'w':
+            case '?':
+            case '@':
+            case '~':
+            case 'u':
+            case 'U':
+                ptr++;
+                out->op.append(char_input('g'));
+                out->op.append(char_input(ch));
+                goto done;
+            case 'd':
+                ptr++;
+                out->op.append(char_input('g'));
+                out->op.append(char_input(ch));
+                skip_motion = true;
+                goto done;
+            }
+
+            ptr--;
+            break;
+        }
+        case 'z': {
+            ptr++;
+            auto ch = peek_char();
+            switch (ch) {
+            case 'f':
+                ptr++;
+                out->op.append(char_input('z'));
+                out->op.append(char_input(ch));
+                goto done;
+            }
+            ptr--;
+            break;
+        }
+        }
+    }
+done:
+
+    // skip_motion implies o->op.len > 0
+    if (skip_motion) return VIM_PARSE_DONE;
+
+    if (eof()) return VIM_PARSE_WAIT;
+
+    out->m_count = 0;
+    if (out->o_count && !out->op.len) {
+        out->m_count = out->o_count;
+        out->o_count = 0;
+    } else {
+        out->m_count = read_count();
+    }
+
+    if (eof()) return VIM_PARSE_WAIT;
+
+    it = peek();
+    if (it.is_key) {
+        /*
+        switch (it.mods) {
+        case CP_MOD_CTRL:
+            switch (it.key) {
+            }
+            break;
+        }
+        */
+        return VIM_PARSE_DISCARD;
+    }
+
+    switch (it.ch) {
+    case 'h':
+    case 'j':
+    case 'k':
+    case 'l':
+    case 'H':
+    case 'L':
+    case 'M':
+    case '0':
+    case '^':
+    case '$':
+    case 'w':
+    case 'W':
+    case 'e':
+    case 'E':
+    case 'b':
+    case 'B':
+    case 'G':
+    case '}':
+    case '{':
+        ptr++;
+        out->motion.append(it);
+        return VIM_PARSE_DONE;
+
+    case 'g': {
+        ptr++;
+
+        if (eof()) return VIM_PARSE_WAIT;
+
+        auto ch = peek_char();
+        switch (ch) {
+        case 'g':
+        case 'o':
+        case 'm':
+        case 'M':
+        case '^':
+        case '$':
+            ptr++;
+            out->motion.append(char_input('g'));
+            out->motion.append(char_input(ch));
+            return VIM_PARSE_DONE;
+        }
+
+        break;
+    }
+    case 'f':
+    case 'F':
+    case 't':
+    case 'T': {
+        ptr++;
+        if (eof()) return VIM_PARSE_WAIT;
+
+        char motion = it.ch;
+
+        auto ch = peek_char();
+        if (ch) {
+            out->motion.append(char_input(motion));
+            out->motion.append(char_input(ch));
+            return VIM_PARSE_DONE;
+        }
+        break;
+    }
+    default: {
+        if (out->op.len != 1) break;
+
+        auto inp = out->op[0];
+        if (inp.is_key) break;
+        if (inp.ch != it.ch) break;
+
+        switch (inp.ch) {
+        case 'd':
+        case 'y':
+        case 'c':
+            out->motion.append(inp);
+            return VIM_PARSE_DONE;
+        }
+        break;
+    }
+    }
+
+    return VIM_PARSE_DISCARD;
+}
+
+ccstr render_key(int key, int mods) {
+    Text_Renderer rend; rend.init();
+
+    auto parts = new_list(ccstr);
+    if (mods & CP_MOD_CMD) parts->append("cmd");
+    if (mods & CP_MOD_CTRL) parts->append("ctrl");
+    if (mods & CP_MOD_ALT) parts->append("option");
+    if (mods & CP_MOD_SHIFT) parts->append("shift");
+    parts->append(key_str((Key)key) + strlen("CP_KEY_"));
+    return join_array(parts, "+");
+}
+
+ccstr render_command_buffer(List<Vim_Command_Input> *arr) {
+    Text_Renderer rend; rend.init();
+    For (arr) {
+        if (it.is_key)
+            rend.write("<%s>", render_key(it.key, it.mods));
+        else
+            rend.write("%c", (char)it.ch);
+    }
+    return rend.finish();
+}
+
+ccstr render_command(Vim_Command *cmd) {
+    Text_Renderer rend; rend.init();
+
+    rend.write("operator: %d ", cmd->o_count);
+    if (cmd->op.len)
+        rend.write("%s", render_command_buffer(&cmd->op));
+    else
+        rend.write("<none>", render_command_buffer(&cmd->op));
+
+    rend.write(" | motion: %d ", cmd->m_count);
+    if (cmd->motion.len)
+        rend.write("%s", render_command_buffer(&cmd->motion));
+    else
+        rend.write("<none>", render_command_buffer(&cmd->motion));
+
+    return rend.finish();
+}
+
+bool gr_isspace(List<uchar> *graph) {
+    if (graph->len == 1) {
+        auto uch = graph->at(0);
+        if (uch < 127 && isspace(uch))
+            return true;
+    }
+    return false;
+}
+
+bool gr_isident(List<uchar> *graph) {
+    if (graph->len == 1) {
+        auto uch = graph->at(0);
+        if (isident(uch))
+            return true;
+    }
+    return false;
+}
+
+ccstr Editor::get_selection_text(Selection *selection) {
+    switch (selection->type) {
+    case SEL_CHAR:
+    case SEL_LINE: {
+        auto range = selection->ranges->at(0);
+        return buf->get_text(range.start, range.end);
+    }
+    case SEL_BLOCK: {
+        auto lines = new_list(ccstr);
+        For (selection->ranges)
+            lines->append(buf->get_text(it.start, it.end));
+        return join_array(lines, "\n");
+    }
+    }
+    cp_panic("invalid selection type");
+}
+
+enum Gr_Type {
+    GR_SPACE,
+    GR_IDENT,
+    GR_OTHER,
+};
+
+Gr_Type gr_type(List<uchar> *graph) {
+    if (gr_isspace(graph))
+        return GR_SPACE;
+    if (gr_isident(graph))
+        return GR_IDENT;
+    return GR_OTHER;
+}
+
+Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
+    auto &motion = cmd->motion;
+    if (!motion.len) return NULL;
+
+    auto &op = cmd->op;
+
+    auto is_op = [&](ccstr s) {
+        int len = strlen(s);
+        if (len != op.len) return false;
+
+        for (int i = 0; i < len; i++)
+            if (op[i].is_key || op[i].ch != s[i])
+                return false;
+        return true;
+    };
+
+    auto &c = cur;
+    auto &lines = buf->lines;
+    auto ret = new_object(Eval_Motion_Result);
+
+    int o_count = (cmd->o_count == 0 ? 1 : cmd->o_count);
+    int m_count = (cmd->m_count == 0 ? 1 : cmd->m_count);
+    int count = o_count * m_count;
+
+    // TODO: does this break anything?
+    c = buf->fix_cur(c);
+    cp_assert(buf->is_valid(c));
+
+    auto goto_line_first_nonspace = [&](int y) {
+        ret->new_dest = new_cur2(find_first_nonspace_cp(y), y);
+        ret->type = MOTION_LINE;
+    };
+
+    auto inp = motion[0];
+    if (inp.is_key) {
+    } else {
+        switch (inp.ch) {
+        case 'g': {
+            if (motion.len < 2) break;
+
+            auto inp2 = motion[1];
+            if (inp2.is_key) break;
+
+            switch (inp2.ch) {
+            case 'g':
+                if (!cmd->o_count && !cmd->m_count)
+                    goto_line_first_nonspace(0);
+                else
+                    goto_line_first_nonspace(count-1);
+                return ret;
+            case 'o':
+                ret->new_dest = buf->offset_to_cur(count - 1);
+                ret->type = MOTION_CHAR_EXCL;
+                return ret;
+            }
+            break;
+        }
+
+        case '{':
+        case '}': {
+            auto isempty = [&](int y) {
+                return !lines[y].len;
+            };
+
+            auto isok = [&](int y) {
+                return 0 <= y && y < lines.len;
+            };
+
+            cur2 pos = c;
+
+            for (int i = 0; i < count; i++) {
+                int y = pos.y;
+                if (isempty(y))
+                    while (isok(y) && isempty(y))
+                        y += (inp.ch == '{' ? -1 : 1);
+
+                while (isok(y) && !isempty(y))
+                    y += (inp.ch == '{' ? -1 : 1);
+
+                if (y == -1) {
+                    pos = new_cur2(0, 0);
+                    break;
+                }
+
+                if (y >= lines.len) {
+                    y = lines.len-1;
+                    pos = new_cur2(relu_sub(lines[y].len, 1), y);
+                    break;
+                }
+
+                pos = new_cur2(0, y);
+            }
+
+            ret->new_dest = pos;
+            ret->type = MOTION_CHAR_EXCL;
+            return ret;
+        }
+
+        case 'f':
+        case 't': {
+            if (motion.len < 2) break;
+
+            auto inp2 = motion[1];
+            if (inp2.is_key) break;
+
+            auto it = gr_iter();
+
+            cur2 last;
+
+            for (int i = 0; i < count && !it.eol(); i++) {
+                // ignore the first character
+                if (!it.eol()) {
+                    it.read();
+                    last = it.pos();
+                    it.eat();
+                }
+
+                while (!it.eol()) {
+                    auto graph = it.read();
+                    if (graph->len == 1)
+                        if (inp2.ch == graph->at(0))
+                            break;
+                    last = it.pos();
+                    it.eat();
+                }
+            }
+
+            if (it.eol()) break;
+
+            ret->new_dest = inp.ch == 't' ? last : it.pos();
+            ret->type = MOTION_CHAR_INCL;
+            return ret;
+        }
+
+        case 'F':
+        case 'T': {
+            if (motion.len < 2) break;
+
+            auto inp2 = motion[1];
+            if (inp2.is_key) break;
+
+            break;
+        }
+
+        case 'G':
+            if (!cmd->o_count && !cmd->m_count)
+                goto_line_first_nonspace(lines.len-1);
+            else
+                goto_line_first_nonspace(count-1);
+            return ret;
+
+        case '0':
+            ret->new_dest = new_cur2(0, c.y);
+            ret->type = MOTION_CHAR_EXCL;
+            return ret;
+
+        case '^': {
+            int x = find_first_nonspace_cp(c.y);
+            ret->new_dest = new_cur2(x, c.y);
+            ret->type = MOTION_CHAR_EXCL;
+            return ret;
+        }
+
+        case '$': {
+            int newy = min(lines.len-1, c.y + count-1);
+            ret->new_dest = new_cur2(lines[newy].len, newy);
+            ret->type = MOTION_CHAR_INCL;
+            return ret;
+        }
+        case 'c':
+        case 'y':
+        case 'd': {
+            if (!is_op(cp_sprintf("%c", (char)inp.ch))) break;
+
+            int y = min(c.y + count-1, lines.len-1);
+            ret->new_dest = new_cur2(0, y);
+            ret->type = MOTION_LINE;
+            return ret;
+        }
+
+        case 'j':
+        case 'k': {
+            int newy = c.y + count * (inp.ch == 'j' ? 1 : -1);
+            if (newy < 0) newy = 0;
+            if (newy >= lines.len) newy = lines.len-1;
+            if (newy == c.y) break;
+
+            auto vx = buf->idx_cp_to_vcp(c.y, c.x);
+            auto newvx = max(vx, vim.hidden_vx);
+
+            auto newx = buf->idx_vcp_to_cp(newy, newvx);
+            if (newx >= lines[newy].len && lines[newy].len > 0)
+                newx = lines[newy].len-1;
+
+            ret->new_dest = new_cur2(newx, newy);
+            ret->type = MOTION_LINE;
+            return ret;
+        }
+        case 'h':
+        case 'l': {
+            auto grx = buf->idx_cp_to_gr(c.y, c.x);
+
+            if (inp.ch == 'h') {
+                if (grx) grx--;
+            } else {
+                grx++;
+            }
+
+            auto x = buf->idx_gr_to_cp(c.y, grx);
+            if (x == lines[c.y].len && lines[c.y].len > 0)
+                x = lines[c.y].len-1;
+
+            // vim.hidden_vx = buf->idx_cp_to_vcp(c.y, x);
+            ret->new_dest = new_cur2(x, c.y);
+            ret->type = MOTION_CHAR_EXCL;
+            return ret;
+        }
+        case 'H':
+        case 'M':
+        case 'L': {
+            u32 y = 0;
+            if (inp.ch == 'H') y = view.y + min(view.h - 1, max(count - 1, options.scrolloff));
+            if (inp.ch == 'M') y = view.y + (view.h / 2);
+            if (inp.ch == 'L') y = view.y + relu_sub(view.h, 1 + max(count - 1, options.scrolloff));
+
+            // this needs to be refactored out
+            if (y >= lines.len)
+                y = lines.len ? lines.len-1 : 0;
+
+            goto_line_first_nonspace(y);
+            return ret;
+        }
+        case 'w':
+        case 'W': {
+            auto it = gr_iter();
+
+            for (int i = 0; i < count && !it.eof(); i++) {
+                auto graph = it.read();
+                it.eat();
+
+                auto type = gr_type(graph);
+                while (!it.eof()) {
+                    graph = it.read();
+                    if (inp.ch == 'w') {
+                        if (gr_type(graph) != type)
+                            break;
+                    } else {
+                        if (gr_isspace(graph) != (type == GR_SPACE))
+                            break;
+                    }
+                    it.eat();
+                }
+
+                if (type != GR_SPACE) {
+                    while (!it.eof()) {
+                        auto graph = it.read();
+                        if (!gr_isspace(graph)) break;
+                        it.eat();
+                    }
+                }
+            }
+
+            ret->new_dest = it.pos();
+            ret->type = MOTION_CHAR_EXCL;
+            return ret;
+        }
+        case 'e':
+        case 'E': {
+            auto it = gr_iter();
+
+            for (int i = 0; i < count && !it.eof(); i++) {
+                auto graph = it.read();
+                it.eat();
+
+                auto type = gr_type(graph);
+                bool eat_spaces = false;
+
+                auto is_end = [&](List<uchar> *next_graph, Gr_Type current_type) {
+                    if (inp.ch == 'e')
+                        return gr_type(next_graph) != type;
+                    return gr_isspace(next_graph);
+                };
+
+                if (type == GR_SPACE || is_end(it.read(), type)) {
+                    while (!it.eof()) {
+                        graph = it.read();
+                        if (!gr_isspace(graph))
+                            break;
+                        it.eat();
+                    }
+                }
+
+                // now go to the end of the next word
+                graph = it.read();
+                type = gr_type(graph);
+
+                auto prev = it.pos();
+                it.eat();
+
+                while (!it.eof()) {
+                    graph = it.read();
+                    if (is_end(graph, type))
+                        break;
+                    prev = it.pos();
+                    it.eat();
+                }
+
+                it.it.pos = prev;
+            }
+
+            ret->new_dest = it.pos();
+            ret->type = MOTION_CHAR_INCL;
+            return ret;
+        }
+
+        }
+    }
+
+    return NULL;
+}
+
+void Editor::vim_handle_visual_mode_key(Selection_Type type) {
+    if (world.vim.mode == VI_VISUAL) {
+        if (vim.visual_type == type)
+            world.vim.mode = VI_NORMAL;
+        else
+            vim.visual_type = type;
+    } else {
+        world.vim.mode = VI_VISUAL;
+        vim.visual_start = cur;
+        vim.visual_type = type;
+    }
+}
+
+// mirrors buf->remove_lines, y1-y2 are inclusive
+void Editor::vim_delete_lines(int y1, int y2) {
+    // TODO: pick up here, this ties into clipboard support
+    buf->remove_lines(y1, y2);
+}
+
+cur2 Editor::vim_delete_range(cur2 start, cur2 end) {
+    Selection_Range range; ptr0(&range);
+    range.start = start;
+    range.end = end;
+
+    Selection sel; ptr0(&sel);
+    sel.type = SEL_CHAR;
+    sel.ranges = new_list(Selection_Range);
+    sel.ranges->append(&range);
+    return vim_delete_selection(&sel);
+}
+
+cur2 Editor::vim_delete_selection(Selection *selection) {
+    auto text = get_selection_text(selection);
+    world.window->set_clipboard_string(text);
+
+    int len = selection->ranges->len;
+    for (int i = len-1; i >= 0; i--) {
+        auto &it = selection->ranges->at(i);
+        buf->remove(it.start, it.end);
+    }
+
+    return selection->ranges->at(0).start;
+}
+
+bool Editor::vim_exec_command(Vim_Command *cmd) {
+    auto mode = world.vim.mode;
+    auto motion_result = vim_eval_motion(cmd);
+
+    auto &c = cur;
+    auto &lines = buf->lines;
+
+    int o_count = cmd->o_count == 0 ? 1 : cmd->o_count;
+
+    // Move cursor in normal mode.
+    auto move_cursor_normal = [&](cur2 pos) {
+        auto len = lines[pos.y].len;
+        if (pos.x >= len)
+            pos.x = len ? len-1 : 0;
+
+        // man this is getting too "magical" and complicated
+        if (motion_result)
+            if (motion_result->type == MOTION_CHAR_INCL || motion_result->type == MOTION_CHAR_EXCL)
+                vim.hidden_vx = buf->idx_cp_to_vcp(pos.y, pos.x);
+
+        move_cursor(pos);
+    };
+
+    auto enter_insert_mode = [&]() {
+        vim.insert_start = cur;
+        world.vim.mode = VI_INSERT;
+
+        // copy the command over
+        vim.insert_command.m_count = cmd->m_count;
+        vim.insert_command.o_count = cmd->o_count;
+        For (&cmd->op) vim.insert_command.op.append(it);
+        For (&cmd->motion) vim.insert_command.motion.append(it);
+    };
+
+    auto &op = cmd->op;
+    if (!op.len) {
+        if (!motion_result) return false;
+
+        auto pos = motion_result->new_dest;
+        if (pos.y >= lines.len) {
+            pos.y = lines.len-1;
+            pos.x = lines[pos.y].len-1;
+        }
+
+        int len = lines[pos.y].len;
+        if (pos.x >= len && len > 0) pos.x = len-1;
+
+        move_cursor_normal(pos);
+        return true;
+    }
+
+    auto inp = op[0];
+    if (inp.is_key) {
+        switch (inp.mods) {
+        case CP_MOD_NONE:
+            switch (inp.key) {
+            case CP_KEY_TAB: {
+                for (int i = 0; i < o_count; i++)
+                    if (!world.history.go_forward())
+                        break;
+                return true;
+            }
+            }
+            break;
+        case CP_MOD_CTRL:
+            switch (inp.key) {
+            case CP_KEY_E:
+            case CP_KEY_Y: {
+                int old = view.y;
+                if (inp.key == CP_KEY_E)
+                    view.y = min(lines.len-1, view.y + o_count);
+                else
+                    view.y = relu_sub(view.y, o_count);
+                if (old != view.y) ensure_cursor_on_screen();
+                return true;
+            }
+
+            case CP_KEY_D:
+            case CP_KEY_U:
+            case CP_KEY_B:
+            case CP_KEY_F: {
+                bool forward = false;
+                int jumpsize = 0;
+
+                switch (inp.key) {
+                case CP_KEY_D: forward = true; jumpsize = view.h/2; break;
+                case CP_KEY_U: forward = false; jumpsize = view.h/2; break;
+                case CP_KEY_B: forward = false; jumpsize = view.h; break;
+                case CP_KEY_F: forward = true; jumpsize = view.h; break;
+                }
+
+                jumpsize *= o_count;
+                if (forward) {
+                    int maxy = lines.len-1;
+                    view.y = min(maxy, view.y + jumpsize);
+                    move_cursor(new_cur2((int)cur.x, (int)min(maxy, cur.y + jumpsize)));
+                } else {
+                    view.y = relu_sub(view.y, jumpsize);
+                    move_cursor(new_cur2((int)cur.x, (int)relu_sub(cur.y, jumpsize)));
+                }
+                ensure_cursor_on_screen();
+                break;
+            }
+
+            case CP_KEY_R: {
+                cur2 pos;
+                for (int i = 0; i < o_count; i++)
+                    pos = buf->hist_redo();
+                move_cursor_normal(pos);
+                return true;
+            }
+            case CP_KEY_TAB:
+            case CP_KEY_I: {
+                for (int i = 0; i < o_count; i++)
+                    if (!world.history.go_forward())
+                        break;
+                return true;
+            }
+            case CP_KEY_O: {
+                for (int i = 0; i < o_count; i++)
+                    if (!world.history.go_backward())
+                        break;
+                return true;
+            }
+            case CP_KEY_V:
+                vim_handle_visual_mode_key(SEL_BLOCK);
+                return true;
+            }
+            break;
+        }
+    } else {
+        switch (inp.ch) {
+        case 'v':
+            vim_handle_visual_mode_key(SEL_CHAR);
+            return true;
+        case 'V':
+            vim_handle_visual_mode_key(SEL_LINE);
+            return true;
+        case 'i':
+            enter_insert_mode();
+            return true;
+        case 'a': {
+            auto gr = buf->idx_cp_to_gr(c.y, c.x);
+            auto x = buf->idx_gr_to_cp(c.y, gr+1);
+            move_cursor(new_cur2(x, c.y));
+            enter_insert_mode();
+            return true;
+        }
+        case 'A': {
+            move_cursor(new_cur2(lines[c.y].len, c.y));
+            enter_insert_mode();
+            return true;
+        }
+        case 'I': {
+            move_cursor(new_cur2(find_first_nonspace_cp(c.y), c.y));
+            enter_insert_mode();
+            return true;
+        }
+        case 'o':
+        case 'O':
+            switch (world.vim.mode) {
+            case VI_NORMAL: {
+                int y = inp.ch == 'o' ? c.y + 1 : c.y;
+                move_cursor(open_newline(y));
+                enter_insert_mode();
+                return true;
+            }
+            case VI_VISUAL:
+                return true;
+            }
+            break;
+
+        case 's':
+        case 'S':
+            switch (world.vim.mode) {
+            case VI_NORMAL: {
+                cur2 start, end;
+                if (inp.ch == 's') {
+                    start = c;
+                    auto gr = buf->idx_cp_to_gr(c.y, c.x);
+                    auto cp = buf->idx_gr_to_cp(c.y, gr+1);
+                    end = new_cur2(cp, c.y);
+                } else {
+                    start = new_cur2(find_first_nonspace_cp(c.y), c.y);
+                    end = new_cur2(lines[c.y].len, c.y);
+                }
+
+                vim_delete_range(start, end);
+                move_cursor(start);
+                enter_insert_mode();
+                return true;
+            }
+            case VI_VISUAL: {
+                cur2 start;
+                if (inp.ch == 's') {
+                    auto selection = get_selection();
+                    start = vim_delete_selection(selection);
+                } else {
+                    auto selection = get_selection(SEL_LINE);
+                    auto range = selection->ranges->at(0);
+                    vim_delete_lines(range.start.y, range.end.y);
+                    start = open_newline(range.start.y);
+                }
+                move_cursor(start);
+                enter_insert_mode();
+                return true;
+            }
+            }
+            break;
+
+        case 'D':
+        case 'C':
+            switch (world.vim.mode) {
+            case VI_NORMAL: {
+                auto start = cur;
+                int y = cur.y + o_count - 1;
+                auto end = new_cur2(lines[y].len, y);
+                vim_delete_range(start, end);
+                if (inp.ch == 'D') {
+                    move_cursor_normal(start);
+                } else {
+                    move_cursor(start);
+                    enter_insert_mode();
+                }
+                return true;
+            }
+            case VI_VISUAL: {
+                auto selection = get_selection(SEL_LINE);
+                auto range = selection->ranges->at(0);
+                vim_delete_lines(range.start.y, range.end.y);
+
+                if (inp.ch == 'D') {
+                    world.vim.mode = VI_NORMAL;
+                    auto x = find_first_nonspace_cp(range.start.y);
+                    move_cursor_normal(new_cur2(x, range.start.y));
+                } else {
+                    auto newcur = open_newline(range.start.y);
+                    move_cursor(newcur);
+                    enter_insert_mode();
+                }
+                return true;
+            }
+            }
+            break;
+
+        case 'u': {
+            cur2 pos;
+            for (int i = 0; i < o_count; i++)
+                pos = buf->hist_undo();
+            move_cursor_normal(pos);
+            return true;
+        }
+        case 'J':
+            for (int i = 0; i < o_count; i++) {
+                int y = c.y;
+                if (y == lines.len-1) break;
+
+                auto start = new_cur2(lines[y].len, y);
+                auto x = find_first_nonspace_cp(y+1);
+                auto end = new_cur2(x, y+1);
+                bool add_space = (x < lines[y+1].len && lines[y+1][x] != ')');
+
+                buf->remove(start, end);
+                if (add_space) {
+                    uchar space = ' ';
+                    buf->insert(start, &space, 1);
+                }
+            }
+            return true;
+        case 'x': {
+            switch (world.vim.mode) {
+            case VI_NORMAL: {
+                auto it = gr_iter();
+                for (int i = 0; i < o_count && !it.eol(); i++) {
+                    it.read();
+                    it.eat();
+                }
+
+                if (c != it.pos()) {
+                    vim_delete_range(c, it.pos());
+                    int len = lines[c.y].len;
+                    if (c.x >= len && len > 0) {
+                        move_cursor_normal(new_cur2(len-1, c.y));
+                    }
+                }
+                return true;
+            }
+            case VI_VISUAL: {
+                auto start = vim_delete_selection(get_selection());
+                move_cursor_normal(start);
+                world.vim.mode = VI_NORMAL;
+                return true;
+            }
+            }
+            break;
+        }
+        case 'c':
+        case 'd': {
+            switch (mode) {
+            case VI_VISUAL: {
+                cp_assert(!motion_result);
+                auto start = vim_delete_selection(get_selection());
+                if (inp.ch == 'c') {
+                    move_cursor(start);
+                    enter_insert_mode();
+                } else {
+                    world.vim.mode = VI_NORMAL;
+                    move_cursor_normal(start);
+                }
+                return true;
+            }
+            case VI_NORMAL: {
+                cp_assert(motion_result);
+
+                switch (motion_result->type) {
+                case MOTION_CHAR_INCL:
+                case MOTION_CHAR_EXCL: {
+                    cur2 a = c, b = motion_result->new_dest;
+                    ORDER(a, b);
+
+                    if (motion_result->type == MOTION_CHAR_INCL) {
+                        auto it = gr_iter(b);
+                        it.read();
+                        it.eat();
+                        b = it.pos();
+                    }
+
+                    vim_delete_range(a, b);
+
+                    if (inp.ch == 'c') {
+                        move_cursor(a);
+                        enter_insert_mode();
+                    } else {
+                        move_cursor_normal(a);
+                    }
+                    break;
+                }
+                case MOTION_LINE: {
+                    int y1 = c.y;
+                    int y2 = motion_result->new_dest.y;
+
+                    if (y1 > y2) {
+                        int tmp = y1;
+                        y1 = y2;
+                        y2 = tmp;
+                    }
+
+                    cur2 start = new_cur2(0, y1);
+                    cur2 end = new_cur2(0, y2+1);
+
+                    if (y2 == lines.len-1) {
+                        start = buf->dec_cur(start);
+                        end = new_cur2(lines[y2].len, y2);
+                    }
+
+                    vim_delete_range(start, end);
+
+                    if (inp.ch == 'c') {
+                        move_cursor(open_newline(y1));
+                        enter_insert_mode();
+                    } else {
+                        auto to = new_cur2(0, y1);
+                        if (y1 >= lines.len) {
+                            // TODO: find first non whitespace
+                            to = new_cur2(0, lines.len-1);
+                        }
+                        move_cursor_normal(to);
+                    }
+                }
+                }
+                return true;
+            }
+            }
+            break;
+        }
+        case 'y':
+            break;
+        case '~':
+            break;
+        case '!':
+            break;
+        case '=':
+            break;
+        case '<':
+            break;
+        case '>':
+            break;
+        case 'g': {
+            auto it2 = op[1];
+            if (!it2.is_key) {
+                switch (it2.ch) {
+                case 'q':
+                case 'w':
+                case '?':
+                case '@':
+                case '~':
+                case 'u':
+                case 'U':
+                    break;
+                case 'd': {
+                    handle_goto_definition();
+                    break;
+                }
+                }
+            }
+            break;
+        }
+        case 'z': {
+            auto it2 = op[1];
+            if (!it2.is_key) {
+                switch (it2.ch) {
+                case 'f': {
+                    break;
+                }
+                }
+            }
+            break;
+        }
+        }
+    }
+    return false;
+}
+
+cur2 Editor::open_newline(int y) {
+    if (y == 0) {
+        // if it's the first line, start at 0, 0 and insert
+        // indent + \n, or rather, just \n
+        uchar newline = '\n';
+        buf->insert(new_cur2(0, 0), &newline, 1);
+        return new_cur2(0, 0);
+    }
+
+    // otherwise, start at the line above, and add \n + indent
+    auto yp = y-1;
+
+    auto indent_chars = get_autoindent(y);
+    int indent_len = strlen(indent_chars);
+
+    auto text = new_list(uchar);
+    text->append((uchar)'\n');
+    for (int i = 0; i < indent_len; i++)
+        text->append((uchar)indent_chars[i]);
+    buf->insert(new_cur2(buf->lines[yp].len, yp), text->items, text->len);
+
+    auto start = new_cur2(0, y);
+    auto end = new_cur2(indent_len, y);
+    vim_save_inserted_indent(start, end);
+    return end;
+}
+
+bool Editor::vim_handle_input(Vim_Command_Input *input) {
+    switch (world.vim.mode) {
+    case VI_VISUAL:
+    case VI_NORMAL: {
+        vim.command_buffer->append(input);
+
+        print("%s", render_command_buffer(vim.command_buffer));
+
+        Vim_Command cmd; ptr0(&cmd);
+        cmd.op.init();
+        cmd.motion.init();
+
+        auto status = vim_parse_command(&cmd);
+        if (status == VIM_PARSE_WAIT) break;
+
+        vim.command_buffer->len = 0;
+        if (status == VIM_PARSE_DISCARD) {
+            print("command discarded");
+            break;
+        }
+
+        vim_exec_command(&cmd);
+        return true;
+    }
+    }
+    return false;
+}
+
+bool Editor::vim_handle_char(u32 ch) {
+    Vim_Command_Input input; ptr0(&input);
+    input.is_key = false;
+    input.ch = ch;
+    return vim_handle_input(&input);
+}
+
+bool Editor::vim_handle_key(int key, int mods) {
+    Vim_Command_Input input; ptr0(&input);
+    input.is_key = true;
+    input.key = key;
+    input.mods = mods;
+    return vim_handle_input(&input);
 }

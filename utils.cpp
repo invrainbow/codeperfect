@@ -40,7 +40,7 @@ ccstr cp_strdup(ccstr s) {
     if (!s) return NULL;
 
     auto len = strlen(s);
-    auto ret = alloc_array(char, len + 1);
+    auto ret = new_array(char, len + 1);
     memcpy(ret, s, sizeof(char) * (len + 1));
     return (ccstr)ret;
 }
@@ -48,7 +48,7 @@ ccstr cp_strdup(ccstr s) {
 ccstr cp_strncpy(ccstr s, int n) {
     if (!s) return NULL;
 
-    auto ret = alloc_array(char, n + 1);
+    auto ret = new_array(char, n + 1);
     memcpy(ret, s, sizeof(char) * n);
     ret[n] = '\0';
     return (ccstr)ret;
@@ -59,7 +59,7 @@ ccstr cp_vsprintf(ccstr fmt, va_list args) {
     va_copy(args2, args);
 
     auto len = stbsp_vsnprintf(NULL, 0, fmt, args);
-    auto buf = alloc_array(char, (len + 1));
+    auto buf = new_array(char, (len + 1));
     stbsp_vsnprintf(buf, len + 1, fmt, args2);
 
     va_end(args2);
@@ -89,14 +89,14 @@ List<ccstr> *split_string(ccstr str, char sep) {
 List<ccstr> *split_string(ccstr str, fn<bool(char)> pred) {
     auto len = strlen(str);
     u32 start = 0;
-    auto ret = alloc_list<ccstr>();
+    auto ret = new_list(ccstr);
 
     while (start < len) {
         u32 end = start;
         while (end < len && !pred(str[end])) end++;
 
         auto partlen = end-start;
-        auto s = alloc_array(char, partlen+1);
+        auto s = new_array(char, partlen+1);
         strncpy(s, str + start, partlen);
         s[partlen] = '\0';
         ret->append(s);
@@ -110,7 +110,7 @@ Path* make_path(ccstr s) {
     auto pred = [&](char ch) -> bool { return is_sep(ch); };
     auto parts = split_string(s, pred);
 
-    auto path = alloc_object(Path);
+    auto path = new_object(Path);
     path->init(parts);
     return path;
 }
@@ -151,7 +151,7 @@ ccstr join_array(List<ccstr> *arr, char glue) {
 ccstr join_array(List<ccstr> *arr, ccstr glue) {
     if (!arr->len) return "";
 
-    auto ret = alloc_list<char>();
+    auto ret = new_list(char);
 
     auto append_str = [&](ccstr s) {
         for (auto p = s; *p; p++)
@@ -181,7 +181,7 @@ ccstr str_replace(ccstr s, ccstr find, ccstr replace) {
     int i = 0, len = strlen(s);
     int flen = strlen(find);
     int rlen = strlen(replace);
-    auto ret = alloc_list<char>();
+    auto ret = new_list(char);
 
     while (i < len) {
         if (str_starts_with(&s[i], find)) {

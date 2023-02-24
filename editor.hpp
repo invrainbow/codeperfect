@@ -6,9 +6,6 @@
 #include "os.hpp"
 #include "tree_sitter_crap.hpp"
 
-#define NVIM_DEFAULT_WIDTH 200
-#define NVIM_DEFAULT_HEIGHT 500
-
 const int AUTOCOMPLETE_WINDOW_ITEMS = 10;
 
 #define MAX_BREAKPOINTS 128
@@ -19,6 +16,17 @@ enum {
     HINT_NORMAL,
     HINT_CURRENT_PARAM,
     HINT_NOT_CURRENT_PARAM,
+};
+
+enum Vim_Mode {
+    VI_NONE,
+    VI_NORMAL,
+    VI_VISUAL,
+    VI_INSERT,
+    VI_REPLACE,
+    VI_OPERATOR,
+    VI_CMDLINE,
+    VI_UNKNOWN,
 };
 
 struct Client_Parameter_Hint {
@@ -53,8 +61,6 @@ enum Ensure_Cursor_Mode {
 };
 
 struct Move_Cursor_Opts {
-    bool dont_add_to_history;
-
     // NOTE: Honestly, this is not a great name. The point isn't whether it's a
     // user movement, but whether we should reset location-pegged things like
     // autocomplete and appending keystrokes to the most recent change in history.
@@ -62,6 +68,59 @@ struct Move_Cursor_Opts {
 };
 
 Move_Cursor_Opts *default_move_cursor_opts();
+
+struct Vim_Command_Input {
+    bool is_key;
+    union {
+        uchar ch;
+        struct {
+            int key;
+            int mods;
+        };
+    };
+};
+
+enum Vim_Parse_Status {
+    VIM_PARSE_DONE,
+    VIM_PARSE_WAIT,
+    VIM_PARSE_DISCARD,
+};
+
+struct Vim_Command {
+    int o_count;
+    List<Vim_Command_Input> op;
+    int m_count;
+    List<Vim_Command_Input> motion;
+};
+
+enum Motion_Type {
+    MOTION_LINE,
+    MOTION_CHAR_INCL,
+    MOTION_CHAR_EXCL,
+};
+
+struct Eval_Motion_Result {
+    Motion_Type type;
+    cur2 new_dest; // anything else?
+    bool inclusive;
+};
+
+enum Selection_Type {
+    SEL_CHAR,
+    SEL_LINE,
+    SEL_BLOCK,
+    SEL_NONE = -1, // sentinel
+};
+
+struct Selection_Range {
+    cur2 start;
+    cur2 end;
+};
+
+struct Selection {
+    Selection_Type type;
+    List<Selection_Range> *ranges;
+};
 
 struct Editor {
     u32 id;
@@ -81,6 +140,7 @@ struct Editor {
     // only used when !world.use_nvim
     bool selecting;
     cur2 select_start;
+
     bool mouse_selecting;
     u64 mouse_drag_last_time_ms;
     i64 mouse_drag_accum;
@@ -106,7 +166,6 @@ struct Editor {
     u64 disable_file_watcher_until;
 
     bool saving;
-    char highlights[NVIM_DEFAULT_HEIGHT][NVIM_DEFAULT_WIDTH];
 
     cur2 go_here_after_escape;
 
@@ -118,49 +177,11 @@ struct Editor {
     bool ui_rect_set;
     boxf ui_rect;
 
-    struct {
-        bool is_buf_attached;
-        u32 buf_id;
-        u32 win_id;
-
-        bool got_initial_cur;
-        bool got_initial_lines;
-        bool need_initial_pos_set;
-        cur2 initial_pos;
-
-        bool waiting_for_move_cursor;
-        cur2 move_cursor_to;
-        int grid_topline;
-
-        cur2 post_insert_original_cur;
-
-        bool is_navigating;
-        cur2 navigating_to_pos;
-        int navigating_to_editor;
-
-        int changedtick;
-
-        cur2 visual_start;
-        cur2 visual_end;
-    } nvim_data;
-
     struct Insert_Change {
         cur2 start; // line
         cur2 end;
         List<Line> lines;
     };
-
-    struct {
-        Pool mem;
-
-        // current change
-        cur2 start;
-        cur2 old_end;
-        u32 deleted_graphemes;
-
-        List<Insert_Change> other_changes;
-        u32 skip_changedticks_until;
-    } nvim_insert;
 
     struct {
         Autocomplete ac;
@@ -177,16 +198,40 @@ struct Editor {
         int tree_version;
     } ast_navigation;
 
+    struct {
+        Pool mem;
+        List<Vim_Command_Input> *command_buffer;
+        int hidden_vx;
+        union {
+            // Right now the mode is stored in world, but the mode-specific
+            // shit is stored here in editor. This is going to break things if
+            // the user somehow switches editors without changing back to
+            // normal mode. That seems really stupid.
+            struct {
+                cur2 insert_start;
+                Vim_Command insert_command;
+            };
+            struct {
+                cur2 visual_start;
+                Selection_Type visual_type;
+            };
+        };
+        struct {
+            bool inserted;
+            int buf_tree_version;
+            cur2 start;
+            cur2 end;
+        } inserted_indent;
+    } vim;
+
     Client_Parameter_Hint parameter_hint;
 
     void init();
     void cleanup();
 
     bool is_unsaved() { return is_modifiable() && (file_was_deleted || buf->dirty); }
-    bool is_nvim_ready();
     bool is_modifiable();
 
-    void raw_move_cursor(cur2 c, Move_Cursor_Opts *opts = NULL);
     void move_cursor(cur2 c, Move_Cursor_Opts *opts = NULL);
     void reset_state();
     bool load_file(ccstr new_filepath);
@@ -212,10 +257,9 @@ struct Editor {
 
     void apply_edits(List<TSInputEdit> *edits);
     void reload_file(bool because_of_file_watcher = false);
-    void update_lines(int firstline, int lastline, List<uchar*> *lines, List<s32> *line_lengths);
     bool trigger_escape(cur2 go_here_after = {-1, -1});
     bool optimize_imports();
-    void format_on_save(bool fix_imports, bool write_to_nvim = true);
+    void format_on_save(bool fix_imports);
     void handle_save(bool about_to_close = false);
     bool is_current_editor();
     void backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_erase);
@@ -226,7 +270,6 @@ struct Editor {
     void add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end);
     bool cur_is_inside_comment_or_string();
     bool ask_user_about_unsaved_changes();
-    void skip_next_nvim_update(int n = 1);
     void delete_selection();
     void toggle_comment(int ystart, int yend);
     void highlight_snippet(cur2 start, cur2 end);
@@ -236,6 +279,27 @@ struct Editor {
     void ast_navigate_out();
     void ast_navigate_prev();
     void ast_navigate_next();
+
+    Vim_Parse_Status vim_parse_command(Vim_Command *out);
+    bool vim_handle_char(u32 ch);
+    bool vim_handle_key(int key, int mods);
+    bool vim_handle_input(Vim_Command_Input *input);
+
+    Gr_Iter gr_iter(cur2 c) { return buf->gr_iter(c); };
+    Gr_Iter gr_iter() { return buf->gr_iter(cur); };
+
+    Eval_Motion_Result* vim_eval_motion(Vim_Command *cmd);
+    bool vim_exec_command(Vim_Command *cmd);
+    int find_first_nonspace_cp(int y);
+    cur2 open_newline(int y);
+    cur2 handle_alt_move(bool back, bool backspace);
+    Selection* get_selection(Selection_Type override_type = SEL_NONE);
+    ccstr get_selection_text(Selection *selection);
+    void vim_handle_visual_mode_key(Selection_Type type);
+    cur2 vim_delete_selection(Selection *selection);
+    cur2 vim_delete_range(cur2 start, cur2 end);
+    void vim_delete_lines(int y1, int y2);
+    void vim_save_inserted_indent(cur2 start, cur2 end);
 };
 
 Parse_Lang determine_lang(ccstr filepath);

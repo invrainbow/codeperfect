@@ -29,7 +29,7 @@ struct Buffer_It {
     uchar prev();
     uchar next();
     bool bof() { return !x && !y; }
-    bool eol() { return peek() == '\n'; }
+    bool eol() { return peek() == '\n' || eof(); }
     uchar get(cur2 _pos);
 };
 
@@ -157,6 +157,24 @@ struct Change {
     Change *next;
 };
 
+
+struct Gr_Iter {
+    Buffer_It it;
+    cur2 gr_end;
+
+    void init(Buffer_It _it) {
+        ptr0(this);
+        it = _it;
+    }
+
+    cur2 pos() { return it.pos; };
+    bool eof() { return it.eof(); };
+    bool eol() { return it.eol() || it.eof(); };
+
+    List<uchar>* read();
+    void eat();
+};
+
 struct Buffer {
     Pool *mem;
 
@@ -225,12 +243,15 @@ struct Buffer {
 
     void insert(cur2 start, uchar* text, s32 len, bool applying_change = false);
     void remove(cur2 start, cur2 end, bool applying_change = false);
+    void remove_lines(u32 y1, u32 y2);
 
     Buffer_It iter(cur2 c);
     cur2 inc_cur(cur2 c);
     cur2 dec_cur(cur2 c);
     i32 cur_to_offset(cur2 c);
-    cur2 offset_to_cur(i32 off);
+    cur2 offset_to_cur(i32 off, bool nothrow = true);
+    Gr_Iter gr_iter(cur2 c);
+    cur2 inc_gr(cur2 c);
 
     // this is so stupid lmao
     u32 idx_byte_to_gr(int y, int off);
@@ -246,6 +267,9 @@ struct Buffer {
     u32 idx_cp_to_vcp(int y, int off) { return internal_convert_x_vx(y, off, true); }
 
     ccstr get_text(cur2 start, cur2 end);
+
+    bool is_valid(cur2 c);
+    cur2 fix_cur(cur2 c);
 };
 
 s32 uchar_size(uchar c);

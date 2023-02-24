@@ -106,7 +106,7 @@ bool Debugger::find_breakpoint(ccstr filename, u32 line, Breakpoint* out) {
 void Debugger::save_list_of_vars(Json_Navigator js, i32 idx, List<Dlv_Var*> *out) {
     auto len = js.array_length(idx);
     for (u32 i = 0; i < len; i++) {
-        auto ptr = alloc_object(Dlv_Var);
+        auto ptr = new_object(Dlv_Var);
         save_single_var(js, js.get(idx, i), ptr);
         out->append(ptr);
     }
@@ -229,7 +229,7 @@ void Debugger::save_single_var(Json_Navigator js, i32 idx, Dlv_Var* out, Save_Va
         out->value = cp_sprintf("%s%s", out->value, js.str(js.get(idx, ".value")));
     } else {
         if (save_mode == SAVE_VAR_NORMAL || save_mode == SAVE_VAR_CHILDREN_OVERWRITE)
-            out->children = alloc_list<Dlv_Var*>();
+            out->children = new_list(Dlv_Var*);
         save_list_of_vars(js, js.get(idx, ".children"), out->children);
     }
 }
@@ -249,12 +249,12 @@ void Debugger::eval_watch(Dlv_Watch *watch) {
     Dlv_Var value; ptr0(&value);
     if (eval_expression(watch->expr, goroutine_id, frame_id, &value, SAVE_VAR_NORMAL)) {
         SCOPED_MEM(&watches_mem);
-        watch->value = alloc_object(Dlv_Var);
+        watch->value = new_object(Dlv_Var);
         memcpy(watch->value, value.copy(), sizeof(Dlv_Var));
         watch->state = DBGWATCH_READY;
     } else {
         SCOPED_MEM(&watches_mem);
-        watch->value = alloc_object(Dlv_Var);
+        watch->value = new_object(Dlv_Var);
         watch->value->flags = DLV_VAR_CANTREAD;
         watch->state = DBGWATCH_ERROR;
     }
@@ -438,7 +438,7 @@ Packet* Debugger::send_packet(ccstr packet_name, lambda f, bool read) {
 
     t.log("read packet");
 
-    auto packet = alloc_object(Packet);
+    auto packet = new_object(Packet);
     memcpy(packet, &p, sizeof(p));
     return packet;
 }
@@ -589,7 +589,7 @@ List<Breakpoint>* Debugger::list_breakpoints() {
 
     auto breakpoints_idx = js.get(0, ".result.Breakpoints");
     auto breakpoints_len = js.array_length(breakpoints_idx);
-    auto ret = alloc_list<Breakpoint>(breakpoints_len);
+    auto ret = new_list(Breakpoint, breakpoints_len);
 
     for (i32 i = 0; i < breakpoints_len; i++) {
         auto it = js.get(breakpoints_idx, i);
@@ -618,7 +618,7 @@ List<Breakpoint>* Debugger::list_breakpoints() {
             auto idx = js.get(it, ".addrs");
             auto len = js.array_length(idx);
 
-            bp->addrs = alloc_list<u64>(js.array_length(idx));
+            bp->addrs = new_list(u64, js.array_length(idx));
             for (i32 j = 0; j < len; j++)
                 bp->addrs->append(js.num(js.get(idx, j)));
         }
@@ -628,7 +628,7 @@ List<Breakpoint>* Debugger::list_breakpoints() {
             if (idx != -1) {
                 auto len = js.array_length(idx);
 
-                bp->variable_expressions = alloc_list<ccstr>(len);
+                bp->variable_expressions = new_list(ccstr, len);
                 for (i32 j = 0; j < len; j++)
                     bp->variable_expressions->append(js.str(js.get(idx, j)));
             }
@@ -642,7 +642,7 @@ bool Json_Navigator::parse(ccstr s) {
     Timer t; t.init("Json_Navigator::parse");
 
     string = s;
-    tokens = alloc_list<jsmntok_t>();
+    tokens = new_list(jsmntok_t);
 
     jsmn_parser parser;
     jsmn_init(&parser);
@@ -677,7 +677,7 @@ bool Json_Navigator::match(int i, ccstr s) {
         return false;
 
     auto newlen = tok.end - tok.start;
-    auto buf = alloc_array(char, newlen + 1);
+    auto buf = new_array(char, newlen + 1);
     for (u32 i = 0; i < newlen; i++)
         buf[i] = string[tok.start + i];;
     buf[newlen] = '\0';
@@ -797,7 +797,7 @@ ccstr Json_Navigator::str(i32 i) {
     u32 len;
     auto s = str(i, &len);
 
-    auto ret = alloc_array(char, len + 1);
+    auto ret = new_array(char, len + 1);
     strncpy(ret, s, len);
     ret[len] = '\0';
     return ret;
@@ -1242,7 +1242,7 @@ bool Debugger::fill_stacktrace(Debugger_State *draft) {
 
         auto locations_len = js.array_length(locations_idx);
 
-        goroutine->frames = alloc_list<Dlv_Frame>();
+        goroutine->frames = new_list(Dlv_Frame);
 
         for (u32 i = 0; i < locations_len; i++) {
             auto it = js.get(locations_idx, i);
@@ -1291,7 +1291,7 @@ bool Debugger::fill_local_vars(Debugger_State *draft) {
 
     auto vars_idx = js.get(0, ".result.Variables");
     if (vars_idx != -1) {
-        frame->locals = alloc_list<Dlv_Var*>();
+        frame->locals = new_list(Dlv_Var*);
         save_list_of_vars(js, vars_idx, frame->locals);
     }
 
@@ -1327,7 +1327,7 @@ bool Debugger::fill_function_args(Debugger_State *draft) {
 
     auto vars_idx = js.get(0, ".result.Args");
     if (vars_idx != -1) {
-        frame->args = alloc_list<Dlv_Var*>();
+        frame->args = new_list(Dlv_Var*);
         save_list_of_vars(js, vars_idx, frame->args);
     }
 
@@ -1347,7 +1347,7 @@ void Debugger::jump_to_frame() {
     world.message_queue.add([&](auto msg) {
         msg->type = MTM_GOTO_FILEPOS;
         msg->goto_file = cp_strdup(frame->filepath);
-        msg->goto_pos = new_cur2((i32)0, (i32)frame->lineno - 1);
+        msg->goto_pos = new_cur2(0, frame->lineno - 1);
     });
 
     if (debuggee_pid) {
@@ -1475,7 +1475,7 @@ void Debugger::do_everything() {
 
                 {
                     SCOPED_MEM(mem);
-                    auto ptr = alloc_object(Dlv_Var);
+                    auto ptr = new_object(Dlv_Var);
                     memcpy(ptr, newvar->copy(), sizeof(Dlv_Var));
                     *args.var = ptr;
                 }
@@ -1542,8 +1542,8 @@ void Debugger::do_everything() {
 
                     {
                         SCOPED_MEM(mem);
-                        state = alloc_object(Debugger_State);
-                        state->goroutines = alloc_list<Dlv_Goroutine>();
+                        state = new_object(Debugger_State);
+                        state->goroutines = new_list(Dlv_Goroutine);
                         state->current_goroutine_id = -1;
                         state->current_frame = 0;
                     }
@@ -1584,7 +1584,7 @@ void Debugger::do_everything() {
                     break;
                 }
 
-                auto new_ids = alloc_list<int>();
+                auto new_ids = new_list(int);
 
                 For (&breakpoints) {
                     auto js = set_breakpoint(it.file, it.line)->js();
@@ -1772,7 +1772,7 @@ void Debugger::handle_new_state(Packet *p) {
         else
             draft->current_goroutine_id = -1;
         draft->current_frame = 0;
-        draft->goroutines = alloc_list<Dlv_Goroutine>();
+        draft->goroutines = new_list(Dlv_Goroutine);
 
         t.log("checking threads");
 

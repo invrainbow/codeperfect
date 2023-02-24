@@ -24,7 +24,7 @@ wchar_t* to_wide(ccstr s, int slen) {
     auto len = MultiByteToWideChar(CP_UTF8, 0, s, slen, NULL, 0);
     if (!len) return NULL;
 
-    auto ret = alloc_array(wchar_t, len + 1);
+    auto ret = new_array(wchar_t, len + 1);
     if (MultiByteToWideChar(CP_UTF8, 0, s, slen, ret, len) != len) return NULL;
 
     ret[len] = L'\0';
@@ -35,7 +35,7 @@ ccstr to_utf8(const wchar_t *s, int slen) {
     auto len = WideCharToMultiByte(CP_UTF8, 0, s, slen, NULL, 0, NULL, NULL);
     if (!len) return NULL;
 
-    auto ret = alloc_array(char, len+1);
+    auto ret = new_array(char, len+1);
     if (WideCharToMultiByte(CP_UTF8, 0, s, slen, ret, len, NULL, NULL) != len) return NULL;
 
     ret[len] = '\0';
@@ -81,7 +81,7 @@ ccstr get_normalized_path(ccstr path) {
 
     Frame frame;
 
-    auto buf = alloc_array(wchar_t, len);
+    auto buf = new_array(wchar_t, len);
     if (!GetFinalPathNameByHandleW(f, buf, len, FILE_NAME_NORMALIZED)) {
         frame.restore();
         print("GetFinalPathNameByHandleW: %s", get_last_error());
@@ -528,7 +528,7 @@ ccstr rel_to_abs_path(ccstr path) {
     if (!len) return NULL;
 
     Frame frame;
-    auto ret = alloc_array(wchar_t, len);
+    auto ret = new_array(wchar_t, len);
 
     auto copied = GetFullPathNameW(wpath, len, ret, NULL);
     if (!copied) {
@@ -558,7 +558,7 @@ bool Fs_Watcher::platform_init() {
 
     {
         SCOPED_MEM(&mem);
-        buf = alloc_array(FILE_NOTIFY_INFORMATION, FS_WATCHER_BUFSIZE);
+        buf = new_array(FILE_NOTIFY_INFORMATION, FS_WATCHER_BUFSIZE);
     }
 
     initiate_wait();
@@ -748,7 +748,7 @@ ccstr get_path_relative_to(ccstr full, ccstr base) {
 
     auto full2 = to_wide(normalize_path_sep(full));
     auto base2 = to_wide(normalize_path_sep(base));
-    auto buf = alloc_array(wchar_t, MAX_PATH+1);
+    auto buf = new_array(wchar_t, MAX_PATH+1);
 
     if (!PathRelativePathToW(buf, base2, FILE_ATTRIBUTE_DIRECTORY, full2, 0)) {
         frame.restore();
@@ -764,7 +764,7 @@ ccstr get_canon_path(ccstr path) {
     auto len = strlen(path);
 
     Frame frame;
-    auto ret = alloc_array(wchar_t, len+1);
+    auto ret = new_array(wchar_t, len+1);
     if (FAILED(PathCchCanonicalizeEx(ret, len+1, to_wide(path), PATHCCH_ALLOW_LONG_PATHS))) {
         frame.restore();
         return NULL;
@@ -819,7 +819,7 @@ void *read_font_data_from_name(s32 *len, ccstr name, Charset_Type charset) {
 
     Frame frame;
 
-    auto ret = alloc_array(char, size);
+    auto ret = new_array(char, size);
     if (GetFontData(hdc, 0, 0, ret, size) != size) {
         frame.restore();
         return NULL;
@@ -879,7 +879,7 @@ ccstr get_executable_path() {
     for (int len = MAX_PATH;; len *= 1.5) {
         Frame frame;
 
-        auto ret = alloc_array(wchar_t, len+1);
+        auto ret = new_array(wchar_t, len+1);
         auto result = GetModuleFileNameW(NULL, ret, len+1);
         if (!result) {
             frame.restore();
@@ -960,7 +960,7 @@ Font_Data* load_font_data_by_name(ccstr name, bool dont_check_name) {
         return NULL;
     }
 
-    auto ret = alloc_object(Font_Data);
+    auto ret = new_object(Font_Data);
     ret->type = FONT_DATA_MALLOC;
     ret->data = fontdata;
     ret->len = datalen;
@@ -973,7 +973,7 @@ ccstr _cp_dirname(ccstr path) {
     if (is_sep(s[len-1]))
         s[len-1] = '\0';
 
-    auto ret = alloc_array(char, strlen(s) + 1);
+    auto ret = new_array(char, strlen(s) + 1);
     _splitpath(s, ret, NULL, NULL, NULL);
     _splitpath(s, NULL, ret + strlen(ret), NULL, NULL);
     return ret;

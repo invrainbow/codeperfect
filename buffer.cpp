@@ -26,7 +26,7 @@ s32 uchar_to_cstr(uchar c, cstr out) {
 }
 
 char* uchar_to_cstr(uchar c) {
-    auto ret = alloc_array(char, 5);
+    auto ret = new_array(char, 5);
     auto len = uchar_to_cstr(c, ret);
     ret[len] = '\0';
     return ret;
@@ -98,6 +98,29 @@ uchar Buffer_It::next() {
         }
     }
     return ret;
+}
+
+List<uchar>* Gr_Iter::read() {
+    if (eof()) return NULL;
+
+    cur2 start = it.pos;
+
+    Grapheme_Clusterer gc;
+    gc.init();
+    gc.feed(it.peek());
+
+    auto ret = new_list(uchar);
+    do {
+        ret->append(it.next());
+    } while (!eof() && !gc.feed(it.peek()));
+
+    gr_end = it.pos;
+    it.pos = start;
+    return ret;
+}
+
+void Gr_Iter::eat() {
+    it.pos = gr_end;
 }
 
 void Cstr_To_Ustr::init() {
@@ -173,7 +196,7 @@ bool Cstr_To_Ustr::feed(u8 ch) {
 List<uchar>* cstr_to_ustr(ccstr s) {
     Cstr_To_Ustr conv; conv.init();
 
-    auto ret = alloc_list<uchar>();
+    auto ret = new_list(uchar);
     for (int i = 0, len = strlen(s); i < len; i++) {
         if (conv.feed(s[i]))
             ret->append(conv.uch);
@@ -204,7 +227,7 @@ cur2 Buffer::hist_undo() {
 
     hist_curr = hist_dec(hist_curr);
 
-    auto arr = alloc_list<Change*>();
+    auto arr = new_list(Change*);
     for (auto it = history[hist_curr]; it; it = it->next)
         arr->append(it);
 
@@ -227,7 +250,7 @@ cur2 Buffer::hist_redo() {
 
     for (auto it = history[hist_curr]; it; it = it->next){
         hist_apply_change(it, false);
-        if (!it->next) ret = it->new_end;
+        if (!it->next) ret = it->start;
     }
 
     hist_curr = hist_inc(hist_curr);
@@ -235,7 +258,7 @@ cur2 Buffer::hist_redo() {
 }
 
 ccstr Buffer::get_text(cur2 start, cur2 end) {
-    auto ret = alloc_list<char>();
+    auto ret = new_list(char);
     char tmp[4];
 
     // make sure start is valid
@@ -248,6 +271,26 @@ ccstr Buffer::get_text(cur2 start, cur2 end) {
 
     ret->append('\0');
     return ret->items;
+}
+
+bool Buffer::is_valid(cur2 c) {
+    if (0 <= c.y && c.y < lines.len)
+        if (0 <= c.x && c.x <= lines[c.y].len)
+            return true;
+    return false;
+}
+
+cur2 Buffer::fix_cur(cur2 c) {
+    if (c.y < 0) return new_cur2(0, 0);
+
+    if (c.y >= lines.len) {
+        int y = lines.len-1;
+        return new_cur2(lines[y].len, y);
+    }
+
+    if (c.x < 0) c.x = 0;
+    if (c.x > lines[c.y].len) c.x = lines[c.y].len;
+    return c;
 }
 
 void Buffer::init(Pool *_mem, int _lang, bool _use_history) {
@@ -428,6 +471,32 @@ void Buffer::write(File *f) {
         for (auto ch : it)
             write_char(ch);
     }
+}
+
+// This function produces the same result as internal_delete_lines(), except it
+// mimics the behavior through remove(). This is because doing this via
+// .remove() has been tested to work -- the entire reason we made
+// internal_...() functions was to stop us from calling them directly, because
+// it would lead to bugs.
+//
+// Update: Also, .remove() handles tree updating correctly.
+// 
+// Also, y1 and y2 are inclusive, whereas internal_delete_lines() is exclusive.
+void Buffer::remove_lines(u32 y1, u32 y2) {
+    auto start = new_cur2(0, y1);
+    auto end = new_cur2(0, y2+1);
+
+    if (y2 == lines.len-1) {
+        // when would this happen? and is this how we should handle?
+        // if (!y1) return;
+
+        start = dec_cur(start);
+        end = new_cur2(lines[lines.len-1].len, lines.len-1);
+    } else {
+        end = new_cur2(0, y2+1);
+    }
+
+    remove(start, end);
 }
 
 void Buffer::internal_delete_lines(u32 y1, u32 y2) {
@@ -860,7 +929,7 @@ void Buffer::remove(cur2 start, cur2 end, bool applying_change) {
             change->new_end = it.pos;
 
             {
-                auto tmp = alloc_list<uchar>();
+                auto tmp = new_list(uchar);
                 For (&change->old_text)
                     tmp->append(it);
 
@@ -909,6 +978,21 @@ cur2 Buffer::inc_cur(cur2 c) {
     return it.pos;
 }
 
+Gr_Iter Buffer::gr_iter(cur2 c) {
+    Gr_Iter ret;
+    ret.init(iter(c));
+    return ret;
+}
+
+cur2 Buffer::inc_gr(cur2 c) {
+    auto it = gr_iter(c);
+    if (!it.eof()) {
+        it.read();
+        it.eat();
+    }
+    return it.pos();
+}
+
 cur2 Buffer::dec_cur(cur2 c) {
     auto it = iter(c);
     it.prev();
@@ -918,7 +1002,7 @@ cur2 Buffer::dec_cur(cur2 c) {
 uchar* Buffer::alloc_temp_array(s32 size) {
     if (size > 1024)
         return (uchar*)cp_malloc(sizeof(uchar) * size);
-    return alloc_array(uchar, size);
+    return new_array(uchar, size);
 }
 
 void Buffer::free_temp_array(uchar* buf, s32 size) {
@@ -1018,30 +1102,32 @@ u32 Buffer::internal_convert_x_vx(int y, int off, bool to_vx) {
     while (true) {
         if (x >= line.len) break;
 
-        if (to_vx) {
-            if (x >= off) break;
-        } else {
-            if (vx >= off) break;
-        }
+        int dvx = -1;
+        int dx = 1;
 
         if (line[x] == '\t') {
-            vx += options.tabsize - (vx % options.tabsize);
-            x++;
+            dvx = options.tabsize - (vx % options.tabsize);
         } else {
-            auto width = cp_wcwidth(line[x]);
-            if (width == -1) width = 1;
-            vx += width;
-
-            x++;
-            while (x < (to_vx ? off : line.len) && !gc.feed(line[x]))
-                x++;
+            dvx = cp_wcwidth(line[x]);
+            if (dvx == -1) dvx = 1;
+            while (x+dx < (to_vx ? off : line.len) && !gc.feed(line[x+dx]))
+                dx++;
         }
+
+        if (to_vx) {
+            if (x + dx > off) break;
+        } else {
+            if (vx + dvx > off) break;
+        }
+
+        vx += dvx;
+        x += dx;
     }
 
     return to_vx ? vx : x;
 }
 
-cur2 Buffer::offset_to_cur(i32 off) {
+cur2 Buffer::offset_to_cur(i32 off, bool nothrow) {
     cur2 ret;
     ret.x = -1;
     ret.y = -1;
@@ -1057,7 +1143,9 @@ cur2 Buffer::offset_to_cur(i32 off) {
 
     if (ret.x == -1 || ret.y == -1) {
         cp_assert(ret.x == -1 && ret.y == -1);
-        cp_assert(!off);
+        if (!nothrow) {
+            cp_assert(!off);
+        }
         ret.y = lines.len-1;
         ret.x = lines[ret.y].len;
     }

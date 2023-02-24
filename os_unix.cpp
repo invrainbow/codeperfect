@@ -402,7 +402,7 @@ bool list_directory(ccstr folder, list_directory_cb cb) {
 }
 
 ccstr get_canon_path(ccstr path) {
-    auto new_path = alloc_list<ccstr>();
+    auto new_path = new_list(ccstr);
     auto p = make_path(path);
 
     int extra_dotdots = 0;
@@ -422,7 +422,7 @@ ccstr get_canon_path(ccstr path) {
         new_path->append(it);
     }
 
-    auto ret = alloc_list<ccstr>();
+    auto ret = new_list(ccstr);
     for (int i = 0; i < extra_dotdots; i++)
         ret->append("..");
     For (new_path)
@@ -454,7 +454,7 @@ ccstr get_path_relative_to(ccstr full, ccstr base) {
 
     int shared = i;
 
-    auto ret = alloc_list<ccstr>();
+    auto ret = new_list(ccstr);
     for (int i = shared; i < pbase->len; i++)
         ret->append("..");
     for (int i = shared; i < pfull->len; i++)

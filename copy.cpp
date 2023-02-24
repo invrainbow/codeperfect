@@ -4,14 +4,13 @@
 #include "settings.hpp"
 #include "go.hpp"
 #include "dbg.hpp"
-#include "nvim.hpp"
 
 // -----
 // stupid c++ template shit
 
 template<typename T>
 T *clone(T *old) {
-    auto ret = alloc_object(T);
+    auto ret = new_object(T);
     memcpy(ret, old, sizeof(T));
     return ret;
 }
@@ -25,7 +24,7 @@ template <typename T>
 List<T> *copy_list(List<T> *arr, fn<T*(T* it)> copy_func) {
     if (!arr) return NULL;
 
-    auto new_arr = alloc_object(List<T>);
+    auto new_arr = new_object(List<T>);
     new_arr->init(LIST_POOL, max(arr->len, 1));
     For (arr) new_arr->append(copy_func(&it));
     return new_arr;
@@ -35,7 +34,7 @@ template <typename T>
 List<T> *copy_listp(List<T> *arr) {
     if (!arr) return NULL;
 
-    auto new_arr = alloc_object(List<T>);
+    auto new_arr = new_object(List<T>);
     new_arr->init(LIST_POOL, max(arr->len, 1));
     For (arr) new_arr->append(copy_object(it));
     return new_arr;
@@ -51,7 +50,7 @@ List<T> *copy_list(List<T> *arr) {
 List<ccstr> *copy_string_list(List<ccstr> *arr) {
     if (!arr) return NULL;
 
-    auto new_arr = alloc_object(List<ccstr>);
+    auto new_arr = new_object(List<ccstr>);
     new_arr->init(LIST_POOL, max(arr->len, 1));
     For (arr) new_arr->append(cp_strdup(it));
     return new_arr;
@@ -61,7 +60,7 @@ template <typename T>
 List<T> *copy_raw_list(List<T> *arr) {
     if (!arr) return NULL;
 
-    auto new_arr = alloc_object(List<T>);
+    auto new_arr = new_object(List<T>);
     new_arr->init(LIST_POOL, max(arr->len, 1));
     new_arr->concat(arr);
     return new_arr;
@@ -308,7 +307,7 @@ Go_Package *Go_Package::copy() {
     ret->import_path = cp_strdup(import_path);
     ret->package_name = cp_strdup(package_name);
 
-    auto new_files = alloc_object(List<Go_File>);
+    auto new_files = new_object(List<Go_File>);
     new_files->init(LIST_POOL, max(ret->files->len, 1));
     For (ret->files) {
         auto gofile = new_files->append();
@@ -455,28 +454,3 @@ Work_Trie_Node *Work_Trie_Node::copy() {
     return ret;
 }
 */
-
-Nvim_Message_Buf_Lines *Nvim_Message_Buf_Lines::copy() {
-    auto ret = clone(this);
-    ret->line_lengths = copy_raw_list(line_lengths);
-
-    ret->lines = alloc_object(List<uchar*>);
-    ret->lines->init(LIST_POOL, max(lines->len, 1));
-    Fori (lines) {
-        auto newarr = alloc_array(uchar, line_lengths->at(i));
-        memcpy(newarr, it, sizeof(uchar) * line_lengths->at(i));
-        ret->lines->append(newarr);
-    }
-
-    return ret;
-}
-
-Nvim_Insert_Delayed_Action *Nvim_Insert_Delayed_Action::copy() {
-    auto ret = clone(this);
-    switch (type) {
-    case NIDA_LINE_UPDATE:
-        ret->update_lines = copy_object(update_lines);
-        break;
-    }
-    return ret;
-}

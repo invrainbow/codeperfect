@@ -58,7 +58,6 @@ elif [[ $os = "mac" ]]; then
 
     # codesign garbage
     codesign --force --options runtime --sign 'Developer ID Application: Brandon Hsiao' CodePerfect.app/Contents/MacOS/bin/ide
-    codesign --force --options runtime --sign 'Developer ID Application: Brandon Hsiao' CodePerfect.app/Contents/MacOS/bin/nvim/bin/nvim
     codesign --deep --force --options runtime --sign 'Developer ID Application: Brandon Hsiao' CodePerfect.app
 
     # zip up app & update

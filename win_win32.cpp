@@ -352,9 +352,9 @@ struct Framebuffer_Config {
 };
 
 int get_pixel_format(HDC dc) {
-    auto fbconfigs = alloc_list<Framebuffer_Config>();
+    auto fbconfigs = new_list(Framebuffer_Config);
 
-    auto attribs = alloc_list<int>();
+    auto attribs = new_list(int);
     int nformats;
 
     if (WGLEW_ARB_pixel_format) {
@@ -397,7 +397,7 @@ int get_pixel_format(HDC dc) {
         auto pixel_format_id = i + 1;
 
         if (WGLEW_ARB_pixel_format) {
-            auto values = alloc_list<int>();
+            auto values = new_list(int);
             if (!wglGetPixelFormatAttribivARB(dc, pixel_format_id, 0, attribs->len, attribs->items, values->items))
                 return 0;
 
@@ -476,7 +476,7 @@ int get_pixel_format(HDC dc) {
         int extradiff;
     };
 
-    auto scores = alloc_list<Score>();
+    auto scores = new_list(Score);
 
     Fori (fbconfigs) {
         int missing = 0;
@@ -904,7 +904,7 @@ bool Window::create_wgl_context() {
     if (!WGLEW_ARB_create_context) return false;
     if (!WGLEW_ARB_create_context_profile) return false;
 
-    auto attribs = alloc_list<int>();
+    auto attribs = new_list(int);
 
     auto set_attrib = [&](int key, int val) {
         attribs->append(key);

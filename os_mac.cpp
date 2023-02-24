@@ -56,7 +56,7 @@ ccstr get_executable_path() {
     _NSGetExecutablePath(NULL, &size);
     if (!size) return NULL;
 
-    auto ret = alloc_array(char, size+1);
+    auto ret = new_array(char, size+1);
     if (_NSGetExecutablePath(ret, &size) != 0) return NULL;
 
     return ret;
@@ -96,7 +96,7 @@ bool Fs_Watcher::platform_init() {
 
     events.init();
 
-    context = (void*)alloc_object(FSEventStreamContext);
+    context = (void*)new_object(FSEventStreamContext);
     ((FSEventStreamContext*)context)->version = 0;
     ((FSEventStreamContext*)context)->info = this;
     ((FSEventStreamContext*)context)->retain = nullptr;
@@ -164,7 +164,7 @@ void fork_self(List<char*> *args, bool exit_this) {
     if (pid == -1) return;
 
     if (pid == 0) {
-        auto our_argv = alloc_list<char*>();
+        auto our_argv = new_list(char*);
         if (args) {
             our_argv->append(gargv[0]);
             For (args) our_argv->append(it);

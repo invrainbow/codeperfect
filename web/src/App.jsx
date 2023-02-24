@@ -4,6 +4,7 @@ import {
   IconDownload,
   IconTag,
   IconChevronRight,
+  IconChevronDown,
   IconClockHour4,
   IconX,
   IconBooks,
@@ -604,7 +605,7 @@ function BuyLicense() {
 
 const faqs = [
   {
-    q: "What makes CodePerfect fast?",
+    q: "What makes it fast?",
     a: (
       <>
         <p>
@@ -632,7 +633,7 @@ const faqs = [
     ),
   },
   {
-    q: "How does CodePerfect compare with Jetbrains and VSCode?",
+    q: "How does it compare with Jetbrains or VSCode?",
     a: (
       <>
         <p>
@@ -661,15 +662,15 @@ const faqs = [
         <p>
           New programming tools today tend to have ambitious goals like making
           programming more collaborative, or involve less code, or more
-          integrated with third-party tools. We have a more boring goal: to
-          build the best tool for editing, compiling, and debugging code.
-          CodePerfect is tightly integrated and optimized around that workflow.
+          integrated with third-party tools. Ours is more boring: to build the
+          best tool for editing, compiling, and debugging code. CodePerfect is
+          tightly integrated and optimized around that workflow.
         </p>
 
         <p>
           We want to be <A href="https://sesuperhuman.com">Superhuman</A> for
           programming. Business people are in their email all day, and small
-          improvements add up. An IDE is the same.
+          improvements add up. Same with an IDE.
         </p>
         <p>
           A big part of this is building a smooth experience. Up to a point,
@@ -715,19 +716,36 @@ const faqs = [
 ];
 
 function FAQ() {
+  const [states, setStates] = React.useState({});
+
   return (
     <div className="bg-white md:bg-transparent py-12 px-6 md:px-4 md:py-24 md:max-w-screen-sm mx-auto">
       <div className="md:px-4 md:text-center text-3xl md:text-5xl title mb-8">
         FAQ
       </div>
-      <div>
-        {faqs.map((it) => (
+      <div className="flex flex-col gap-4 md:gap-4">
+        {faqs.map((it, i) => (
           <div
-            className="prose md:p-6 md:border-0 mb-12 md:mb-4 last:mb-0 md:bg-white md:rounded-lg md:shadow-sm"
+            className="prose md:bg-white border-b border-neutral-200 last:border-0 md:border-0 md:rounded-lg md:shadow-sm"
             key={it.q}
           >
-            <p className="font-bold">{it.q}</p>
-            {it.a}
+            <button
+              onClick={() => setStates({ ...states, [i]: !states[i] })}
+              className="text-left pb-4 md:p-5 font-bold w-full flex justify-between items-center"
+            >
+              <div>{it.q}</div>
+              <div className="flex items-center justify-center">
+                <Icon
+                  size={20}
+                  icon={IconChevronDown}
+                  className={cx(
+                    "transition-transform origin-center",
+                    states[i] && "rotate-180"
+                  )}
+                />
+              </div>
+            </button>
+            {states[i] && <div className="pb-4 md:p-5 md:pt-0">{it.a}</div>}
           </div>
         ))}
       </div>
