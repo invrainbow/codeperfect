@@ -33,6 +33,7 @@ struct Buffer_It {
     uchar prev();
     uchar next();
     bool bof() { return !x && !y; }
+    bool bol() { return !x; }
     bool eol() { return peek() == '\n' || eof(); }
     uchar get(cur2 _pos);
 
