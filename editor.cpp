@@ -3021,6 +3021,52 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             if (inp2.is_key) break;
 
             switch (inp2.ch) {
+            case 'e':
+            case 'E': {
+                /*
+                test string: alksdjahf  $$$$asdjalf  asjfh
+
+                if we're on a space:
+                    find first nonspace
+                else
+                    find first non-type
+                    if next is a space, find first nonspace
+
+                more simply...
+
+                if nonspace:
+                    goto nontype
+                if space:
+                    goto nonspace
+
+                note that those are not exclusive if statements
+                */
+
+                auto it = iter();
+
+                for (int i = 0; i < count && !it.bof(); i++) {
+                    auto type = gr_type(it.gr_peek());
+                    if (type != GR_SPACE) {
+                        while (!it.bof()) {
+                            auto gr = it.gr_prev();
+                            if (inp2.ch == 'e' && gr_type(gr) != type) break;
+                            if (inp2.ch == 'E' && gr_isspace(gr)) break;
+                        }
+                    }
+
+                    if (it.bof()) break;
+
+                    if (gr_isspace(it.gr_peek()))
+                        while (!it.bof())
+                            if (!gr_isspace(it.gr_prev()))
+                                break;
+                }
+
+                ret->new_dest = it.pos;
+                ret->type = MOTION_CHAR_INCL;
+                return ret;
+            }
+
             case 'g':
                 if (!cmd->o_count && !cmd->m_count)
                     goto_line_first_nonspace(0);
