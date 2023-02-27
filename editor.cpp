@@ -3124,16 +3124,13 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             if (inp2.is_key) break;
 
             auto it = iter();
-
             cur2 last;
 
             for (int i = 0; i < count && !it.eol(); i++) {
                 // ignore the first character
-                if (!it.eol()) {
-                    it.gr_peek();
-                    last = it.pos;
-                    it.gr_next();
-                }
+                last = it.pos;
+                it.gr_peek();
+                it.gr_next();
 
                 while (!it.eol()) {
                     auto gr = it.gr_peek();
@@ -3159,6 +3156,37 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             auto inp2 = motion[1];
             if (inp2.is_key) break;
 
+            auto it = iter();
+            int start_y = it.pos.y;
+            cur2 last;
+
+            for (int i = 0; i < count && !it.bof() && it.y == start_y; i++) {
+                last = it.pos;
+                auto gr = it.gr_prev();
+
+                while (it.y == start_y) {
+                    // gr guaranteed to be valid, since !it.bof()
+                    cp_assert(gr);
+
+                    // if it's a match, break
+                    if (gr->len == 1 && inp2.ch == gr->at(0))
+                        break;
+
+                    // try to move back, checking for bof so the cp_assert(gr)
+                    // above remains consistent
+                    last = it.pos;
+                    if (it.bof()) goto leave;
+                    gr = it.gr_prev();
+                }
+            }
+
+            if (it.y != start_y) break;
+
+            ret->new_dest = inp.ch == 'T' ? last : it.pos;
+            ret->type = MOTION_CHAR_INCL;
+            return ret;
+
+        leave:
             break;
         }
 
