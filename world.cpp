@@ -619,7 +619,7 @@ void World::init() {
 
     if (vim.on) {
         // anything else?
-        vim.mode = VI_NORMAL;
+        vim_set_mode(VI_NORMAL);
     }
 }
 
@@ -719,6 +719,7 @@ void activate_pane_by_index(u32 idx) {
     if (world.current_pane != idx) {
         auto e = get_current_editor();
         if (e) e->trigger_escape();
+        cp_assert(world.vim_mode() == VI_NORMAL);
     }
 
     world.current_pane = idx;
@@ -2297,24 +2298,26 @@ void handle_command(Command cmd, bool from_menu) {
             int miny = result->highlight_start.y;
             int maxy = result->highlight_end.y;
 
-            editor->buf->hist_batch_mode = true;
+            {
+                editor->buf->hist_batch_mode = true;
+                defer { editor->buf->hist_batch_mode = false; };
 
-            Fori (result->insert_starts) {
-                auto start = it;
-                auto end = result->insert_ends->at(i);
-                auto text = result->insert_texts->at(i);
+                Fori (result->insert_starts) {
+                    auto start = it;
+                    auto end = result->insert_ends->at(i);
+                    auto text = result->insert_texts->at(i);
 
-                auto utext = cstr_to_ustr(text);
-                if (!utext) continue;
+                    auto utext = cstr_to_ustr(text);
+                    if (!utext) continue;
 
-                if (start.y < miny) miny = start.y;
-                if (end.y > maxy) maxy = end.y;
+                    if (start.y < miny) miny = start.y;
+                    if (end.y > maxy) maxy = end.y;
 
-                editor->buf->remove(start, end);
-                editor->buf->insert(start, utext->items, utext->len);
+                    editor->buf->remove(start, end);
+                    editor->buf->insert(start, utext->items, utext->len);
+                }
             }
 
-            editor->buf->hist_batch_mode = false;
             editor->highlight_snippet(result->highlight_start, result->highlight_end);
         }
         break;
@@ -2449,11 +2452,26 @@ void handle_command(Command cmd, bool from_menu) {
         if (!editor) break;
 
         auto buf = editor->buf;
-        auto pos = (cmd == CMD_UNDO ?  buf->hist_undo() : buf->hist_redo());
+
+        // is this gonna cause any issues if we start to "hook" on-leave-insert and do more stuff there?
+        // why would we tho? before all the stuff we were doing was hacks to work around nvim bullshit
+        // now that all state is in memory it's just a bunch of direct state updates
+        if (world.vim.on && world.vim_mode() != VI_NORMAL)
+            editor->vim_return_to_normal_mode(); // should we call this or trigger_escape()?
+
+        auto pos = (cmd == CMD_UNDO ? buf->hist_undo() : buf->hist_redo());
 
         if (pos.x != -1) {
             auto opts = default_move_cursor_opts();
             opts->is_user_movement = true;
+
+            // should we make this part of move_cursor?
+            // this code basically says, if we are in normal mode, don't put the cursor at eol
+            // whose job is it to ensure that?
+            if (world.vim.on)
+                if (pos.x == editor->buf->lines[pos.y].len && pos.x)
+                    pos.x = editor->buf->lines[pos.y].len-1;
+
             editor->move_cursor(pos, opts);
         }
 

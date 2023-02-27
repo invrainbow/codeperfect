@@ -349,7 +349,7 @@ void handle_key_event(Window_Event *it) {
     if (!editor) return;
 
     // send anything to vim that we need to
-    if (world.vim.on && world.vim.mode != VI_INSERT) {
+    if (world.vim.on && world.vim_mode() != VI_INSERT) {
         switch (key) {
         case CP_KEY_ENTER:
         case CP_KEY_BACKSPACE:
@@ -450,7 +450,7 @@ void handle_key_event(Window_Event *it) {
 
     // now handle insert mode shit
     // ===========================
-    if (world.vim.on && world.vim.mode != VI_INSERT) return;
+    if (world.vim.on && world.vim_mode() != VI_INSERT) return;
 
     switch (key) {
     case CP_KEY_ENTER: {
@@ -856,7 +856,7 @@ void handle_window_event(Window_Event *it) {
         auto ed = get_current_editor();
         if (!ed) return;
 
-        if (world.vim.on && world.vim.mode != VI_INSERT) {
+        if (world.vim.on && world.vim_mode() != VI_INSERT) {
             ed->vim_handle_char(ch);
         } else if (ed->is_modifiable()) {
             ed->delete_selection();

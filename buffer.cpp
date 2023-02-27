@@ -517,15 +517,12 @@ void Buffer::write(File *f) {
     }
 }
 
-// This function produces the same result as internal_delete_lines(), except it
-// mimics the behavior through remove(). This is because doing this via
-// .remove() has been tested to work -- the entire reason we made
-// internal_...() functions was to stop us from calling them directly, because
-// it would lead to bugs.
+// This function basically produces the result internal_delete_lines() does,
+// except it mimics the outcome through remove(). All changes
+// must happen through .insert() and .remove(), or a whole bunch of shit
+// breaks, including history and tree handling.
 //
-// Update: Also, .remove() handles tree updating correctly.
-//
-// Also, y1 and y2 are inclusive, whereas internal_delete_lines() is exclusive.
+// Note: here y1 and y2 are inclusive, whereas internal_delete_lines() is exclusive.
 void Buffer::remove_lines(u32 y1, u32 y2) {
     auto start = new_cur2(0, y1);
     auto end = new_cur2(0, y2+1);
@@ -883,18 +880,6 @@ Change* Buffer::hist_get_latest_change_for_append() {
 
     return c;
 }
-
-/*
-void Buffer::hist_start_batch() {
-    hist_batch_mode = true;
-    hist_force_push_next_change = true;
-}
-
-void Buffer::hist_end_batch() {
-    hist_batch_mode = false;
-    hist_force_push_next_change = false;
-}
-*/
 
 int Buffer::internal_distance_between(cur2 a, cur2 b) {
     cp_assert(!editable_from_main_thread_only || is_main_thread);

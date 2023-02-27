@@ -6636,7 +6636,7 @@ void UI::draw_everything() {
                 auto muted = (current_pane != world.current_pane);
 
                 actual_cursor_positions[current_pane] = cur_pos;    // save position where cursor is drawn for later use
-                bool is_insert_cursor = !world.vim.on || world.vim.mode == VI_INSERT;
+                bool is_insert_cursor = !world.vim.on || world.vim_mode() == VI_INSERT;
 
                 auto pos = cur_pos;
                 pos.y -= base_font->offset_y;
@@ -7314,7 +7314,7 @@ void UI::draw_everything() {
             if (editor) {
                 if (editor->is_modifiable()) {
                     ccstr mode_str = NULL;
-                    switch (world.vim.mode) {
+                    switch (world.vim_mode()) {
                     case VI_NORMAL: mode_str = "NORMAL"; break;
                     case VI_INSERT: mode_str = "INSERT"; break;
                     case VI_REPLACE: mode_str = "REPLACE"; break;

@@ -430,8 +430,22 @@ struct World {
 
     struct {
         bool on;
-        Vim_Mode mode;
+
+        // this variable is going to be marked "private" because we have a
+        // fuckload of logic centered around the vim mode, and it is crucial we
+        // set it using the vim_*() methods below and in Editor instead of setting it
+        // directly
+        Vim_Mode _mode;
     } vim;
+
+    Vim_Mode vim_mode() { return vim._mode; }
+
+    // so we can track where we're setting
+    void vim_set_mode(Vim_Mode new_mode, bool calling_from_vim_return_to_normal_mode = false) {
+        if (vim_mode() == VI_INSERT && new_mode == VI_NORMAL)
+            cp_assert(calling_from_vim_return_to_normal_mode);
+        vim._mode = new_mode;
+    }
 
     struct Debugger dbg;
 

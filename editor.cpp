@@ -34,7 +34,7 @@ Selection *Editor::get_selection(Selection_Type sel_type) {
     };
 
     if (world.vim.on) {
-        if (world.vim.mode != VI_VISUAL) return NULL;
+        if (world.vim_mode() != VI_VISUAL) return NULL;
 
         ret->type = sel_type;
         switch (sel_type) {
@@ -926,7 +926,7 @@ void Editor::move_cursor(cur2 c, Move_Cursor_Opts *opts) {
     if (cur.y + options.scrolloff >= view.y + view.h)
         view.y = cur.y + options.scrolloff - view.h + 1;
 
-    // If we're not using nvim, then we're using this function to trigger
+    // we're using this function to trigger
     // certain "on cursor move" actions
     if (opts->is_user_movement) {
         // clear out autocomplete
@@ -1264,10 +1264,13 @@ bool Editor::trigger_escape(cur2 go_here_after) {
         // autocomplete/parameter? will setting it to true in the vim handler
         // here break anything?
 
-        switch (world.vim.mode) {
-        case VI_INSERT: {
+        auto mode = world.vim_mode();
+
+        if (mode == VI_INSERT) {
             handled = true;
 
+            // i think this is specific to escape handling, and shouldn't go in
+            // vim_leave_insert_mode
             auto &ref = vim.inserted_indent;
             if (ref.inserted && ref.buf_tree_version == buf->tree_version) {
                 buf->remove(ref.start, ref.end);
@@ -1282,13 +1285,11 @@ bool Editor::trigger_escape(cur2 go_here_after) {
                     move_cursor(new_cur2(x, cur.y));
                 }
             }
-            world.vim.mode = VI_NORMAL;
-            break;
         }
-        case VI_VISUAL:
+
+        if (mode != VI_NORMAL) {
             handled = true;
-            world.vim.mode = VI_NORMAL;
-            break;
+            vim_return_to_normal_mode();
         }
     }
 
@@ -2521,50 +2522,52 @@ void Editor::toggle_comment(int ystart, int yend) {
     };
 
     cur2 new_cur = new_cur2(-1, ystart);
-    buf->hist_batch_mode = true;
+    {
+        buf->hist_batch_mode = true;
+        defer { buf->hist_batch_mode = false; };
 
-    if (is_commented()) {
-        // remove comments
-        for (int y = ystart; y <= yend; y++) {
-            int x = 0;
-            auto line = &buf->lines[y];
+        if (is_commented()) {
+            // remove comments
+            for (int y = ystart; y <= yend; y++) {
+                int x = 0;
+                auto line = &buf->lines[y];
 
-            for (; x+1 < line->len; x++) {
-                if (u_isspace(line->at(x))) continue;
-                if (line->at(x) != '/' || line->at(x+1) != '/') break;
+                for (; x+1 < line->len; x++) {
+                    if (u_isspace(line->at(x))) continue;
+                    if (line->at(x) != '/' || line->at(x+1) != '/') break;
 
-                if (new_cur.x == -1) new_cur.x = x;
+                    if (new_cur.x == -1) new_cur.x = x;
 
-                cur2 start = new_cur2(x, y);
-                cur2 end = new_cur2(x+2, y);
+                    cur2 start = new_cur2(x, y);
+                    cur2 end = new_cur2(x+2, y);
 
-                if (u_isspace(line->at(x+2))) end.x++;
+                    if (u_isspace(line->at(x+2))) end.x++;
 
-                buf->remove(start, end);
+                    buf->remove(start, end);
+                }
             }
-        }
-    } else {
-        // add comments
-        int smallest_indent = -1;
+        } else {
+            // add comments
+            int smallest_indent = -1;
 
-        for (int y = ystart; y <= yend; y++) {
-            auto line = &buf->lines[y];
-            auto stripped = strip_spaces(line);
-            auto indent = line->len - stripped->len;
+            for (int y = ystart; y <= yend; y++) {
+                auto line = &buf->lines[y];
+                auto stripped = strip_spaces(line);
+                auto indent = line->len - stripped->len;
 
-            if (smallest_indent == -1 || indent < smallest_indent)
-                smallest_indent = indent;
-        }
+                if (smallest_indent == -1 || indent < smallest_indent)
+                    smallest_indent = indent;
+            }
 
-        new_cur.x = smallest_indent;
+            new_cur.x = smallest_indent;
 
-        for (int y = ystart; y <= yend; y++) {
-            auto comments = cstr_to_ustr("// ");
-            buf->insert(new_cur2(smallest_indent, y), comments->items, comments->len, false);
+            for (int y = ystart; y <= yend; y++) {
+                auto comments = cstr_to_ustr("// ");
+                buf->insert(new_cur2(smallest_indent, y), comments->items, comments->len, false);
+            }
         }
     }
 
-    buf->hist_batch_mode = false;
     move_cursor(new_cur);
     selecting = false;
 }
@@ -2679,7 +2682,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
                 skip_motion = true;
                 break;
             case CP_KEY_V:
-                switch (world.vim.mode) {
+                switch (world.vim_mode()) {
                 case VI_NORMAL:
                 case VI_VISUAL:
                     out->op.append(it);
@@ -2714,7 +2717,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
 
         case 'c':
         case 'd':
-            if (world.vim.mode == VI_VISUAL)
+            if (world.vim_mode() == VI_VISUAL)
                 skip_motion = true;
             out->op.append(it);
             ptr++;
@@ -3401,13 +3404,13 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
 }
 
 void Editor::vim_handle_visual_mode_key(Selection_Type type) {
-    if (world.vim.mode == VI_VISUAL) {
+    if (world.vim_mode() == VI_VISUAL) {
         if (vim.visual_type == type)
-            world.vim.mode = VI_NORMAL;
+            vim_return_to_normal_mode();
         else
             vim.visual_type = type;
     } else {
-        world.vim.mode = VI_VISUAL;
+        world.vim_set_mode(VI_VISUAL);
         vim.visual_start = cur;
         vim.visual_type = type;
     }
@@ -3444,8 +3447,37 @@ cur2 Editor::vim_delete_selection(Selection *selection) {
     return selection->ranges->at(0).start;
 }
 
+void Editor::vim_enter_insert_mode(Vim_Command *cmd, fn<void()> prep) {
+    buf->hist_batch_mode = true; // unset in vim_leave_insert_mode
+
+    prep(); // call this after setting hist_batch_mode
+
+    vim.insert_start = cur;
+
+    // copy the command over
+    vim.insert_command.m_count = cmd->m_count;
+    vim.insert_command.o_count = cmd->o_count;
+    vim.insert_command.op.len = 0;
+    For (&cmd->op) vim.insert_command.op.append(it);
+    vim.insert_command.motion.len = 0;
+    For (&cmd->motion) vim.insert_command.motion.append(it);
+
+    world.vim_set_mode(VI_INSERT);
+}
+
+void Editor::vim_return_to_normal_mode() {
+    switch (world.vim_mode()) {
+    case VI_INSERT:
+        buf->hist_batch_mode = false; // set in vim_enter_insert_mode
+        buf->hist_force_push_next_change = true;
+        break;
+    // anything else? other modes?
+    }
+    world.vim_set_mode(VI_NORMAL, /* calling_from_vim_return_to_normal_mode = */ true);
+}
+
 bool Editor::vim_exec_command(Vim_Command *cmd) {
-    auto mode = world.vim.mode;
+    auto mode = world.vim_mode();
     auto motion_result = vim_eval_motion(cmd);
 
     auto &c = cur;
@@ -3467,15 +3499,8 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
         move_cursor(pos);
     };
 
-    auto enter_insert_mode = [&]() {
-        vim.insert_start = cur;
-        world.vim.mode = VI_INSERT;
-
-        // copy the command over
-        vim.insert_command.m_count = cmd->m_count;
-        vim.insert_command.o_count = cmd->o_count;
-        For (&cmd->op) vim.insert_command.op.append(it);
-        For (&cmd->motion) vim.insert_command.motion.append(it);
+    auto enter_insert_mode = [&](auto f) {
+        vim_enter_insert_mode(cmd, f);
     };
 
     auto &op = cmd->op;
@@ -3583,32 +3608,33 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
             vim_handle_visual_mode_key(SEL_LINE);
             return true;
         case 'i':
-            enter_insert_mode();
+            enter_insert_mode([]() { return; });
             return true;
         case 'a': {
             auto gr = buf->idx_cp_to_gr(c.y, c.x);
             auto x = buf->idx_gr_to_cp(c.y, gr+1);
             move_cursor(new_cur2(x, c.y));
-            enter_insert_mode();
+            enter_insert_mode([]() { return; });
             return true;
         }
         case 'A': {
             move_cursor(new_cur2(lines[c.y].len, c.y));
-            enter_insert_mode();
+            enter_insert_mode([]() { return; });
             return true;
         }
         case 'I': {
             move_cursor(new_cur2(find_first_nonspace_cp(c.y), c.y));
-            enter_insert_mode();
+            enter_insert_mode([]() { return; });
             return true;
         }
         case 'o':
         case 'O':
-            switch (world.vim.mode) {
+            switch (world.vim_mode()) {
             case VI_NORMAL: {
                 int y = inp.ch == 'o' ? c.y + 1 : c.y;
-                move_cursor(open_newline(y));
-                enter_insert_mode();
+                enter_insert_mode([&]() {
+                    move_cursor(open_newline(y));
+                });
                 return true;
             }
             case VI_VISUAL:
@@ -3618,37 +3644,38 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
 
         case 's':
         case 'S':
-            switch (world.vim.mode) {
-            case VI_NORMAL: {
-                cur2 start, end;
-                if (inp.ch == 's') {
-                    start = c;
-                    auto gr = buf->idx_cp_to_gr(c.y, c.x);
-                    auto cp = buf->idx_gr_to_cp(c.y, gr+1);
-                    end = new_cur2(cp, c.y);
-                } else {
-                    start = new_cur2(find_first_nonspace_cp(c.y), c.y);
-                    end = new_cur2(lines[c.y].len, c.y);
-                }
+            switch (world.vim_mode()) {
+            case VI_NORMAL:
+                enter_insert_mode([&]() {
+                    cur2 start, end;
+                    if (inp.ch == 's') {
+                        start = c;
+                        auto gr = buf->idx_cp_to_gr(c.y, c.x);
+                        auto cp = buf->idx_gr_to_cp(c.y, gr+1);
+                        end = new_cur2(cp, c.y);
+                    } else {
+                        start = new_cur2(find_first_nonspace_cp(c.y), c.y);
+                        end = new_cur2(lines[c.y].len, c.y);
+                    }
 
-                vim_delete_range(start, end);
-                move_cursor(start);
-                enter_insert_mode();
+                    vim_delete_range(start, end);
+                    move_cursor(start);
+                });
                 return true;
-            }
             case VI_VISUAL: {
-                cur2 start;
-                if (inp.ch == 's') {
-                    auto selection = get_selection();
-                    start = vim_delete_selection(selection);
-                } else {
-                    auto selection = get_selection(SEL_LINE);
-                    auto range = selection->ranges->at(0);
-                    vim_delete_lines(range.start.y, range.end.y);
-                    start = open_newline(range.start.y);
-                }
-                move_cursor(start);
-                enter_insert_mode();
+                enter_insert_mode([&]() {
+                    cur2 start;
+                    if (inp.ch == 's') {
+                        auto selection = get_selection();
+                        start = vim_delete_selection(selection);
+                    } else {
+                        auto selection = get_selection(SEL_LINE);
+                        auto range = selection->ranges->at(0);
+                        vim_delete_lines(range.start.y, range.end.y);
+                        start = open_newline(range.start.y);
+                    }
+                    move_cursor(start);
+                });
                 return true;
             }
             }
@@ -3656,33 +3683,38 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
 
         case 'D':
         case 'C':
-            switch (world.vim.mode) {
+            switch (world.vim_mode()) {
             case VI_NORMAL: {
                 auto start = cur;
                 int y = cur.y + o_count - 1;
                 auto end = new_cur2(lines[y].len, y);
-                vim_delete_range(start, end);
+
                 if (inp.ch == 'D') {
+                    vim_delete_range(start, end);
                     move_cursor_normal(start);
                 } else {
-                    move_cursor(start);
-                    enter_insert_mode();
+                    enter_insert_mode([&]() {
+                        vim_delete_range(start, end);
+                        move_cursor(start);
+                    });
                 }
                 return true;
             }
             case VI_VISUAL: {
                 auto selection = get_selection(SEL_LINE);
                 auto range = selection->ranges->at(0);
-                vim_delete_lines(range.start.y, range.end.y);
 
                 if (inp.ch == 'D') {
-                    world.vim.mode = VI_NORMAL;
+                    vim_delete_lines(range.start.y, range.end.y);
+                    vim_return_to_normal_mode();
                     auto x = find_first_nonspace_cp(range.start.y);
                     move_cursor_normal(new_cur2(x, range.start.y));
                 } else {
-                    auto newcur = open_newline(range.start.y);
-                    move_cursor(newcur);
-                    enter_insert_mode();
+                    enter_insert_mode([&]() {
+                        vim_delete_lines(range.start.y, range.end.y);
+                        auto newcur = open_newline(range.start.y);
+                        move_cursor(newcur);
+                    });
                 }
                 return true;
             }
@@ -3714,7 +3746,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
             }
             return true;
         case 'x': {
-            switch (world.vim.mode) {
+            switch (world.vim_mode()) {
             case VI_NORMAL: {
                 auto it = iter();
                 for (int i = 0; i < o_count && !it.eol(); i++) {
@@ -3734,7 +3766,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
             case VI_VISUAL: {
                 auto start = vim_delete_selection(get_selection());
                 move_cursor_normal(start);
-                world.vim.mode = VI_NORMAL;
+                vim_return_to_normal_mode();
                 return true;
             }
             }
@@ -3745,12 +3777,14 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
             switch (mode) {
             case VI_VISUAL: {
                 cp_assert(!motion_result);
-                auto start = vim_delete_selection(get_selection());
+                auto sel = get_selection();
                 if (inp.ch == 'c') {
-                    move_cursor(start);
-                    enter_insert_mode();
+                    enter_insert_mode([&]() {
+                        move_cursor(vim_delete_selection(sel));
+                    });
                 } else {
-                    world.vim.mode = VI_NORMAL;
+                    auto start = vim_delete_selection(sel);
+                    vim_return_to_normal_mode();
                     move_cursor_normal(start);
                 }
                 return true;
@@ -3771,12 +3805,13 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
                         b = it.pos;
                     }
 
-                    vim_delete_range(a, b);
-
                     if (inp.ch == 'c') {
-                        move_cursor(a);
-                        enter_insert_mode();
+                        enter_insert_mode([&]() {
+                            vim_delete_range(a, b);
+                            move_cursor(a);
+                        });
                     } else {
+                        vim_delete_range(a, b);
                         move_cursor_normal(a);
                     }
                     break;
@@ -3799,12 +3834,13 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
                         end = new_cur2(lines[y2].len, y2);
                     }
 
-                    vim_delete_range(start, end);
-
                     if (inp.ch == 'c') {
-                        move_cursor(open_newline(y1));
-                        enter_insert_mode();
+                        enter_insert_mode([&]() {
+                            vim_delete_range(start, end);
+                            move_cursor(open_newline(y1));
+                        });
                     } else {
+                        vim_delete_range(start, end);
                         auto to = new_cur2(0, y1);
                         if (y1 >= lines.len) {
                             // TODO: find first non whitespace
@@ -3895,7 +3931,7 @@ cur2 Editor::open_newline(int y) {
 }
 
 bool Editor::vim_handle_input(Vim_Command_Input *input) {
-    switch (world.vim.mode) {
+    switch (world.vim_mode()) {
     case VI_VISUAL:
     case VI_NORMAL: {
         vim.command_buffer->append(input);

@@ -297,6 +297,8 @@ struct Editor {
     cur2 vim_delete_range(cur2 start, cur2 end);
     void vim_delete_lines(int y1, int y2);
     void vim_save_inserted_indent(cur2 start, cur2 end);
+    void vim_enter_insert_mode(Vim_Command *cmd, fn<void()> prep);
+    void vim_return_to_normal_mode();
 };
 
 Parse_Lang determine_lang(ccstr filepath);
