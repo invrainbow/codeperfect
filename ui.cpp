@@ -6709,7 +6709,7 @@ void UI::draw_everything() {
                     }
                 }
             }
-            
+
             auto editor_selection = editor->get_selection();
             int editor_curr_range = 0;
             /*
