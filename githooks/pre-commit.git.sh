@@ -26,7 +26,7 @@ for line in `git diff --check --cached | sed '/^[+-]/d'` ; do
     file="`echo $line | sed -E 's/:[0-9]+: .*//'`"
   else
     file="`echo $line | sed -r 's/:[0-9]+: .*//'`"
-  fi  
+  fi
   # display tips
   echo -e "auto remove trailing whitespace in \033[31m$file\033[0m!"
   # since $file in working directory isn't always equal to $file in index, so we backup it
@@ -42,7 +42,7 @@ for line in `git diff --check --cached | sed '/^[+-]/d'` ; do
     sed -i "" 's/[[:space:]]*$//' "$file"
   else
     sed -i 's/[[:space:]]*$//' "$file"
-  fi  
+  fi
   git add "$file"
   # restore the $file
   sed 's/[[:space:]]*$//' "${file}.save" > "$file"
