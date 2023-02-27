@@ -114,13 +114,56 @@ Grapheme Gr_Iter::read_grapheme_from_current_pos(cur2 *end) {
         ret->append(it.next());
     } while (!eof() && !gc.feed(it.peek()));
 
-    gr_end = it.pos;
+    *end = it.pos;
     it.pos = start;
     return ret;
 }
 
-void Gr_Iter::eat() {
-    it.pos = gr_end;
+Grapheme Gr_Iter::peek() {
+    return read_grapheme_from_current_pos(&saved_next_from_peek);
+}
+
+Grapheme Gr_Iter::prev() {
+    saved_next_from_peek = NULL_CUR;
+
+    auto current_pos = it.pos;
+
+    // i guess the thing i don't know is... let's say you have a grapheme
+    // consisting of codepoints A B C. if you start at C, will it read just C
+    // as a grapheme? what if you start at B?
+
+    Grapheme last_gr = NULL;
+    while (!it.bof()) {
+        auto old = it.pos;
+        it.prev();
+
+        cur2 end = NULL_CUR;
+        auto gr = read_grapheme_from_current_pos(&end);
+
+        // the grapheme starting at this pos no longer ends at current_pos
+        if (!gr || end != current_pos) {
+            // if old == current_pos it means that somehow the codepoint prior
+            // to current_pos does not result in a grapheme that ends at
+            // current_pos. that is very weird, but we need to move backward,
+            // or we will probably have an infinite loop in downstream code. so
+            // just keep the prev(), and get out.
+            if (old != current_pos)
+                it.pos = old;
+            return last_gr;
+        }
+        last_gr = gr;
+    }
+    return last_gr;
+}
+
+void Gr_Iter::next() {
+    if (saved_next_from_peek == NULL_CUR) {
+        peek();
+        cp_assert(saved_next_from_peek != NULL_CUR);
+    }
+
+    it.pos = saved_next_from_peek;
+    saved_next_from_peek = NULL_CUR;
 }
 
 void Cstr_To_Ustr::init() {
@@ -480,7 +523,7 @@ void Buffer::write(File *f) {
 // it would lead to bugs.
 //
 // Update: Also, .remove() handles tree updating correctly.
-// 
+//
 // Also, y1 and y2 are inclusive, whereas internal_delete_lines() is exclusive.
 void Buffer::remove_lines(u32 y1, u32 y2) {
     auto start = new_cur2(0, y1);
@@ -987,8 +1030,8 @@ Gr_Iter Buffer::gr_iter(cur2 c) {
 cur2 Buffer::inc_gr(cur2 c) {
     auto it = gr_iter(c);
     if (!it.eof()) {
-        it.read();
-        it.eat();
+        it.peek();
+        it.next();
     }
     return it.pos();
 }

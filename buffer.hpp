@@ -161,19 +161,34 @@ typedef List<uchar> *Grapheme;
 
 struct Gr_Iter {
     Buffer_It it;
-    cur2 gr_end;
+    cur2 saved_next_from_peek;
 
     void init(Buffer_It _it) {
         ptr0(this);
         it = _it;
+        saved_next_from_peek = NULL_CUR;
     }
 
+    // is there honestly no easier way than to proxy all these methods lol
+    // ...what if we just built gr_peek, gr_next and gr_prev into
+    // Buffer_It???? i guess only thing is if we're adding fields like
+    // saved_next_from_peek i don't want to be saving shit inside there and
+    // making it too fat to pass by value
     cur2 pos() { return it.pos; };
+    void setpos(cur2 pos) { it.pos = pos; }
+    bool bof() { return it.bof(); };
     bool eof() { return it.eof(); };
     bool eol() { return it.eol() || it.eof(); };
 
-    List<uchar>* read();
-    void eat();
+    Grapheme read_grapheme_from_current_pos(cur2 *end);
+    Grapheme peek();
+
+    // next does not return grapheme so that it can just use the saved
+    // position of peek() to move forward. the operation of back() requires us
+    // to read a grapheme from the pos it lands on, so it costs nothing to
+    // just return that grapheme
+    void next();
+    Grapheme prev();
 };
 
 struct Buffer {
