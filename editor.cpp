@@ -3309,8 +3309,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                 if (type == GR_SPACE || is_start(gr, type)) {
                     while (!it.bof()) {
                         auto old = it.pos;
-                        gr = it.gr_prev();
-                        if (!gr_isspace(gr)) {
+                        if (!gr_isspace(it.gr_prev())) {
                             it.pos = old;
                             break;
                         }
