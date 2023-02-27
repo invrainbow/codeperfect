@@ -49,12 +49,5 @@ for line in `git diff --check --cached | sed '/^[+-]/d'` ; do
   rm "${file}.save"
 done
 
-if [ "x`git status -s | grep '^[A|D|M]'`" = "x" ]; then
-  # empty commit
-  echo
-  echo -e "\033[31mNO CHANGES ADDED, ABORT COMMIT!\033[0m"
-  exit 1
-fi
-
 # Now we can commit
 exit
