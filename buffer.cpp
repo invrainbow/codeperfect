@@ -223,7 +223,7 @@ void Buffer::hist_apply_change(Change *change, bool undo) {
 }
 
 cur2 Buffer::hist_undo() {
-    if (hist_curr == hist_start) return new_cur2(-1, -1);
+    if (hist_curr == hist_start) return NULL_CUR;
 
     hist_curr = hist_dec(hist_curr);
 
@@ -231,7 +231,7 @@ cur2 Buffer::hist_undo() {
     for (auto it = history[hist_curr]; it; it = it->next)
         arr->append(it);
 
-    auto ret = new_cur2(-1, -1);
+    auto ret = NULL_CUR;
 
     for (int i = 0; i < arr->len; i++) {
         auto it = arr->at(arr->len - i - 1);
@@ -244,9 +244,9 @@ cur2 Buffer::hist_undo() {
 }
 
 cur2 Buffer::hist_redo() {
-    if (hist_curr == hist_top) return new_cur2(-1, -1);
+    if (hist_curr == hist_top) return NULL_CUR;
 
-    auto ret = new_cur2(-1, -1);
+    auto ret = NULL_CUR;
 
     for (auto it = history[hist_curr]; it; it = it->next){
         hist_apply_change(it, false);
@@ -1128,9 +1128,7 @@ u32 Buffer::internal_convert_x_vx(int y, int off, bool to_vx) {
 }
 
 cur2 Buffer::offset_to_cur(i32 off, bool nothrow) {
-    cur2 ret;
-    ret.x = -1;
-    ret.y = -1;
+    cur2 ret = NULL_CUR;
 
     Fori (&bytecounts) {
         if (off < it) {
@@ -1141,8 +1139,7 @@ cur2 Buffer::offset_to_cur(i32 off, bool nothrow) {
         off -= it;
     }
 
-    if (ret.x == -1 || ret.y == -1) {
-        cp_assert(ret.x == -1 && ret.y == -1);
+    if (ret == NULL_CUR) {
         if (!nothrow) {
             cp_assert(!off);
         }

@@ -142,3 +142,5 @@ NORETURN void cp_panic(ccstr s) {
 void assert_main_thread() {
     cp_assert(is_main_thread);
 }
+
+const cur2 NULL_CUR = new_cur2(-1, -1);

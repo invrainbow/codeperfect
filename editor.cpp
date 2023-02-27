@@ -838,7 +838,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
         move_cursor(new_cur2(ac_start.x + name->len, ac_start.y));
 
         // clear out last_closed_autocomplete
-        last_closed_autocomplete = new_cur2(-1, -1);
+        last_closed_autocomplete = NULL_CUR;
 
         // clear autocomplete
         ptr0(&ac);
@@ -966,7 +966,7 @@ void Editor::ensure_cursor_on_screen() {
 void Editor::reset_state() {
     cur.x = 0;
     cur.y = 0;
-    last_closed_autocomplete = new_cur2(-1, -1);
+    last_closed_autocomplete = NULL_CUR;
 }
 
 bool check_file(File_Mapping *fm) {
@@ -1180,7 +1180,7 @@ void Pane::cleanup() {
 }
 
 Editor* Pane::focus_editor(ccstr path) {
-    return focus_editor(path, new_cur2(-1, -1));
+    return focus_editor(path, NULL_CUR);
 }
 
 Editor* Pane::focus_editor(ccstr path, cur2 pos, bool pos_in_byte_format) {
@@ -1208,7 +1208,7 @@ Editor* Pane::focus_editor(ccstr path, cur2 pos, bool pos_in_byte_format) {
 }
 
 Editor *Pane::focus_editor_by_index(u32 idx) {
-    return focus_editor_by_index(idx, new_cur2(-1, -1));
+    return focus_editor_by_index(idx, NULL_CUR);
 }
 
 // It feels like this is very related to but sufficiently different from w/e/b
@@ -1254,7 +1254,7 @@ cur2 Editor::handle_alt_move(bool back, bool backspace) {
 }
 
 bool Editor::trigger_escape(cur2 go_here_after) {
-    if (go_here_after.x == -1 && go_here_after.y == -1)
+    if (go_here_after == NULL_CUR)
         postfix_stack.len = 0;
 
     bool handled = false;
@@ -1586,7 +1586,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             if (!triggered_by_dot)
                 return;
 
-        last_closed_autocomplete = new_cur2(-1, -1);
+        last_closed_autocomplete = NULL_CUR;
 
         {
             // use autocomplete_mem
@@ -2153,7 +2153,7 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
     buf->remove(start, cur);
     move_cursor(start);
 
-    last_closed_autocomplete = new_cur2(-1, -1);
+    last_closed_autocomplete = NULL_CUR;
 }
 
 bool Editor::optimize_imports() {

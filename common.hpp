@@ -134,6 +134,8 @@ struct cur2 : vec2 {
     ccstr str();
 };
 
+extern const cur2 NULL_CUR;
+
 struct vec3 {
     union {
         struct {

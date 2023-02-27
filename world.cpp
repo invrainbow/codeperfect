@@ -680,7 +680,7 @@ Editor* find_editor_by_filepath(ccstr filepath) {
 }
 
 Editor *focus_editor(ccstr path) {
-    return focus_editor(path, new_cur2(-1, -1));
+    return focus_editor(path, NULL_CUR);
 }
 
 Editor *focus_editor(ccstr path, cur2 pos, bool pos_in_byte_format) {
@@ -951,8 +951,7 @@ Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_
             return show_error("The indexer is currently busy.");
         defer { world.indexer.release_lock(IND_READING); };
 
-        if (pos.x == -1)
-            pos = editor->cur;
+        if (pos == NULL_CUR) pos = editor->cur;
         auto off = editor->cur_to_offset(pos);
         result = world.indexer.jump_to_definition(editor->filepath, new_cur2(off, -1));
     }
@@ -3264,7 +3263,7 @@ void do_generate_function() {
             // if it's already open, just make the change
             auto uchars = cstr_to_ustr(result->insert_code);
 
-            if (result->insert_pos.x == -1) {
+            if (result->insert_pos == NULL_CUR) {
                 int y = ed->buf->lines.len-1;
                 ed->buf->insert(new_cur2(y, ed->buf->lines[y].len), uchars->items, uchars->len);
             } else {
@@ -3278,7 +3277,7 @@ void do_generate_function() {
                 return;
             }
 
-            if (result->insert_pos.x == -1) {
+            if (result->insert_pos == NULL_CUR) {
                 // abuse the file replacer to insert it at end lol fuck me
                 while (!fr.done()) fr.write(fr.advance_read_pointer());
                 fr.do_replacement(fr.read_cur, result->insert_code);

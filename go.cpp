@@ -4693,7 +4693,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
 
     if (result.pos.y == -1) {
         auto newpos = offset_to_cur(result.pos.x, result.file);
-        if (newpos.x == -1) return NULL;
+        if (newpos == NULL_CUR) return NULL;
         result.pos = newpos;
     }
 
@@ -4709,7 +4709,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
 
 cur2 offset_to_cur(int off, ccstr filepath) {
     auto fm = map_file_into_memory(filepath);
-    if (!fm) return new_cur2(-1, -1);
+    if (!fm) return NULL_CUR;
     defer { fm->cleanup(); };
 
     cur2 newpos; ptr0(&newpos);

@@ -457,7 +457,7 @@ void Jblow_Tests::run() {
             };
 
             Exception exceptions[] = {
-                // {"controller-idioms/queue/controls.go", new_cur2(-1, -1)},
+                // {"controller-idioms/queue/controls.go", NULL_CUR},
             };
             */
 
@@ -467,7 +467,7 @@ void Jblow_Tests::run() {
                     auto should_skip = [&]() {
                         for (auto &&it : exceptions)
                             if (streq(filename, it.filename))
-                                if ((dot == it.dot) || (it.dot.x == -1 && it.dot.y == -1))
+                                if ((dot == it.dot) || (it.dot == NULL_CUR))
                                     return true;
                         return false;
                     };

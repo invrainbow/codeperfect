@@ -5816,7 +5816,7 @@ void UI::draw_everything() {
                 im::Checkbox("show comments?", &wnd.show_comments);
                 im::SameLine();
 
-                cur2 open_cur = new_cur2(-1, -1);
+                cur2 open_cur = NULL_CUR;
                 if (im::Button("go to cursor"))
                     open_cur = editor->cur;
 
@@ -5870,7 +5870,7 @@ void UI::draw_everything() {
                                 int i = 0;
                                 while (i < gofile->scope_ops->len) {
                                     auto &it = gofile->scope_ops->at(i++);
-                                    auto pos = new_cur2(-1, -1);
+                                    auto pos = NULL_CUR;
 
                                     switch (it.type) {
                                     case GSOP_OPEN_SCOPE: {
@@ -6032,7 +6032,7 @@ void UI::draw_everything() {
             draw_rect(tabs_area, rgba(is_pane_selected ? global_colors.pane_active : global_colors.pane_inactive));
             auto editor = pane.get_current_editor();
 
-            cur2 saved_pos = new_cur2(-1, -1);
+            cur2 saved_pos = NULL_CUR;
 
             auto actually_calculate_pos_from_mouse = [&]() -> cur2 {
                 auto buf = editor->buf;
@@ -6050,14 +6050,14 @@ void UI::draw_everything() {
 
                 auto im_pos = im::GetIO().MousePos;
                 if (im_pos.x < 0 || im_pos.y < 0)
-                    return new_cur2(-1, -1);
+                    return NULL_CUR;
 
                 auto pos = new_vec2f(im_pos.x, im_pos.y);
-                if (pos.y < area.y || pos.y >= area.y + area.h) return new_cur2(-1, -1);
+                if (pos.y < area.y || pos.y >= area.y + area.h) return NULL_CUR;
 
                 pos.y -= area.y;
                 auto y = view.y + pos.y / (ui.base_font->height * settings.line_height);
-                if (y > view.y + view.h) return new_cur2(-1, -1);
+                if (y > view.y + view.h) return NULL_CUR;
 
                 if (y >= buf->lines.len) {
                     y = buf->lines.len-1;
@@ -6142,7 +6142,7 @@ void UI::draw_everything() {
 
             if (world.ui.mouse_just_pressed[0]) {
                 if (is_hovered) {
-                    focus_editor_by_id(editor->id, new_cur2(-1, -1));
+                    focus_editor_by_id(editor->id, NULL_CUR);
                     auto pos = calculate_pos_from_mouse();
                     if (pos.x != -1 && pos.y != -1) {
                         auto &io = im::GetIO();
@@ -6177,7 +6177,7 @@ void UI::draw_everything() {
                 if (!(flags & MOUSE_DBLCLICKED)) break;
 
                 auto pos = calculate_pos_from_mouse();
-                if (pos.x == -1 || pos.y == -1) break;
+                if (pos == NULL_CUR) break;
 
                 auto classify_char = [&](uchar ch) {
                     if (isspace(ch)) return 0;
