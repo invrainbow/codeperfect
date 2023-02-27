@@ -285,9 +285,6 @@ struct Editor {
     bool vim_handle_key(int key, int mods);
     bool vim_handle_input(Vim_Command_Input *input);
 
-    Gr_Iter gr_iter(cur2 c) { return buf->gr_iter(c); };
-    Gr_Iter gr_iter() { return buf->gr_iter(cur); };
-
     Eval_Motion_Result* vim_eval_motion(Vim_Command *cmd);
     bool vim_exec_command(Vim_Command *cmd);
     int find_first_nonspace_cp(int y);

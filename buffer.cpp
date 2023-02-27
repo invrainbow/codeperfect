@@ -100,45 +100,47 @@ uchar Buffer_It::next() {
     return ret;
 }
 
-Grapheme Gr_Iter::read_grapheme_from_current_pos(cur2 *end) {
+Grapheme Buffer_It::gr_read_from_current_pos(cur2 *end) {
     if (eof()) return NULL;
 
-    cur2 start = it.pos;
+    cur2 start = pos;
 
     Grapheme_Clusterer gc;
     gc.init();
-    gc.feed(it.peek());
+    gc.feed(peek());
 
     auto ret = new_list(uchar);
     do {
-        ret->append(it.next());
-    } while (!eof() && !gc.feed(it.peek()));
+        ret->append(next());
+    } while (!eof() && !gc.feed(peek()));
 
-    *end = it.pos;
-    it.pos = start;
+    *end = pos;
+    pos = start;
     return ret;
 }
 
-Grapheme Gr_Iter::peek() {
-    return read_grapheme_from_current_pos(&saved_next_from_peek);
+Grapheme Buffer_It::gr_peek() {
+    auto ret = gr_read_from_current_pos(&gr_saved_next_from_peek);
+    if (ret) gr_has_saved_next = true;
+    return ret;
 }
 
-Grapheme Gr_Iter::prev() {
-    saved_next_from_peek = NULL_CUR;
+Grapheme Buffer_It::gr_prev() {
+    gr_saved_next_from_peek = NULL_CUR;
 
-    auto current_pos = it.pos;
+    auto current_pos = pos;
 
     // i guess the thing i don't know is... let's say you have a grapheme
     // consisting of codepoints A B C. if you start at C, will it read just C
     // as a grapheme? what if you start at B?
 
     Grapheme last_gr = NULL;
-    while (!it.bof()) {
-        auto old = it.pos;
-        it.prev();
+    while (!bof()) {
+        auto old = pos;
+        prev();
 
         cur2 end = NULL_CUR;
-        auto gr = read_grapheme_from_current_pos(&end);
+        auto gr = gr_read_from_current_pos(&end);
 
         // the grapheme starting at this pos no longer ends at current_pos
         if (!gr || end != current_pos) {
@@ -148,7 +150,7 @@ Grapheme Gr_Iter::prev() {
             // or we will probably have an infinite loop in downstream code. so
             // just keep the prev(), and get out.
             if (old != current_pos)
-                it.pos = old;
+                pos = old;
             return last_gr;
         }
         last_gr = gr;
@@ -156,14 +158,13 @@ Grapheme Gr_Iter::prev() {
     return last_gr;
 }
 
-void Gr_Iter::next() {
-    if (saved_next_from_peek == NULL_CUR) {
-        peek();
-        cp_assert(saved_next_from_peek != NULL_CUR);
+void Buffer_It::gr_next() {
+    if (!gr_has_saved_next) {
+        gr_peek();
+        cp_assert(gr_has_saved_next);
     }
-
-    it.pos = saved_next_from_peek;
-    saved_next_from_peek = NULL_CUR;
+    pos = gr_saved_next_from_peek;
+    gr_has_saved_next = false;
 }
 
 void Cstr_To_Ustr::init() {
@@ -1021,19 +1022,11 @@ cur2 Buffer::inc_cur(cur2 c) {
     return it.pos;
 }
 
-Gr_Iter Buffer::gr_iter(cur2 c) {
-    Gr_Iter ret;
-    ret.init(iter(c));
-    return ret;
-}
-
 cur2 Buffer::inc_gr(cur2 c) {
-    auto it = gr_iter(c);
-    if (!it.eof()) {
-        it.peek();
-        it.next();
-    }
-    return it.pos();
+    auto it = iter(c);
+    if (!it.eof())
+        it.gr_next();
+    return it.pos;
 }
 
 cur2 Buffer::dec_cur(cur2 c) {

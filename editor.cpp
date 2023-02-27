@@ -3082,31 +3082,31 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             auto inp2 = motion[1];
             if (inp2.is_key) break;
 
-            auto it = gr_iter();
+            auto it = iter();
 
             cur2 last;
 
             for (int i = 0; i < count && !it.eol(); i++) {
                 // ignore the first character
                 if (!it.eol()) {
-                    it.peek();
-                    last = it.pos();
-                    it.next();
+                    it.gr_peek();
+                    last = it.pos;
+                    it.gr_next();
                 }
 
                 while (!it.eol()) {
-                    auto gr = it.peek();
+                    auto gr = it.gr_peek();
                     if (gr->len == 1)
                         if (inp2.ch == gr->at(0))
                             break;
-                    last = it.pos();
-                    it.next();
+                    last = it.pos;
+                    it.gr_next();
                 }
             }
 
             if (it.eol()) break;
 
-            ret->new_dest = inp.ch == 't' ? last : it.pos();
+            ret->new_dest = inp.ch == 't' ? last : it.pos;
             ret->type = MOTION_CHAR_INCL;
             return ret;
         }
@@ -3211,15 +3211,15 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
         }
         case 'w':
         case 'W': {
-            auto it = gr_iter();
+            auto it = iter();
 
             for (int i = 0; i < count && !it.eof(); i++) {
-                auto gr = it.peek();
-                it.next();
+                auto gr = it.gr_peek();
+                it.gr_next();
 
                 auto type = gr_type(gr);
                 while (!it.eof()) {
-                    gr = it.peek();
+                    gr = it.gr_peek();
                     if (inp.ch == 'w') {
                         if (gr_type(gr) != type)
                             break;
@@ -3227,68 +3227,70 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                         if (gr_isspace(gr) != (type == GR_SPACE))
                             break;
                     }
-                    it.next();
+                    it.gr_next();
                 }
 
                 if (type != GR_SPACE) {
                     while (!it.eof()) {
-                        auto gr = it.peek();
+                        auto gr = it.gr_peek();
                         if (!gr_isspace(gr)) break;
-                        it.next();
+                        it.gr_next();
                     }
                 }
             }
 
-            ret->new_dest = it.pos();
+            ret->new_dest = it.pos;
             ret->type = MOTION_CHAR_EXCL;
             return ret;
         }
         case 'b':
         case 'B': {
-            auto it = gr_iter();
+            auto it = iter();
 
-            for (int i = 0; i < count && !it.eof(); i++) {
+            for (int i = 0; i < count && !it.bof(); i++) {
                 auto is_start = [&](Grapheme prev_graph, Gr_Type current_type) {
                     if (inp.ch == 'b')
                         return gr_type(prev_graph) != current_type;
                     return gr_isspace(prev_graph);
                 };
 
-                auto type = gr_type(it.peek());
+                auto type = gr_type(it.gr_peek());
 
-                auto old = it.pos();
-                auto gr = it.prev();
-                it.setpos(old);
+                auto old = it.pos;
+                auto gr = it.gr_prev();
+                it.pos = old;
 
                 if (type == GR_SPACE || is_start(gr, type)) {
                     while (!it.bof()) {
-                        auto prev = it.pos();
-                        gr = it.prev();
+                        auto old = it.pos;
+                        gr = it.gr_prev();
                         if (!gr_isspace(gr)) {
-                            it.setpos(prev);
+                            it.pos = old;
                             break;
                         }
                     }
                 }
 
+                if (it.bof()) break;
+
                 // now go to the front of the previous word
-                type = gr_type(it.prev());
+                type = gr_type(it.gr_prev());
                 while (!it.bof()) {
-                    auto old = it.pos();
-                    if (is_start(it.prev(), type)) {
-                        it.setpos(old);
+                    auto old = it.pos;
+                    if (is_start(it.gr_prev(), type)) {
+                        it.pos = old;
                         break;
                     }
                 }
             }
 
-            ret->new_dest = it.pos();
+            ret->new_dest = it.pos;
             ret->type = MOTION_CHAR_EXCL;
             return ret;
         }
         case 'e':
         case 'E': {
-            auto it = gr_iter();
+            auto it = iter();
 
             for (int i = 0; i < count && !it.eof(); i++) {
                 auto is_end = [&](Grapheme next_graph, Gr_Type current_type) {
@@ -3297,26 +3299,28 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                     return gr_isspace(next_graph);
                 };
 
-                auto type = gr_type(it.peek());
-                it.next();
+                auto type = gr_type(it.gr_peek());
+                it.gr_next();
 
-                if (type == GR_SPACE || is_end(it.peek(), type))
-                    while (!it.eof() && gr_isspace(it.peek()))
-                        it.next();
+                if (type == GR_SPACE || is_end(it.gr_peek(), type))
+                    while (!it.eof() && gr_isspace(it.gr_peek()))
+                        it.gr_next();
+
+                if (it.eof()) break;
 
                 // now go to the end of the next word
-                type = gr_type(it.peek());
+                type = gr_type(it.gr_peek());
                 while (!it.eof()) {
-                    auto old = it.pos();
-                    it.next();
-                    if (is_end(it.peek(), type)) {
-                        it.setpos(old);
+                    auto old = it.pos;
+                    it.gr_next();
+                    if (is_end(it.gr_peek(), type)) {
+                        it.pos = old;
                         break;
                     }
                 }
             }
 
-            ret->new_dest = it.pos();
+            ret->new_dest = it.pos;
             ret->type = MOTION_CHAR_INCL;
             return ret;
         }
@@ -3643,14 +3647,14 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
         case 'x': {
             switch (world.vim.mode) {
             case VI_NORMAL: {
-                auto it = gr_iter();
+                auto it = iter();
                 for (int i = 0; i < o_count && !it.eol(); i++) {
-                    it.peek();
-                    it.next();
+                    it.gr_peek();
+                    it.gr_next();
                 }
 
-                if (c != it.pos()) {
-                    vim_delete_range(c, it.pos());
+                if (c != it.pos) {
+                    vim_delete_range(c, it.pos);
                     int len = lines[c.y].len;
                     if (c.x >= len && len > 0) {
                         move_cursor_normal(new_cur2(len-1, c.y));
@@ -3692,10 +3696,10 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
                     ORDER(a, b);
 
                     if (motion_result->type == MOTION_CHAR_INCL) {
-                        auto it = gr_iter(b);
-                        it.peek();
-                        it.next();
-                        b = it.pos();
+                        auto it = iter(b);
+                        it.gr_peek();
+                        it.gr_next();
+                        b = it.pos;
                     }
 
                     vim_delete_range(a, b);

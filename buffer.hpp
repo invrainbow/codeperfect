@@ -6,6 +6,8 @@
 #include "os.hpp"
 #include "tree_sitter_crap.hpp"
 
+typedef List<uchar> *Grapheme;
+
 struct Buffer;
 
 struct Buffer_It {
@@ -23,6 +25,8 @@ struct Buffer_It {
     int fake_end_offset;
     bool append_chars_to_end;
     ccstr chars_to_append_to_end;
+    cur2 gr_saved_next_from_peek;
+    bool gr_has_saved_next; // zii
 
     bool eof();
     uchar peek();
@@ -31,6 +35,15 @@ struct Buffer_It {
     bool bof() { return !x && !y; }
     bool eol() { return peek() == '\n' || eof(); }
     uchar get(cur2 _pos);
+
+    Grapheme gr_read_from_current_pos(cur2 *end);
+    Grapheme gr_peek();
+    // next does not return grapheme so that it can just use the saved
+    // position of peek() to move forward. the operation of back() requires us
+    // to read a grapheme from the pos it lands on, so it costs nothing to
+    // just return that grapheme
+    void gr_next();
+    Grapheme gr_prev();
 };
 
 typedef List<uchar> Line;
@@ -157,40 +170,6 @@ struct Change {
     Change *next;
 };
 
-typedef List<uchar> *Grapheme;
-
-struct Gr_Iter {
-    Buffer_It it;
-    cur2 saved_next_from_peek;
-
-    void init(Buffer_It _it) {
-        ptr0(this);
-        it = _it;
-        saved_next_from_peek = NULL_CUR;
-    }
-
-    // is there honestly no easier way than to proxy all these methods lol
-    // ...what if we just built gr_peek, gr_next and gr_prev into
-    // Buffer_It???? i guess only thing is if we're adding fields like
-    // saved_next_from_peek i don't want to be saving shit inside there and
-    // making it too fat to pass by value
-    cur2 pos() { return it.pos; };
-    void setpos(cur2 pos) { it.pos = pos; }
-    bool bof() { return it.bof(); };
-    bool eof() { return it.eof(); };
-    bool eol() { return it.eol() || it.eof(); };
-
-    Grapheme read_grapheme_from_current_pos(cur2 *end);
-    Grapheme peek();
-
-    // next does not return grapheme so that it can just use the saved
-    // position of peek() to move forward. the operation of back() requires us
-    // to read a grapheme from the pos it lands on, so it costs nothing to
-    // just return that grapheme
-    void next();
-    Grapheme prev();
-};
-
 struct Buffer {
     Pool *mem;
 
@@ -266,7 +245,6 @@ struct Buffer {
     cur2 dec_cur(cur2 c);
     i32 cur_to_offset(cur2 c);
     cur2 offset_to_cur(i32 off, bool nothrow = true);
-    Gr_Iter gr_iter(cur2 c);
     cur2 inc_gr(cur2 c);
 
     // this is so stupid lmao
