@@ -430,61 +430,6 @@ void handle_key_event(Window_Event *it) {
         break;
     }
 
-    if (keymods == CP_MOD_PRIMARY) {
-        switch (key) {
-        case CP_KEY_A: {
-            editor->select_start = new_cur2(0, 0);
-
-            auto buf = editor->buf;
-            int y = buf->lines.len-1;
-            int x = buf->lines[y].len;
-            editor->move_cursor(new_cur2(x, y));
-
-            if (editor->select_start != editor->cur)
-                editor->selecting = true;
-            return;
-        }
-
-        // make these commands?
-        case CP_KEY_C:
-        case CP_KEY_X: {
-            if (!editor->selecting) return;
-
-            auto a = editor->select_start;
-            auto b = editor->cur;
-            ORDER(a, b);
-
-            auto s = editor->buf->get_text(a, b);
-            world.window->set_clipboard_string(s);
-
-            if (key == CP_KEY_X) {
-                editor->buf->remove(a, b);
-                editor->selecting = false;
-                editor->move_cursor(a);
-            }
-            return;
-        }
-
-        case CP_KEY_V: {
-            auto clipboard_contents = world.window->get_clipboard_string();
-            if (!clipboard_contents) return;
-
-            if (editor->selecting) {
-                auto a = editor->select_start;
-                auto b = editor->cur;
-                ORDER(a, b);
-
-                editor->buf->remove(a, b);
-                editor->move_cursor(a);
-                editor->selecting = false;
-            }
-
-            editor->insert_text_in_insert_mode(clipboard_contents);
-            return;
-        }
-        }
-    }
-
     switch (keymods) {
     case CP_MOD_CTRL:
         switch (key) {

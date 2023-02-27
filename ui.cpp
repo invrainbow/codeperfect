@@ -2403,6 +2403,11 @@ void UI::draw_everything() {
             menu_command(CMD_UNDO);
             menu_command(CMD_REDO);
             im::Separator();
+            menu_command(CMD_CUT);
+            menu_command(CMD_COPY);
+            menu_command(CMD_PASTE);
+            menu_command(CMD_SELECT_ALL);
+            im::Separator();
             menu_command(CMD_SEARCH);
             menu_command(CMD_SEARCH_AND_REPLACE);
             im::EndMenu();

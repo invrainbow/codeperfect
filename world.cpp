@@ -1798,8 +1798,16 @@ bool is_command_enabled(Command cmd) {
 
     case CMD_UNDO:
     case CMD_REDO:
+    case CMD_PASTE:
+    case CMD_SELECT_ALL:
         // TODO: also check if we *can* undo/redo (to be done after we actually implement it)
         return get_current_editor();
+
+    case CMD_CUT:
+    case CMD_COPY: {
+        auto editor = get_current_editor();
+        return editor && editor->selecting;
+    }
 
     case CMD_GENERATE_IMPLEMENTATION:
     case CMD_FIND_REFERENCES:
@@ -1943,6 +1951,10 @@ void init_command_info_table() {
     command_info_table[CMD_TOGGLE_COMMENT] = k(CP_MOD_PRIMARY | CP_MOD_ALT, CP_KEY_SLASH, "Toggle Comment");
     command_info_table[CMD_UNDO] = k(CP_MOD_PRIMARY, CP_KEY_Z, "Undo");
     command_info_table[CMD_REDO] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_Z, "Redo");
+    command_info_table[CMD_CUT] = k(CP_MOD_PRIMARY, CP_KEY_X, "Cut");
+    command_info_table[CMD_COPY] = k(CP_MOD_PRIMARY, CP_KEY_C, "Copy");
+    command_info_table[CMD_PASTE] = k(CP_MOD_PRIMARY, CP_KEY_V, "Paste");
+    command_info_table[CMD_SELECT_ALL] = k(CP_MOD_PRIMARY, CP_KEY_A, "Select All");
     command_info_table[CMD_VIEW_CALLER_HIERARCHY] = k(CP_MOD_PRIMARY, CP_KEY_I, "View Caller Hierarchy");
     command_info_table[CMD_VIEW_CALLEE_HIERARCHY] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_I, "View Callee Hierarchy");
     command_info_table[CMD_AST_NAVIGATION] = k(CP_MOD_CTRL | CP_MOD_ALT, CP_KEY_A, "Enter Tree-Based Navigation");
@@ -2366,6 +2378,69 @@ void handle_command(Command cmd, bool from_menu) {
     case CMD_DOCUMENTATION:
         GHOpenURLInBrowser("https://docs.codeperfect95.com/");
         break;
+
+    case CMD_CUT:
+    case CMD_COPY: {
+        // TODO: integrate with vim
+
+        auto editor = get_current_editor();
+        if (!editor) break;
+        if (!editor->selecting) break;
+
+        auto a = editor->select_start;
+        auto b = editor->cur;
+        ORDER(a, b);
+
+        auto s = editor->buf->get_text(a, b);
+        world.window->set_clipboard_string(s);
+
+        if (cmd == CMD_CUT) {
+            editor->buf->remove(a, b);
+            editor->selecting = false;
+            editor->move_cursor(a);
+        }
+        break;
+    }
+
+    case CMD_SELECT_ALL: {
+        // TODO: integrate with vim
+
+        auto editor = get_current_editor();
+        if (!editor) break;
+        editor->select_start = new_cur2(0, 0);
+
+        auto buf = editor->buf;
+        int y = buf->lines.len-1;
+        int x = buf->lines[y].len;
+        editor->move_cursor(new_cur2(x, y));
+
+        if (editor->select_start != editor->cur)
+            editor->selecting = true;
+        break;
+    }
+
+    case CMD_PASTE: {
+        // TODO: integrate with vim
+
+        auto editor = get_current_editor();
+        if (!editor) break;
+
+        auto clipboard_contents = world.window->get_clipboard_string();
+        if (!clipboard_contents) return;
+
+        if (editor->selecting) {
+            auto a = editor->select_start;
+            auto b = editor->cur;
+            ORDER(a, b);
+
+            editor->buf->remove(a, b);
+            editor->move_cursor(a);
+            editor->selecting = false;
+        }
+
+        editor->insert_text_in_insert_mode(clipboard_contents);
+        return;
+    }
 
     case CMD_UNDO:
     case CMD_REDO: {
