@@ -3083,13 +3083,8 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
 
         case '{':
         case '}': {
-            auto isempty = [&](int y) {
-                return !lines[y].len;
-            };
-
-            auto isok = [&](int y) {
-                return 0 <= y && y < lines.len;
-            };
+            auto isempty = [&](int y) { return !lines[y].len; };
+            auto isok = [&](int y) { return 0 <= y && y < lines.len; };
 
             cur2 pos = c;
 
