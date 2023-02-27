@@ -156,7 +156,7 @@ struct Glyph {
     bool single;
     union {
         uchar codepoint;
-        List<uchar> *grapheme;
+        Grapheme grapheme;
     };
     boxf box;
     boxf uv;
@@ -179,7 +179,7 @@ struct Font {
     bool init(ccstr font_name, u32 font_size, bool dont_check_name);
     bool init(ccstr font_name, u32 font_size, Font_Data *data);
     void cleanup();
-    bool can_render_chars(List<uchar> *chars);
+    bool can_render_grapheme(Grapheme gr);
 };
 
 struct Pane_Areas {
@@ -248,7 +248,7 @@ struct UI {
 
     Font* acquire_font(ccstr name, bool dont_check);
     Font* acquire_system_ui_font();
-    Font* find_font_for_grapheme(List<uchar> *grapheme);
+    Font* find_font_for_grapheme(Grapheme grapheme);
 
     bool init();
     bool init_fonts();
@@ -257,7 +257,7 @@ struct UI {
     void draw_rect(boxf b, vec4f color);
     void draw_rounded_rect(boxf b, vec4f color, float radius, int round_flags);
     void draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int border_width, float radius = 0);
-    int draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color);
+    int draw_char(vec2f* pos, Grapheme grapheme, vec4f color);
     int draw_char(vec2f* pos, uchar ch, vec4f color);
     vec2f draw_string(vec2f pos, ccstr s, vec4f color);
     float get_text_width(ccstr s);
@@ -308,7 +308,7 @@ struct UI {
     Pretty_Menu *pretty_menu_start(ImVec2 padding = ImVec2(4, 2));
     void pretty_menu_item(Pretty_Menu *menu, bool selected);
     void pretty_menu_text(Pretty_Menu *pm, ccstr text, ImU32 color = PM_DEFAULT_COLOR);
-    Glyph *lookup_glyph_for_grapheme(List<uchar> *grapheme);
+    Glyph *lookup_glyph_for_grapheme(Grapheme grapheme);
     void draw_tutorial(boxf rect);
 
     Keyboard_Nav get_keyboard_nav(Wnd *wnd, int flags);

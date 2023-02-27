@@ -100,7 +100,7 @@ uchar Buffer_It::next() {
     return ret;
 }
 
-List<uchar>* Gr_Iter::read() {
+Grapheme Gr_Iter::read_grapheme_from_current_pos(cur2 *end) {
     if (eof()) return NULL;
 
     cur2 start = it.pos;

@@ -1050,9 +1050,9 @@ void UI::draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int b
     }
 }
 
-Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
+Glyph *UI::lookup_glyph_for_grapheme(Grapheme gr) {
     auto utf8chars = new_list(char);
-    For (grapheme) {
+    For (gr) {
         char buf[4];
         int len = uchar_to_cstr(it, buf);
         for (int i = 0; i < len; i++)
@@ -1066,7 +1066,7 @@ Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
 
     SCOPED_MEM(&world.ui_mem);
 
-    auto font = find_font_for_grapheme(grapheme);
+    auto font = find_font_for_grapheme(gr);
     if (!font) return NULL; // TODO: handle error
 
     auto buf = hb_buffer_create();
@@ -1207,12 +1207,12 @@ Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
     atlas->pos.x += bbox.w + 1;
 
     glyph = new_object(Glyph);
-    glyph->single = grapheme->len == 1;
+    glyph->single = gr->len == 1;
     if (glyph->single) {
-        glyph->codepoint = grapheme->at(0);
+        glyph->codepoint = gr->at(0);
     } else {
         auto copy = new_list(uchar);
-        copy->concat(grapheme);
+        copy->concat(gr);
         glyph->grapheme = copy;
     }
 
@@ -1235,7 +1235,7 @@ Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
 }
 
 // advances pos forward
-int UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
+int UI::draw_char(vec2f* pos, Grapheme grapheme, vec4f color) {
     if (!grapheme->len) return -1;
 
     glActiveTexture(GL_TEXTURE0 + TEXTURE_FONT);
@@ -8337,8 +8337,8 @@ Font* UI::acquire_font(ccstr name, bool dont_check) {
     return font;
 }
 
-Font* UI::find_font_for_grapheme(List<uchar> *grapheme) {
-    if (base_font->can_render_chars(grapheme))
+Font* UI::find_font_for_grapheme(Grapheme grapheme) {
+    if (base_font->can_render_grapheme(grapheme))
         return base_font;
 
     auto pat = FcPatternCreate();
@@ -8378,7 +8378,7 @@ Font* UI::find_font_for_grapheme(List<uchar> *grapheme) {
         bool found = false;
         For (all_font_names) {
             auto font = acquire_font(it, false);
-            if (font->can_render_chars(grapheme))
+            if (font->can_render_grapheme(grapheme))
                 return font;
         }
         return NULL;
@@ -8386,7 +8386,7 @@ Font* UI::find_font_for_grapheme(List<uchar> *grapheme) {
 
     auto font = acquire_font(name, true);
     if (!font) return NULL;
-    if (!font->can_render_chars(grapheme)) return NULL;
+    if (!font->can_render_grapheme(grapheme)) return NULL;
     return font;
 }
 
@@ -8439,8 +8439,8 @@ void Font::cleanup() {
     if (data) { data->cleanup(); data = NULL; }
 }
 
-bool Font::can_render_chars(List<uchar> *chars) {
-    For (chars)
+bool Font::can_render_grapheme(Grapheme gr) {
+    For (gr)
         if (!stbtt_FindGlyphIndex(&stbfont, it))
             return false;
     return true;

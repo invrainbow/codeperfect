@@ -157,6 +157,7 @@ struct Change {
     Change *next;
 };
 
+typedef List<uchar> *Grapheme;
 
 struct Gr_Iter {
     Buffer_It it;

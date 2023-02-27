@@ -2926,18 +2926,18 @@ ccstr render_command(Vim_Command *cmd) {
     return rend.finish();
 }
 
-bool gr_isspace(List<uchar> *graph) {
-    if (graph->len == 1) {
-        auto uch = graph->at(0);
+bool gr_isspace(Grapheme gr) {
+    if (gr->len == 1) {
+        auto uch = gr->at(0);
         if (uch < 127 && isspace(uch))
             return true;
     }
     return false;
 }
 
-bool gr_isident(List<uchar> *graph) {
-    if (graph->len == 1) {
-        auto uch = graph->at(0);
+bool gr_isident(Grapheme gr) {
+    if (gr->len == 1) {
+        auto uch = gr->at(0);
         if (isident(uch))
             return true;
     }
@@ -2967,10 +2967,10 @@ enum Gr_Type {
     GR_OTHER,
 };
 
-Gr_Type gr_type(List<uchar> *graph) {
-    if (gr_isspace(graph))
+Gr_Type gr_type(Grapheme gr) {
+    if (gr_isspace(gr))
         return GR_SPACE;
-    if (gr_isident(graph))
+    if (gr_isident(gr))
         return GR_IDENT;
     return GR_OTHER;
 }
