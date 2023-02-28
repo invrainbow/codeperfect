@@ -893,6 +893,8 @@ int Buffer::internal_distance_between(cur2 a, cur2 b) {
 }
 
 void Buffer::remove(cur2 start, cur2 end, bool applying_change) {
+    if (start == end) return;
+
     i32 x1 = start.x, y1 = start.y;
     i32 x2 = end.x, y2 = end.y;
 
