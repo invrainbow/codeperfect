@@ -6635,16 +6635,26 @@ void UI::draw_everything() {
             auto draw_cursor = [&](int chars) {
                 auto muted = (current_pane != world.current_pane);
 
-                actual_cursor_positions[current_pane] = cur_pos;    // save position where cursor is drawn for later use
-                bool is_insert_cursor = !world.vim.on || world.vim_mode() == VI_INSERT;
+                actual_cursor_positions[current_pane] = cur_pos; // save position where cursor is drawn for later use
 
                 auto pos = cur_pos;
                 pos.y -= base_font->offset_y;
 
                 boxf b;
                 b.pos = pos;
-                b.h = (float)base_font->height;
-                b.w = is_insert_cursor ? 2 : ((float)base_font->width * chars);
+
+                if (world.vim.on && world.vim_mode() != VI_INSERT) {
+                    b.w = ((float)base_font->width * chars);
+                    if (world.vim_mode() == VI_REPLACE) {
+                        b.y += base_font->height / 2;
+                        b.h = (float)base_font->height / 2;
+                    } else {
+                        b.h = (float)base_font->height;
+                    }
+                } else {
+                    b.h = (float)base_font->height;
+                    b.w = 2;
+                }
 
                 auto py = base_font->height * (settings.line_height - 1.0) / 2;
                 b.y -= py;

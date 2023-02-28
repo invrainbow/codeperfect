@@ -1265,7 +1265,6 @@ bool Editor::trigger_escape(cur2 go_here_after) {
         // here break anything?
 
         auto mode = world.vim_mode();
-
         if (mode == VI_INSERT) {
             handled = true;
 
@@ -1389,6 +1388,7 @@ void Editor::init() {
         vim.command_buffer = new_list(Vim_Command_Input);
         vim.insert_command.op.init();
         vim.insert_command.motion.init();
+        vim.replace_old_chars.init();
     }
 
     {
@@ -1789,15 +1789,6 @@ void Editor::trigger_parameter_hint() {
     }
 }
 
-void Editor::type_char(uchar uch) {
-    buf->insert(cur, &uch, 1);
-
-    auto old_cur = cur;
-    auto new_cur = buf->inc_cur(cur);
-
-    move_cursor(new_cur);
-}
-
 void Editor::update_parameter_hint() {
     // reset parameter hint when cursor goes before hint start
     auto& hint = parameter_hint;
@@ -1886,12 +1877,40 @@ curr_change.new_end_byte = end;
 curr_change.new_end_point = cur_to_tspoint(cur);
 */
 
-void Editor::type_char_in_insert_mode(uchar ch) {
-    bool already_typed = false;
+void Editor::backspace_in_replace_mode() {
+    if (cur <= vim.replace_start) {
+        // move cursor but don't delete
+        auto start = backspace_in_insert_mode(true); // dry run
+        move_cursor(start);
+        vim.replace_start = start;
+        return;
+    }
 
-    /*
+    // delete the char, then insert old character if we're in range
+    auto old_cur = cur;
+    auto start = backspace_in_insert_mode();
+
+    if (old_cur > vim.replace_end) return;
+
+    cp_assert(vim.replace_old_chars.len);
+
+    uchar ch = *vim.replace_old_chars.last();
+    vim.replace_old_chars.len--;
+    buf->insert(start, &ch, 1);
+
+    vim.replace_end = start;
+}
+
+void Editor::type_char(uchar ch, bool is_replace_mode) {
+
+    // ...wait, why did i comment this out
+    // i think it was because it was completing when i didn't want it to
     // handle typing a dot when an import is selected
+    /*
+    bool already_typed = false;
     do {
+        // commented out now, but if we bring it back, don't run it when is_replace_mode
+        if (is_replace_mode) break;
         if (ch != '.') break;
 
         if (!autocomplete.ac.results) break;
@@ -1907,9 +1926,25 @@ void Editor::type_char_in_insert_mode(uchar ch) {
         perform_autocomplete(&result);
         already_typed = true;
     } while (0);
+    if (!already_typed) type_char(ch);
     */
 
-    if (!already_typed) type_char(ch);
+    if (is_replace_mode) {
+        bool replacing = (cur.x < buf->lines[cur.y].len);
+        if (replacing) {
+            vim.replace_old_chars.append(iter().peek());
+            buf->remove(cur, buf->inc_cur(cur));
+        }
+
+        buf->insert(cur, &ch, 1);
+        move_cursor(buf->inc_cur(cur));
+
+        if (replacing)
+            vim.replace_end = cur;
+    } else {
+        buf->insert(cur, &ch, 1);
+        move_cursor(buf->inc_cur(cur));
+    }
 
     if (lang != LANG_GO) return;
 
@@ -1921,27 +1956,38 @@ void Editor::type_char_in_insert_mode(uchar ch) {
     if (!isident(ch) && autocomplete.ac.results)
         ptr0(&autocomplete);
 
-    switch (ch) {
-    case '.':
-        trigger_autocomplete(true, false);
-        did_autocomplete = true;
-        break;
+    if (!is_replace_mode) {
+        switch (ch) {
+        case '.':
+            trigger_autocomplete(true, false);
+            did_autocomplete = true;
+            break;
 
-    case '(':
-        trigger_parameter_hint();
-        did_parameter_hint = true;
-        break;
-
-    case ',':
-        if (!parameter_hint.gotype) {
+        case '(':
             trigger_parameter_hint();
             did_parameter_hint = true;
-        }
-        break;
+            break;
 
+        case ',':
+            if (!parameter_hint.gotype) {
+                trigger_parameter_hint();
+                did_parameter_hint = true;
+            }
+            break;
+        }
+    }
+
+    // replace mode still has bracket auto dedent, annoyingly enough
+    // will it continue to work?
+    switch (ch) {
     case '}':
     case ')':
     case ']': {
+
+        // ========================================
+        // bunch of code to find the matching brace
+        // ========================================
+
         if (lang != LANG_GO) break;
 
         if (!cur.x) break;
@@ -2045,20 +2091,35 @@ void Editor::type_char_in_insert_mode(uchar ch) {
                 break;
         }
 
-        // backspace to start of line
-        backspace_in_insert_mode(0, cur.x);
+        // ===============================================
+        // code that actually performs the dedent
+        // this is probably what we care about for replace
+        // ===============================================
 
-        // insert indentation
-        auto pos = cur;
-        buf->insert(pos, indentation->items, indentation->len);
-        pos.x += indentation->len;
+        if (is_replace_mode) {
+            // i think this will become more clear once we figure out how enter
+            // works in replace mode
+        } else {
+            // that is so fucking asinine, why don't we just buf->remove() and move_cursor()???
+            // is it because of our stupid nvim integration that we couldn't call move_cursor() safely?????????
+            // yeah i think it's because had to keep track of our insert_start and shit like that
 
-        // insert the brace
-        buf->insert(pos, &ch, 1);
-        pos.x++;
+            // "backspace" to start of line
+            buf->remove(new_cur2(0, cur.y), cur);
+            move_cursor(new_cur2(0, cur.y));
 
-        // move cursor after everything we typed
-        move_cursor(pos);
+            // insert indentation
+            auto pos = cur;
+            buf->insert(pos, indentation->items, indentation->len);
+            pos.x += indentation->len;
+
+            // insert the brace
+            buf->insert(pos, &ch, 1);
+            pos.x++;
+
+            // move cursor after everything we typed
+            move_cursor(pos);
+        }
         break;
     }
     }
@@ -2107,54 +2168,18 @@ void Editor::update_autocomplete(bool triggered_by_ident) {
         trigger_autocomplete(false, triggered_by_ident);
 }
 
-void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_erase) {
-    auto start = cur;
-    auto zero = new_cur2(0, 0);
+cur2 Editor::backspace_in_insert_mode(bool dry_run) {
+    auto it = iter();
+    if (it.bof()) return new_cur2(0, 0);
+    it.gr_prev();
 
-    if (graphemes_to_erase > 0 && codepoints_to_erase > 0)
-        cp_panic("backspace_in_insert_mode called with both graphemes and codepoints");
-
-    while ((graphemes_to_erase > 0 || codepoints_to_erase > 0) && start > zero) {
-        if (!start.x) {
-            start = buf->dec_cur(start);
-
-            if (graphemes_to_erase > 0) graphemes_to_erase--;
-            if (codepoints_to_erase > 0) codepoints_to_erase--;
-            continue;
-        }
-
-        auto old_start = start.x;
-
-        // if we're not backspace past the beginning of the line,
-        // from here on, we only backspace within the current line
-
-        if (graphemes_to_erase > 0) {
-            // we have current cursor as cp index
-            // move it back by 1 gr index, then convert that back to cp index
-            int gr_idx = buf->idx_cp_to_gr(start.y, start.x);
-            if (gr_idx > graphemes_to_erase) {
-                start.x = buf->idx_gr_to_cp(start.y, gr_idx - graphemes_to_erase);
-                graphemes_to_erase = 0;
-            } else {
-                start.x = 0;
-                graphemes_to_erase -= gr_idx;
-            }
-        } else { // codepoints_to_erase > 0
-            auto gr_idx = buf->idx_cp_to_gr(start.y, start.x);
-            if (codepoints_to_erase > start.x) {
-                start.x = 0;
-                codepoints_to_erase -= start.x;
-            } else {
-                start.x -= codepoints_to_erase;
-                codepoints_to_erase = 0;
-            }
-        }
+    if (!dry_run) {
+        buf->remove(it.pos, cur);
+        move_cursor(it.pos);
     }
 
-    buf->remove(start, cur);
-    move_cursor(start);
-
     last_closed_autocomplete = NULL_CUR;
+    return it.pos;
 }
 
 bool Editor::optimize_imports() {
@@ -2701,6 +2726,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
         case 'I':
         case 'a':
         case 'A':
+        case 'R':
         case 'o':
         case 'O':
         case 's':
@@ -2733,6 +2759,23 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             ptr++;
             break;
 
+        case 'r': {
+            ptr++;
+            if (eof()) return VIM_PARSE_WAIT;
+
+            auto ch = peek_char();
+            if (ch) {
+                ptr++;
+                out->op.append(it);
+                out->op.append(char_input(ch));
+                skip_motion = true;
+                break;
+            }
+
+            ptr--;
+            break;
+        }
+
         case 'g': {
             ptr++;
 
@@ -2746,12 +2789,12 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             case 'u':
             case 'U':
                 ptr++;
-                out->op.append(char_input('g'));
+                out->op.append(it);
                 out->op.append(char_input(ch));
                 goto done;
             case 'd':
                 ptr++;
-                out->op.append(char_input('g'));
+                out->op.append(it);
                 out->op.append(char_input(ch));
                 skip_motion = true;
                 goto done;
@@ -3013,17 +3056,22 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
         ret->type = MOTION_LINE;
     };
 
+    auto get_second_char_arg = [&]() -> uchar {
+        if (motion.len < 2) return 0;
+        auto &inp = motion[1];
+        if (inp.is_key) return 0;
+        return inp.ch;
+    };
+
     auto inp = motion[0];
     if (inp.is_key) {
     } else {
         switch (inp.ch) {
         case 'g': {
-            if (motion.len < 2) break;
+            auto second = get_second_char_arg();
+            if (!second) break;
 
-            auto inp2 = motion[1];
-            if (inp2.is_key) break;
-
-            switch (inp2.ch) {
+            switch (second) {
             case 'e':
             case 'E': {
                 /*
@@ -3052,8 +3100,8 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                     if (type != GR_SPACE) {
                         while (!it.bof()) {
                             auto gr = it.gr_prev();
-                            if (inp2.ch == 'e' && gr_type(gr) != type) break;
-                            if (inp2.ch == 'E' && gr_isspace(gr)) break;
+                            if (second == 'e' && gr_type(gr) != type) break;
+                            if (second == 'E' && gr_isspace(gr)) break;
                         }
                     }
 
@@ -3121,10 +3169,8 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
 
         case 'f':
         case 't': {
-            if (motion.len < 2) break;
-
-            auto inp2 = motion[1];
-            if (inp2.is_key) break;
+            auto arg = get_second_char_arg();
+            if (!arg) break;
 
             auto it = iter();
             cur2 last;
@@ -3138,7 +3184,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                 while (!it.eol()) {
                     auto gr = it.gr_peek();
                     if (gr->len == 1)
-                        if (inp2.ch == gr->at(0))
+                        if (arg == gr->at(0))
                             break;
                     last = it.pos;
                     it.gr_next();
@@ -3151,13 +3197,10 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             ret->type = MOTION_CHAR_INCL;
             return ret;
         }
-
         case 'F':
         case 'T': {
-            if (motion.len < 2) break;
-
-            auto inp2 = motion[1];
-            if (inp2.is_key) break;
+            auto arg = get_second_char_arg();
+            if (!arg) break;
 
             auto it = iter();
             int start_y = it.pos.y;
@@ -3175,7 +3218,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                     cp_assert(gr);
 
                     // if it's a match, break
-                    if (gr->len == 1 && inp2.ch == gr->at(0))
+                    if (gr->len == 1 && arg == gr->at(0))
                         break;
 
                     // try to move back, checking for bol so the cp_assert(gr)
@@ -3465,10 +3508,20 @@ void Editor::vim_enter_insert_mode(Vim_Command *cmd, fn<void()> prep) {
     world.vim_set_mode(VI_INSERT);
 }
 
+void Editor::vim_enter_replace_mode() {
+    buf->hist_batch_mode = true;
+
+    vim.replace_start = cur;
+    vim.replace_end = cur;
+    vim.replace_old_chars.len = 0;
+    world.vim_set_mode(VI_REPLACE);
+}
+
 void Editor::vim_return_to_normal_mode() {
     switch (world.vim_mode()) {
     case VI_INSERT:
-        buf->hist_batch_mode = false; // set in vim_enter_insert_mode
+    case VI_REPLACE:
+        buf->hist_batch_mode = false; // set when entering vi_insert and vi_replace
         buf->hist_force_push_next_change = true;
         break;
     // anything else? other modes?
@@ -3621,6 +3674,10 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
             move_cursor(new_cur2(lines[c.y].len, c.y));
             enter_insert_mode([]() { return; });
             return true;
+        }
+        case 'R': {
+            vim_enter_replace_mode();
+            break;
         }
         case 'I': {
             move_cursor(new_cur2(find_first_nonspace_cp(c.y), c.y));
@@ -3855,6 +3912,94 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
             }
             break;
         }
+        case 'r': {
+            if (op.len < 2) break;
+            auto &inp2 = op[1];
+            if (inp2.is_key) break;
+
+            auto arg = inp2.ch;
+
+            switch (mode) {
+            case VI_VISUAL: {
+                cp_assert(!motion_result);
+                auto sel = get_selection();
+
+                buf->hist_batch_mode = true;
+                defer { buf->hist_batch_mode = false; };
+
+                switch (sel->type) {
+                case SEL_CHAR:
+                case SEL_LINE: {
+                    auto range = sel->ranges->at(0);
+                    cur2 start, end;
+                    cp_assert(start < end);
+
+                    if (sel->type == SEL_CHAR) {
+                        start = range.start;
+                        end = range.end;
+                    } else {
+                        start = new_cur2(0, range.start.y);
+                        end = new_cur2(lines[range.end.y].len, range.end.y);
+                    }
+
+                    for (int y = start.y; y <= end.y; y++) {
+                        int x0 = (y == start.y ? start.x : 0);
+                        int x1 = (y == end.y ? end.x : lines[y].len);
+
+                        // from (x0,y) to (x1,y), fill everything with the new character
+
+                        auto chars = new_list(uchar);
+                        for (int i = 0, count = x1 - x0; i < count; i++)
+                            chars->append(arg);
+
+                        auto p0 = new_cur2(x0, y);
+                        auto p1 = new_cur2(x1, y);
+
+                        buf->remove(p0, p1);
+                        buf->insert(p0, chars->items, chars->len);
+                    }
+
+                    move_cursor_normal(start);
+                    vim_return_to_normal_mode();
+                    break;
+                }
+                case SEL_BLOCK:
+                    // this is going to be fucking obnoxious lol
+                    For (sel->ranges) {}
+                    break;
+                }
+
+                return true;
+            }
+            case VI_NORMAL: {
+                auto it = iter();
+                auto start = it.pos;
+                auto new_text = new_list(uchar);
+
+                for (int i = 0; i < o_count; i++) {
+                    if (it.eol()) goto leave;
+                    it.gr_next();
+                    new_text->append(arg);
+                }
+
+                auto end = it.pos;
+
+                {
+                    buf->hist_batch_mode = true;
+                    defer { buf->hist_batch_mode = false; };
+
+                    buf->remove(start, end);
+                    buf->insert(start, new_text->items, new_text->len);
+                }
+
+                move_cursor_normal(new_cur2(start.x + new_text->len - 1, start.y));
+                return true;
+            }
+            }
+        leave:
+            break;
+        }
+
         case 'y':
             break;
         case '~':

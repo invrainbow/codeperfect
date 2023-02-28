@@ -202,20 +202,26 @@ struct Editor {
         Pool mem;
         List<Vim_Command_Input> *command_buffer;
         int hidden_vx;
-        union {
-            // Right now the mode is stored in world, but the mode-specific
-            // shit is stored here in editor. This is going to break things if
-            // the user somehow switches editors without changing back to
-            // normal mode. That seems really stupid.
-            struct {
-                cur2 insert_start;
-                Vim_Command insert_command;
-            };
-            struct {
-                cur2 visual_start;
-                Selection_Type visual_type;
-            };
-        };
+
+        // Right now the mode is stored in world, but the mode-specific
+        // shit is stored here in editor. This is going to break things if
+        // the user somehow switches editors without changing back to
+        // normal mode. That seems really stupid.
+
+        // can't use union because shit in each element needs to be init'd
+        // separately
+
+        cur2 insert_start;
+        Vim_Command insert_command;
+
+        cur2 visual_start;
+        Selection_Type visual_type;
+
+        // okay, for now replace is just going to work on codepoints just like nvim lol
+        cur2 replace_start;
+        cur2 replace_end;
+        List<uchar> replace_old_chars;
+
         struct {
             bool inserted;
             int buf_tree_version;
@@ -247,8 +253,7 @@ struct Editor {
     void filter_autocomplete_results(Autocomplete* ac);
     void trigger_parameter_hint();
 
-    void type_char(uchar ch);
-    void type_char_in_insert_mode(uchar ch);
+    void type_char(uchar ch, bool is_replace_mode = false /* >:( */);
     void update_autocomplete(bool triggered_by_ident);
     void update_parameter_hint();
 
@@ -262,7 +267,8 @@ struct Editor {
     void format_on_save(bool fix_imports);
     void handle_save(bool about_to_close = false);
     bool is_current_editor();
-    void backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_erase);
+    cur2 backspace_in_insert_mode(bool dry_run = false);
+    void backspace_in_replace_mode();
     void ensure_cursor_on_screen();
     void ensure_cursor_on_screen_by_moving_view(Ensure_Cursor_Mode mode = ECM_NONE);
     void insert_text_in_insert_mode(ccstr s);
@@ -298,6 +304,7 @@ struct Editor {
     void vim_delete_lines(int y1, int y2);
     void vim_save_inserted_indent(cur2 start, cur2 end);
     void vim_enter_insert_mode(Vim_Command *cmd, fn<void()> prep);
+    void vim_enter_replace_mode();
     void vim_return_to_normal_mode();
 };
 

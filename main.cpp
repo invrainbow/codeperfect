@@ -450,12 +450,23 @@ void handle_key_event(Window_Event *it) {
 
     // now handle insert mode shit
     // ===========================
-    if (world.vim.on && world.vim_mode() != VI_INSERT) return;
+
+    if (world.vim.on) {
+        switch (world.vim_mode()) {
+        case VI_INSERT:
+        case VI_REPLACE:
+            break;
+        default:
+            return;
+        }
+    }
 
     switch (key) {
     case CP_KEY_ENTER: {
+        // handle replace mode, it seems to insert a newline
+        // actually i wonder if this will just work as written
         editor->delete_selection();
-        editor->type_char_in_insert_mode('\n');
+        editor->type_char('\n');
 
         auto indent_chars = editor->get_autoindent(editor->cur.y);
         auto start = editor->cur;
@@ -465,14 +476,26 @@ void handle_key_event(Window_Event *it) {
         return;
     }
     case CP_KEY_BACKSPACE: {
+        // handle replace mode, need to recover the lost character
         if (editor->selecting) {
             editor->delete_selection();
-        } else if (keymods & CP_MOD_TEXT) {
-            auto new_cur = editor->handle_alt_move(true, true);
-            while (editor->cur > new_cur)
-                editor->backspace_in_insert_mode(1, 0);
         } else {
-            editor->backspace_in_insert_mode(1, 0); // erase one grapheme
+            bool is_replace = world.vim.on && world.vim_mode() == VI_REPLACE;
+
+            auto go_back_one_the_right_way = [&]() {
+                if (is_replace)
+                    editor->backspace_in_replace_mode();
+                else
+                    editor->backspace_in_insert_mode();
+            };
+
+            if (keymods & CP_MOD_TEXT) {
+                auto new_cur = editor->handle_alt_move(true, true);
+                while (editor->cur > new_cur)
+                    go_back_one_the_right_way();
+            } else {
+                go_back_one_the_right_way();
+            }
         }
 
         editor->update_autocomplete(false);
@@ -492,7 +515,7 @@ void handle_key_event(Window_Event *it) {
                 return;
             }
         }
-        editor->type_char_in_insert_mode('\t');
+        editor->type_char('\t');
         return;
     }
 
@@ -856,12 +879,15 @@ void handle_window_event(Window_Event *it) {
         auto ed = get_current_editor();
         if (!ed) return;
 
-        if (world.vim.on && world.vim_mode() != VI_INSERT) {
+        if (world.vim.on && world.vim_mode() != VI_INSERT && world.vim_mode() != VI_REPLACE) {
             ed->vim_handle_char(ch);
-        } else if (ed->is_modifiable()) {
-            ed->delete_selection();
-            ed->type_char_in_insert_mode(ch);
+            break;
         }
+
+        if (!ed->is_modifiable()) break;
+
+        ed->delete_selection();
+        ed->type_char(ch, world.vim_mode() == VI_REPLACE);
         break;
     }
     }
