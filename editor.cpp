@@ -3307,22 +3307,19 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             ret->type = MOTION_LINE;
             return ret;
         }
-        case 'h':
+        case 'h': {
+            auto it = iter();
+            for (int i = 0; i < count && !it.bol(); i++)
+                it.gr_prev();
+            ret->new_dest = it.pos;
+            ret->type = MOTION_CHAR_EXCL;
+            return ret;
+        }
         case 'l': {
-            auto grx = buf->idx_cp_to_gr(c.y, c.x);
-
-            if (inp.ch == 'h') {
-                if (grx) grx--;
-            } else {
-                grx++;
-            }
-
-            auto x = buf->idx_gr_to_cp(c.y, grx);
-            if (x == lines[c.y].len && lines[c.y].len > 0)
-                x = lines[c.y].len-1;
-
-            // vim.hidden_vx = buf->idx_cp_to_vcp(c.y, x);
-            ret->new_dest = new_cur2(x, c.y);
+            auto it = iter();
+            for (int i = 0; i < count && !it.eol(); i++)
+                it.gr_next();
+            ret->new_dest = it.pos;
             ret->type = MOTION_CHAR_EXCL;
             return ret;
         }
