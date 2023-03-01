@@ -101,7 +101,7 @@ enum Motion_Type {
 
 struct Eval_Motion_Result {
     Motion_Type type;
-    cur2 new_dest; // anything else?
+    cur2 dest; // anything else?
     bool inclusive;
 };
 

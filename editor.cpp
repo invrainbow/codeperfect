@@ -3080,7 +3080,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
     cp_assert(buf->is_valid(c));
 
     auto goto_line_first_nonspace = [&](int y) {
-        ret->new_dest = new_cur2(find_first_nonspace_cp(y), y);
+        ret->dest = new_cur2(find_first_nonspace_cp(y), y);
         ret->type = MOTION_LINE;
     };
 
@@ -3157,7 +3157,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                                 break;
                 }
 
-                ret->new_dest = it.pos;
+                ret->dest = it.pos;
                 ret->type = MOTION_CHAR_INCL;
                 return ret;
             }
@@ -3169,7 +3169,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                     goto_line_first_nonspace(count-1);
                 return ret;
             case 'o':
-                ret->new_dest = buf->offset_to_cur(count - 1);
+                ret->dest = buf->offset_to_cur(count - 1);
                 ret->type = MOTION_CHAR_EXCL;
                 return ret;
             }
@@ -3206,7 +3206,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                 pos = new_cur2(0, y);
             }
 
-            ret->new_dest = pos;
+            ret->dest = pos;
             ret->type = MOTION_CHAR_EXCL;
             return ret;
         }
@@ -3237,7 +3237,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
 
             if (it.eol()) break;
 
-            ret->new_dest = inp.ch == 't' ? last : it.pos;
+            ret->dest = inp.ch == 't' ? last : it.pos;
             ret->type = MOTION_CHAR_INCL;
             return ret;
         }
@@ -3278,7 +3278,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
 
             if (!do_shit()) break;
 
-            ret->new_dest = inp.ch == 'T' ? last : it.pos;
+            ret->dest = inp.ch == 'T' ? last : it.pos;
             ret->type = MOTION_CHAR_INCL;
             return ret;
         }
@@ -3291,20 +3291,20 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             return ret;
 
         case '0':
-            ret->new_dest = new_cur2(0, c.y);
+            ret->dest = new_cur2(0, c.y);
             ret->type = MOTION_CHAR_EXCL;
             return ret;
 
         case '^': {
             int x = find_first_nonspace_cp(c.y);
-            ret->new_dest = new_cur2(x, c.y);
+            ret->dest = new_cur2(x, c.y);
             ret->type = MOTION_CHAR_EXCL;
             return ret;
         }
 
         case '$': {
             int newy = min(lines.len-1, c.y + count-1);
-            ret->new_dest = new_cur2(lines[newy].len, newy);
+            ret->dest = new_cur2(lines[newy].len, newy);
             ret->type = MOTION_CHAR_INCL;
             return ret;
         }
@@ -3314,7 +3314,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             if (!is_op(cp_sprintf("%c", (char)inp.ch))) break;
 
             int y = min(c.y + count-1, lines.len-1);
-            ret->new_dest = new_cur2(0, y);
+            ret->dest = new_cur2(0, y);
             ret->type = MOTION_LINE;
             return ret;
         }
@@ -3333,7 +3333,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             if (newx >= lines[newy].len && lines[newy].len > 0)
                 newx = lines[newy].len-1;
 
-            ret->new_dest = new_cur2(newx, newy);
+            ret->dest = new_cur2(newx, newy);
             ret->type = MOTION_LINE;
             return ret;
         }
@@ -3341,7 +3341,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             auto it = iter();
             for (int i = 0; i < count && !it.bol(); i++)
                 it.gr_prev();
-            ret->new_dest = it.pos;
+            ret->dest = it.pos;
             ret->type = MOTION_CHAR_EXCL;
             return ret;
         }
@@ -3349,7 +3349,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             auto it = iter();
             for (int i = 0; i < count && !it.eol(); i++)
                 it.gr_next();
-            ret->new_dest = it.pos;
+            ret->dest = it.pos;
             ret->type = MOTION_CHAR_EXCL;
             return ret;
         }
@@ -3412,7 +3412,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                 }
             }
 
-            ret->new_dest = it.pos;
+            ret->dest = it.pos;
             ret->type = MOTION_CHAR_EXCL;
             return ret;
         }
@@ -3456,7 +3456,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                 }
             }
 
-            ret->new_dest = it.pos;
+            ret->dest = it.pos;
             ret->type = MOTION_CHAR_EXCL;
             return ret;
         }
@@ -3492,7 +3492,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                 }
             }
 
-            ret->new_dest = it.pos;
+            ret->dest = it.pos;
             ret->type = MOTION_CHAR_INCL;
             return ret;
         }
@@ -3617,7 +3617,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
     if (!op.len) {
         if (!motion_result) return false;
 
-        auto pos = motion_result->new_dest;
+        auto pos = motion_result->dest;
         if (pos.y >= lines.len) {
             pos.y = lines.len-1;
             pos.x = lines[pos.y].len-1;
@@ -3913,7 +3913,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
                 switch (motion_result->type) {
                 case MOTION_CHAR_INCL:
                 case MOTION_CHAR_EXCL: {
-                    cur2 a = c, b = motion_result->new_dest;
+                    cur2 a = c, b = motion_result->dest;
                     ORDER(a, b);
 
                     if (motion_result->type == MOTION_CHAR_INCL) {
@@ -3936,7 +3936,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
                 }
                 case MOTION_LINE: {
                     int y1 = c.y;
-                    int y2 = motion_result->new_dest.y;
+                    int y2 = motion_result->dest.y;
 
                     if (y1 > y2) {
                         int tmp = y1;
