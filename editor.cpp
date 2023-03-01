@@ -2853,14 +2853,23 @@ done:
 
     it = peek();
     if (it.is_key) {
-        /*
+        if (it.key == CP_KEY_ENTER) {
+            ptr++;
+            out->motion.append(it);
+            return VIM_PARSE_DONE;
+        }
+
         switch (it.mods) {
         case CP_MOD_CTRL:
             switch (it.key) {
+            case CP_KEY_M:
+                ptr++;
+                out->motion.append(it);
+                return VIM_PARSE_DONE;
             }
             break;
         }
-        */
+
         return VIM_PARSE_DISCARD;
     }
 
@@ -2869,6 +2878,9 @@ done:
     case 'j':
     case 'k':
     case 'l':
+    case '-':
+    case '+':
+    case '_':
     case 'H':
     case 'L':
     case 'M':
@@ -3079,8 +3091,24 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
         return inp.ch;
     };
 
+    auto handle_plus_command = [&]() {
+        int y = min(cur.y + count, lines.len - 1);
+        goto_line_first_nonspace(y);
+    };
+
     auto inp = motion[0];
     if (inp.is_key) {
+        switch (inp.key) {
+        case CP_KEY_ENTER:
+            handle_plus_command();
+            return ret;
+        case CP_KEY_M:
+            if (inp.mods == CP_MOD_CTRL) {
+                handle_plus_command();
+                return ret;
+            }
+            break;
+        }
     } else {
         switch (inp.ch) {
         case 'g': {
@@ -3321,6 +3349,20 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                 it.gr_next();
             ret->new_dest = it.pos;
             ret->type = MOTION_CHAR_EXCL;
+            return ret;
+        }
+        case '-': {
+            int y = relu_sub(cur.y, count);
+            goto_line_first_nonspace(y);
+            return ret;
+        }
+        case '+': {
+            handle_plus_command();
+            return ret;
+        }
+        case '_': {
+            int y = min(cur.y + count - 1, lines.len - 1);
+            goto_line_first_nonspace(y);
             return ret;
         }
         case 'H':
