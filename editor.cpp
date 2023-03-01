@@ -1894,9 +1894,19 @@ void Editor::backspace_in_replace_mode() {
 
     cp_assert(vim.replace_old_chars.len);
 
-    uchar ch = *vim.replace_old_chars.last();
-    vim.replace_old_chars.len--;
-    buf->insert(start, &ch, 1);
+    auto rev = new_list(uchar);
+    while (vim.replace_old_chars.len) {
+        uchar ch = *vim.replace_old_chars.last();
+        vim.replace_old_chars.len--;
+        if (ch == 0) break;
+        rev->append(ch);
+    }
+
+    auto codepoints = new_list(uchar);
+    for (int i = rev->len; i >= 0; i--)
+        codepoints->append(rev->at(i));
+
+    buf->insert(start, codepoints->items, codepoints->len);
 
     vim.replace_end = start;
 }
@@ -1932,8 +1942,14 @@ void Editor::type_char(uchar ch, bool is_replace_mode) {
     if (is_replace_mode) {
         bool replacing = (cur.x < buf->lines[cur.y].len);
         if (replacing) {
-            vim.replace_old_chars.append(iter().peek());
-            buf->remove(cur, buf->inc_cur(cur));
+            auto it = iter();
+            auto gr = it.gr_peek();
+            it.gr_next();
+
+            vim.replace_old_chars.append((uchar)0);
+            vim.replace_old_chars.concat(gr);
+
+            buf->remove(cur, it.pos);
         }
 
         buf->insert(cur, &ch, 1);
