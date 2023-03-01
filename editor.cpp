@@ -3250,35 +3250,37 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             int start_y = it.pos.y;
             cur2 last;
 
-            for (int i = 0; i < count; i++) {
-                // we can *end* on bol, but we can't be at bol mid-process
-                if (it.bol()) goto leave;
+            auto do_shit = [&]() {
+                for (int i = 0; i < count; i++) {
+                    // we can *end* on bol, but we can't be at bol mid-process
+                    if (it.bol()) return false;
 
-                last = it.pos;
-                auto gr = it.gr_prev();
-
-                while (true) {
-                    // gr guaranteed to be valid, since it.x != 0
-                    cp_assert(gr);
-
-                    // if it's a match, break
-                    if (gr->len == 1 && arg == gr->at(0))
-                        break;
-
-                    // try to move back, checking for bol so the cp_assert(gr)
-                    // above remains consistent
                     last = it.pos;
-                    if (it.bol()) goto leave;
-                    gr = it.gr_prev();
+                    auto gr = it.gr_prev();
+
+                    while (true) {
+                        // gr guaranteed to be valid, since it.x != 0
+                        cp_assert(gr);
+
+                        // if it's a match, break
+                        if (gr->len == 1 && arg == gr->at(0))
+                            break;
+
+                        // try to move back, checking for bol so the cp_assert(gr)
+                        // above remains consistent
+                        last = it.pos;
+                        if (it.bol()) return false;
+                        gr = it.gr_prev();
+                    }
                 }
-            }
+                return true;
+            };
+
+            if (!do_shit()) break;
 
             ret->new_dest = inp.ch == 'T' ? last : it.pos;
             ret->type = MOTION_CHAR_INCL;
             return ret;
-
-        leave:
-            break;
         }
 
         case 'G':
@@ -4032,26 +4034,23 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
                 auto new_text = new_list(uchar);
 
                 for (int i = 0; i < o_count; i++) {
-                    if (it.eol()) goto leave;
+                    if (it.eol()) return true;
                     it.gr_next();
                     new_text->append(arg);
                 }
 
                 auto end = it.pos;
 
-                {
-                    buf->hist_batch_mode = true;
-                    defer { buf->hist_batch_mode = false; };
+                buf->hist_batch_mode = true;
+                defer { buf->hist_batch_mode = false; };
 
-                    buf->remove(start, end);
-                    buf->insert(start, new_text->items, new_text->len);
-                }
+                buf->remove(start, end);
+                buf->insert(start, new_text->items, new_text->len);
 
                 move_cursor_normal(new_cur2(start.x + new_text->len - 1, start.y));
                 return true;
             }
             }
-        leave:
             break;
         }
 
