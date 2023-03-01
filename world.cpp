@@ -2461,20 +2461,17 @@ void handle_command(Command cmd, bool from_menu) {
 
         auto pos = (cmd == CMD_UNDO ? buf->hist_undo() : buf->hist_redo());
 
-        if (pos.x != -1) {
-            auto opts = default_move_cursor_opts();
-            opts->is_user_movement = true;
 
-            // should we make this part of move_cursor?
-            // this code basically says, if we are in normal mode, don't put the cursor at eol
-            // whose job is it to ensure that?
-            if (world.vim.on)
-                if (pos.x == editor->buf->lines[pos.y].len && pos.x)
-                    pos.x = editor->buf->lines[pos.y].len-1;
+        // should we make this part of move_cursor?
+        // this code basically says, if we are in normal mode, don't put the cursor at eol
+        // whose job is it to ensure that?
+        if (world.vim.on)
+            if (pos.x == editor->buf->lines[pos.y].len && pos.x)
+                pos.x = editor->buf->lines[pos.y].len-1;
 
-            editor->move_cursor(pos, opts);
-        }
-
+        auto opts = default_move_cursor_opts();
+        opts->is_user_movement = true;
+        editor->move_cursor(pos, opts);
         break;
     }
 
