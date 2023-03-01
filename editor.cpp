@@ -3685,8 +3685,10 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
 
             case CP_KEY_R: {
                 cur2 pos;
-                for (int i = 0; i < o_count; i++)
+                for (int i = 0; i < o_count; i++) {
                     pos = buf->hist_redo();
+                    if (pos == NULL_CUR) return true;
+                }
                 move_cursor_normal(pos);
                 return true;
             }
@@ -3837,8 +3839,10 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
 
         case 'u': {
             cur2 pos;
-            for (int i = 0; i < o_count; i++)
+            for (int i = 0; i < o_count; i++) {
                 pos = buf->hist_undo();
+                if (pos == NULL_CUR) return true;
+            }
             move_cursor_normal(pos);
             return true;
         }

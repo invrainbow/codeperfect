@@ -2460,6 +2460,7 @@ void handle_command(Command cmd, bool from_menu) {
             editor->vim_return_to_normal_mode(); // should we call this or trigger_escape()?
 
         auto pos = (cmd == CMD_UNDO ? buf->hist_undo() : buf->hist_redo());
+        if (pos == NULL_CUR) break;
 
 
         // should we make this part of move_cursor?
