@@ -2633,7 +2633,7 @@ void Editor::delete_selection() {
     move_cursor(a);
 }
 
-int Editor::find_first_nonspace_cp(int y) {
+int Editor::first_nonspace_cp(int y) {
     auto it = iter(new_cur2(0, y));
     while (!it.eol() && !it.eof() && isspace(it.peek()))
         it.next();
@@ -3080,7 +3080,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
     cp_assert(buf->is_valid(c));
 
     auto goto_line_first_nonspace = [&](int y) {
-        ret->dest = new_cur2(find_first_nonspace_cp(y), y);
+        ret->dest = new_cur2(first_nonspace_cp(y), y);
         ret->type = MOTION_LINE;
     };
 
@@ -3296,7 +3296,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             return ret;
 
         case '^': {
-            int x = find_first_nonspace_cp(c.y);
+            int x = first_nonspace_cp(c.y);
             ret->dest = new_cur2(x, c.y);
             ret->type = MOTION_CHAR_EXCL;
             return ret;
@@ -3739,7 +3739,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
             break;
         }
         case 'I': {
-            move_cursor(new_cur2(find_first_nonspace_cp(c.y), c.y));
+            move_cursor(new_cur2(first_nonspace_cp(c.y), c.y));
             enter_insert_mode([]() { return; });
             return true;
         }
@@ -3770,7 +3770,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
                         auto cp = buf->idx_gr_to_cp(c.y, gr+1);
                         end = new_cur2(cp, c.y);
                     } else {
-                        start = new_cur2(find_first_nonspace_cp(c.y), c.y);
+                        start = new_cur2(first_nonspace_cp(c.y), c.y);
                         end = new_cur2(lines[c.y].len, c.y);
                     }
 
@@ -3823,7 +3823,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
                 if (inp.ch == 'D') {
                     vim_delete_lines(range.start.y, range.end.y);
                     vim_return_to_normal_mode();
-                    auto x = find_first_nonspace_cp(range.start.y);
+                    auto x = first_nonspace_cp(range.start.y);
                     move_cursor_normal(new_cur2(x, range.start.y));
                 } else {
                     enter_insert_mode([&]() {
