@@ -2938,6 +2938,40 @@ done:
         }
         break;
     }
+
+    case 'i':
+    case 'a': {
+        ptr++;
+        if (eof()) return VIM_PARSE_WAIT;
+
+        auto ch = peek_char();
+        switch (ch) {
+        case 'w':
+        case 'W':
+        case 's':
+        case 'p':
+        case '[':
+        case ']':
+        case '(':
+        case ')':
+        case 'b':
+        case '<':
+        case '>':
+        case 'B':
+        case '{':
+        case '}':
+        case 't':
+        case '\'':
+        case '"':
+        case '`':
+        case 'a':
+        case 'f': // function
+            out->motion.append(it);
+            out->motion.append(char_input(ch));
+            return VIM_PARSE_DONE;
+        }
+        break;
+    }
     default: {
         if (out->op.len != 1) break;
 
@@ -3238,6 +3272,38 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             ret->dest = inp.ch == 't' ? last : it.pos;
             ret->type = MOTION_CHAR_INCL;
             return ret;
+        }
+
+        case 'i':
+        case 'a': {
+            ret->type = (inp.ch == 'i' ? MOTION_OBJECT_INNER : MOTION_OBJECT);
+
+            auto arg = get_second_char_arg();
+            if (!arg) break;
+
+            switch (arg) {
+            case 'w': break; // TODO
+            case 'W': break; // TODO
+            case 's': break; // TODO
+            case 'p': break; // TODO
+            case '[': break; // TODO
+            case ']': break; // TODO
+            case '(': break; // TODO
+            case ')': break; // TODO
+            case 'b': break; // TODO
+            case '<': break; // TODO
+            case '>': break; // TODO
+            case 'B': break; // TODO
+            case '{': break; // TODO
+            case '}': break; // TODO
+            case 't': break; // TODO
+            case '\'': break; // TODO
+            case '"': break; // TODO
+            case '`': break; // TODO
+            case 'a': break; // TODO
+            case 'f': break; // TODO
+            }
+            break;
         }
         case 'F':
         case 'T': {
@@ -4055,7 +4121,6 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
             }
             break;
         }
-
         case 'y':
             break;
         case '~':
