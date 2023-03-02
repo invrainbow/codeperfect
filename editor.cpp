@@ -2640,6 +2640,30 @@ int Editor::first_nonspace_cp(int y) {
     return it.pos.x;
 }
 
+cur2 Editor::vim_join_lines(int y, int count) {
+    buf->hist_batch_mode = true;
+    defer { buf->hist_batch_mode = false; };
+
+    auto &lines = buf->lines;
+
+    cur2 last_start = NULL_CUR;
+    for (int i = 0; i < count; i++) {
+        if (y == lines.len-1) break;
+
+        auto start = new_cur2(lines[y].len, y);
+        auto x = first_nonspace_cp(y+1);
+        auto end = new_cur2(x, y+1);
+        bool add_space = (x < lines[y+1].len && lines[y+1][x] != ')');
+
+        buf->remove(start, end);
+        if (add_space) {
+            uchar space = ' ';
+            buf->insert(start, &space, 1);
+        }
+        last_start = start;
+    }
+    return last_start;
+}
 Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
     int ptr = 0;
     auto bof = [&]() { return ptr == 0; };
@@ -3911,22 +3935,26 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
             return true;
         }
         case 'J':
-            for (int i = 0; i < o_count; i++) {
-                int y = c.y;
-                if (y == lines.len-1) break;
-
-                auto start = new_cur2(lines[y].len, y);
-                auto x = find_first_nonspace_cp(y+1);
-                auto end = new_cur2(x, y+1);
-                bool add_space = (x < lines[y+1].len && lines[y+1][x] != ')');
-
-                buf->remove(start, end);
-                if (add_space) {
-                    uchar space = ' ';
-                    buf->insert(start, &space, 1);
-                }
+            switch (world.vim_mode()) {
+            case VI_NORMAL: {
+                auto pos = vim_join_lines(c.y, max(o_count - 1, 1));
+                move_cursor_normal(pos);
+                return true;
             }
-            return true;
+            case VI_VISUAL: {
+                auto sel = get_selection();
+
+                int y1 = sel->ranges->at(0).start.y;
+                int y2 = sel->ranges->last()->end.y;
+                ORDER(y1, y2);
+
+                auto pos = vim_join_lines(y1, y2-y1);
+                vim_return_to_normal_mode();
+                move_cursor_normal(pos);
+                return true;
+            }
+            }
+            break;
         case 'x': {
             switch (world.vim_mode()) {
             case VI_NORMAL: {
