@@ -2664,6 +2664,28 @@ cur2 Editor::vim_join_lines(int y, int count) {
     }
     return last_start;
 }
+
+// y1 to y2 inclusive
+void Editor::indent_block(int y1, int y2, int indents) {
+    buf->hist_batch_mode = true;
+    defer { buf->hist_batch_mode = false; };
+
+    for (int y = y1; y <= y2; y++) {
+        auto x = first_nonspace_cp(y);
+        int vx = buf->idx_cp_to_vcp(y, x);
+
+        buf->remove(new_cur2(0, y), new_cur2(x, y));
+
+        int new_vx = vx + max(options.tabsize * indents, 0);
+        auto chars = new_list(uchar);
+        for (int i = 0; i < new_vx / options.tabsize; i++)
+            chars->append('\t');
+        for (int i = 0; i < new_vx % options.tabsize; i++)
+            chars->append(' ');
+        buf->insert(new_cur2(0, y), chars->items, chars->len);
+    }
+}
+
 Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
     int ptr = 0;
     auto bof = [&]() { return ptr == 0; };
@@ -2783,18 +2805,13 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
 
         case 'c':
         case 'd':
-            if (world.vim_mode() == VI_VISUAL)
-                skip_motion = true;
-            out->op.append(it);
-            ptr++;
-            break;
-
+        case '>':
+        case '<':
         case 'y':
         case '~':
-        case '!':
         case '=':
-        case '<':
-        case '>':
+            if (world.vim_mode() == VI_VISUAL)
+                skip_motion = true;
             out->op.append(it);
             ptr++;
             break;
@@ -3007,6 +3024,8 @@ done:
         case 'd':
         case 'y':
         case 'c':
+        case '>':
+        case '<':
             out->motion.append(inp);
             return VIM_PARSE_DONE;
         }
@@ -3398,6 +3417,8 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
         }
         case 'c':
         case 'y':
+        case '<':
+        case '>':
         case 'd': {
             if (!is_op(cp_sprintf("%c", (char)inp.ch))) break;
 
@@ -3982,6 +4003,36 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
             }
             break;
         }
+        case '<':
+        case '>': {
+            switch (mode) {
+            case VI_VISUAL: {
+                auto sel = get_selection();
+                int y1 = sel->ranges->at(0).start.y;
+                int y2 = sel->ranges->last()->end.y;
+                ORDER(y1, y2);
+
+                indent_block(y1, y2, o_count * (inp.key == '<' ? -1 : 1));
+                vim_return_to_normal_mode();
+                move_cursor_normal(c); // enforce bounds on current po
+                break;
+            }
+            case VI_NORMAL: {
+                cp_assert(motion_result);
+
+                int y1 = c.y;
+                int y2 = motion_result->dest.y;
+                ORDER(y1, y2);
+
+                indent_block(y1, y2, inp.key == '<' ? -1 : 1);
+                move_cursor_normal(new_cur2(first_nonspace_cp(y1), y1));
+                break;
+            }
+
+            }
+            break;
+        }
+
         case 'c':
         case 'd': {
             switch (mode) {
@@ -4156,10 +4207,6 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
         case '!':
             break;
         case '=':
-            break;
-        case '<':
-            break;
-        case '>':
             break;
         case 'g': {
             auto it2 = op[1];

@@ -97,6 +97,8 @@ enum Motion_Type {
     MOTION_LINE,
     MOTION_CHAR_INCL,
     MOTION_CHAR_EXCL,
+    MOTION_OBJECT, // ???
+    MOTION_OBJECT_INNER, // ???
 };
 
 struct Eval_Motion_Result {
@@ -293,7 +295,7 @@ struct Editor {
 
     Eval_Motion_Result* vim_eval_motion(Vim_Command *cmd);
     bool vim_exec_command(Vim_Command *cmd);
-    int find_first_nonspace_cp(int y);
+    int first_nonspace_cp(int y);
     cur2 open_newline(int y);
     cur2 handle_alt_move(bool back, bool backspace);
     Selection* get_selection(Selection_Type override_type = SEL_NONE);
@@ -306,6 +308,8 @@ struct Editor {
     void vim_enter_insert_mode(Vim_Command *cmd, fn<void()> prep);
     void vim_enter_replace_mode();
     void vim_return_to_normal_mode();
+    cur2 vim_join_lines(int y, int count);
+    void indent_block(int y1, int y2, int indents);
 };
 
 Parse_Lang determine_lang(ccstr filepath);
