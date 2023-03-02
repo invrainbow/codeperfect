@@ -2930,11 +2930,9 @@ done:
         ptr++;
         if (eof()) return VIM_PARSE_WAIT;
 
-        char motion = it.ch;
-
         auto ch = peek_char();
         if (ch) {
-            out->motion.append(char_input(motion));
+            out->motion.append(it);
             out->motion.append(char_input(ch));
             return VIM_PARSE_DONE;
         }
