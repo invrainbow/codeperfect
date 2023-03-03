@@ -1941,27 +1941,6 @@ void Editor::type_char(uchar ch, bool is_replace_mode) {
     if (!isident(ch) && autocomplete.ac.results)
         ptr0(&autocomplete);
 
-    if (!is_replace_mode) {
-        switch (ch) {
-        case '.':
-            trigger_autocomplete(true, false);
-            did_autocomplete = true;
-            break;
-
-        case '(':
-            trigger_parameter_hint();
-            did_parameter_hint = true;
-            break;
-
-        case ',':
-            if (!parameter_hint.gotype) {
-                trigger_parameter_hint();
-                did_parameter_hint = true;
-            }
-            break;
-        }
-    }
-
     // replace mode still has bracket auto dedent, annoyingly enough
     // will it continue to work?
     switch (ch) {
@@ -2105,6 +2084,27 @@ void Editor::type_char(uchar ch, bool is_replace_mode) {
         }
         break;
     }
+    }
+
+    if (is_replace_mode) return;  // the rest is insert mode only
+
+    switch (ch) {
+    case '.':
+        trigger_autocomplete(true, false);
+        did_autocomplete = true;
+        break;
+
+    case '(':
+        trigger_parameter_hint();
+        did_parameter_hint = true;
+        break;
+
+    case ',':
+        if (!parameter_hint.gotype) {
+            trigger_parameter_hint();
+            did_parameter_hint = true;
+        }
+        break;
     }
 
     do {
@@ -3705,10 +3705,13 @@ void Editor::vim_enter_replace_mode() {
 
 void Editor::vim_return_to_normal_mode(bool from_dotrepeat) {
     auto mode = world.vim_mode();
-    // handle insert specifically
-    if (mode == VI_INSERT) {
+    switch (mode) {
+    case VI_INSERT:
+    case VI_REPLACE: {
         auto &ref = vim.inserted_indent;
-        if (ref.inserted && ref.buf_tree_version == buf->tree_version) {
+        // TODO: so far we're only handling indent for insert mode. Need to
+        // support for replace mode too. But that comes with handling Enter.
+        if (mode == VI_INSERT && ref.inserted && ref.buf_tree_version == buf->tree_version) {
             buf->remove(ref.start, ref.end);
             move_cursor(ref.start);
         } else {
@@ -3718,15 +3721,12 @@ void Editor::vim_return_to_normal_mode(bool from_dotrepeat) {
                 move_cursor(new_cur2(x, cur.y));
             }
         }
-    }
 
-    switch (mode) {
-    case VI_INSERT:
-    case VI_REPLACE:
+
         buf->hist_batch_end(); // started when entering vi_insert and vi_replace
         if (!from_dotrepeat) {
             if (vim.dotrepeat.filled) {
-                auto a = vim.insert_start;
+                auto a = mode == VI_INSERT ? vim.insert_start : vim.replace_start;
                 auto b = buf->inc_cur(cur);
                 ORDER(a, b);
 
@@ -3738,6 +3738,7 @@ void Editor::vim_return_to_normal_mode(bool from_dotrepeat) {
         }
         vim.insert_start = NULL_CUR;
         break;
+    }
     // anything else? other modes?
     }
 
@@ -3877,7 +3878,10 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
     } else {
         switch (inp.ch) {
         case '.': {
+            if (world.vim_mode() != VI_NORMAL) return false;
+
             auto &dr = vim.dotrepeat;
+            if (!dr.filled) return false;
 
             // "play back" the dotrepeat
             Vim_Command tmp; tmp.init();
@@ -3888,9 +3892,32 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             }
             bool junk;
             if (vim_exec_command(&tmp, &junk)) {
-                if (dr.has_input && world.vim_mode() == dr.input_mode) {
-                    auto pos = buf->insert(cur, dr.input_chars.items, dr.input_chars.len);
-                    move_cursor(pos);
+                if (dr.has_input) {
+                    auto mode = world.vim_mode();
+                    if (mode != dr.input_mode)
+                        return false;
+
+                    switch (mode) {
+                    case VI_INSERT: {
+                        auto pos = buf->insert(cur, dr.input_chars.items, dr.input_chars.len);
+                        move_cursor(pos);
+                        break;
+                    }
+                    case VI_REPLACE: {
+                        For (&dr.input_chars) {
+                            // This seems like it might be super slow as there
+                            // might be a bunch of shit that happens on each
+                            // type_char call. Currently when is_replace_mode
+                            // is true, everything is turned off. But that
+                            // might change in the future. Might be better to
+                            // have a flag like "skip_all_checks" or
+                            // "just_insert" or something.
+                            type_char(it, /* is_replace_mode = */true);
+                        }
+                        break;
+                    }
+                    }
+
                     vim_return_to_normal_mode(true); // from_dotrepeat
                 }
             }
@@ -4018,7 +4045,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         case 'R': {
             vim_enter_replace_mode();
             *can_dotrepeat = true;
-            break;
+            return true;
         }
         case 'I': {
             move_cursor(new_cur2(first_nonspace_cp(c.y), c.y));
@@ -4527,8 +4554,6 @@ bool Editor::vim_handle_input(Vim_Command_Input *input) {
                     vim.dotrepeat.input_mode = world.vim_mode();
                 }
             }
-        } else {
-            vim.dotrepeat.filled = false;
         }
         return true;
     }
