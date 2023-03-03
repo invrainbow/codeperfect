@@ -230,6 +230,9 @@ struct Editor {
             cur2 start;
             cur2 end;
         } inserted_indent;
+
+        List<char> yank_register;
+        bool yank_register_filled;
     } vim;
 
     Client_Parameter_Hint parameter_hint;
@@ -309,6 +312,8 @@ struct Editor {
     void vim_enter_replace_mode();
     void vim_return_to_normal_mode();
     cur2 vim_join_lines(int y, int count);
+    void vim_yank_text(ccstr text);
+    ccstr vim_paste_text();
     void indent_block(int y1, int y2, int indents);
 };
 

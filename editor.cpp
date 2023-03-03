@@ -1384,6 +1384,7 @@ void Editor::init() {
         vim.insert_command.op.init();
         vim.insert_command.motion.init();
         vim.replace_old_chars.init();
+        vim.yank_register.init();
     }
 
     {
@@ -2782,6 +2783,8 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
         case 'V':
         case 'D':
         case 'C':
+        case 'p':
+        case 'P':
             skip_motion = true;
             out->op.append(it);
             ptr++;
@@ -3081,10 +3084,14 @@ bool gr_isident(Grapheme gr) {
 
 ccstr Editor::get_selection_text(Selection *selection) {
     switch (selection->type) {
-    case SEL_CHAR:
-    case SEL_LINE: {
+    case SEL_CHAR: {
         auto range = selection->ranges->at(0);
         return buf->get_text(range.start, range.end);
+    }
+    case SEL_LINE: {
+        auto range = selection->ranges->at(0);
+        auto text = buf->get_text(range.start, range.end);
+        return cp_strcat(text, "\n");
     }
     case SEL_BLOCK: {
         auto lines = new_list(ccstr);
@@ -3611,8 +3618,40 @@ void Editor::vim_handle_visual_mode_key(Selection_Type type) {
 
 // mirrors buf->remove_lines, y1-y2 are inclusive
 void Editor::vim_delete_lines(int y1, int y2) {
-    // TODO: pick up here, this ties into clipboard support
-    buf->remove_lines(y1, y2);
+    Selection_Range range; ptr0(&range);
+    range.start = new_cur2(0, y1);
+    range.end = new_cur2(buf->lines[y2].len, y2);
+
+    Selection sel; ptr0(&sel);
+    sel.type = SEL_LINE;
+    sel.ranges = new_list(Selection_Range);
+    sel.ranges->append(&range);
+
+    // this handles SEL_LINE correctly
+    vim_delete_selection(&sel);
+}
+
+void Editor::vim_yank_text(ccstr text) {
+    if (options.vim_use_clipboard) {
+        world.window->set_clipboard_string(text);
+        return;
+    }
+
+    vim.yank_register.len = 0;
+    int len = strlen(text);
+    vim.yank_register.ensure_cap(len + 1);
+    for (int i = 0; i < len; i++)
+        vim.yank_register.append(text[i]);
+    vim.yank_register.append('\0');
+    vim.yank_register_filled = true;
+}
+
+ccstr Editor::vim_paste_text() {
+    if (options.vim_use_clipboard)
+        return world.window->get_clipboard_string();
+    if (!vim.yank_register_filled)
+        return NULL;
+    return vim.yank_register.items;
 }
 
 cur2 Editor::vim_delete_range(cur2 start, cur2 end) {
@@ -3627,17 +3666,28 @@ cur2 Editor::vim_delete_range(cur2 start, cur2 end) {
     return vim_delete_selection(&sel);
 }
 
-cur2 Editor::vim_delete_selection(Selection *selection) {
-    auto text = get_selection_text(selection);
-    world.window->set_clipboard_string(text);
+cur2 Editor::vim_delete_selection(Selection *sel) {
+    auto text = get_selection_text(sel);
+    vim_yank_text(text);
 
-    int len = selection->ranges->len;
-    for (int i = len-1; i >= 0; i--) {
-        auto &it = selection->ranges->at(i);
-        buf->remove(it.start, it.end);
+    switch (sel->type) {
+    case SEL_CHAR:
+    case SEL_BLOCK: {
+        int len = sel->ranges->len;
+        for (int i = len-1; i >= 0; i--) {
+            auto &it = sel->ranges->at(i);
+            buf->remove(it.start, it.end);
+        }
+        break;
+    }
+    case SEL_LINE: {
+        auto &range = sel->ranges->at(0);
+        buf->remove_lines(range.start.y, range.end.y);
+        break;
+    }
     }
 
-    return selection->ranges->at(0).start;
+    return sel->ranges->at(0).start;
 }
 
 void Editor::vim_enter_insert_mode(Vim_Command *cmd, fn<void()> prep) {
@@ -3806,6 +3856,100 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
         }
     } else {
         switch (inp.ch) {
+        case 'p':
+        case 'P': {
+            SCOPED_BATCH_CHANGE(buf);
+
+            auto raw_text = vim_paste_text();
+            if (!raw_text) return false;
+
+            auto text = cstr_to_ustr(raw_text);
+            bool as_line = (*text->last() == '\n');
+
+            // pastes `text` at given `pos` and returns pos where cursor should be placed after
+            auto paste_and_get_last_char = [&](cur2 pos) -> cur2 {
+                buf->insert(pos, text->items, text->len);
+
+                // go to last character of inserted text
+                auto it = iter(pos);
+                for (int i = 0; i < text->len - 1; i++)
+                    it.next();
+                return it.pos;
+            };
+
+            switch (world.vim_mode()) {
+            case VI_VISUAL: {
+                auto sel = get_selection();
+
+                if (as_line) {
+                    switch (sel->type) {
+                    case SEL_CHAR:
+                    case SEL_LINE: {
+                        vim_delete_selection(sel);
+
+                        auto &range = sel->ranges->at(0);
+                        int y = range.start.y;
+
+                        if (sel->type == SEL_CHAR) {
+                            buf->insert(range.start, '\n');
+                            y++;
+                        }
+
+                        buf->insert(new_cur2(0, y), text->items, text->len);
+                        move_cursor_normal(new_cur2(first_nonspace_cp(y), y));
+                        break;
+                    }
+                    case SEL_BLOCK:
+                        // TODO
+                        break;
+                    }
+                } else {
+                    switch (sel->type) {
+                    case SEL_CHAR:
+                    case SEL_LINE: {
+                        vim_delete_selection(sel);
+                        auto pos = sel->ranges->at(0).start;
+                        auto newpos = paste_and_get_last_char(pos);
+                        move_cursor_normal(newpos);
+                        break;
+                    }
+                    case SEL_BLOCK:
+                        // TODO
+                        break;
+                    }
+                }
+                vim_return_to_normal_mode();
+                *can_dotrepeat = true;
+                return true;
+            }
+            case VI_NORMAL:
+                if (as_line) {
+                    int y = 0;
+                    if (inp.ch == 'p') {
+                        if (c.y == lines.len-1) {
+                            buf->insert(new_cur2(lines[c.y].len, c.y), '\n');
+                            text->len--; // ignore the last newline
+                        }
+                        y = c.y+1;
+                    } else {
+                        y = c.y;
+                    }
+                    buf->insert(new_cur2(0, y), text->items, text->len);
+                    // go to first nonspace of begining of inserted text
+                    move_cursor_normal(new_cur2(first_nonspace_cp(y), y));
+                } else {
+                    cur2 pos = c;
+                    if (inp.ch == 'p')
+                        pos = buf->inc_gr(pos);
+
+                    auto newpos = paste_and_get_last_char(pos);
+                    move_cursor_normal(newpos);
+                }
+                *can_dotrepeat = true;
+                return true;
+            }
+            break;
+        }
         case 'v':
             vim_handle_visual_mode_key(SEL_CHAR);
             return true;
@@ -4018,19 +4162,34 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
         }
 
         case 'c':
-        case 'd': {
+        case 'd':
+        case 'y': {
+            SCOPED_BATCH_CHANGE(buf);
+
             switch (mode) {
             case VI_VISUAL: {
                 cp_assert(!motion_result);
                 auto sel = get_selection();
-                if (inp.ch == 'c') {
+                cp_assert(sel);
+
+                switch (inp.ch) {
+                case 'c':
                     enter_insert_mode([&]() {
                         move_cursor(vim_delete_selection(sel));
                     });
-                } else {
+                    break;
+                case 'd': {
                     auto start = vim_delete_selection(sel);
                     vim_return_to_normal_mode();
                     move_cursor_normal(start);
+                    break;
+                }
+                case 'y': {
+                    vim_yank_text(get_selection_text(sel));
+                    vim_return_to_normal_mode();
+                    move_cursor_normal(sel->ranges->at(0).start);
+                    break;
+                }
                 }
                 return true;
             }
@@ -4050,14 +4209,22 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
                         b = it.pos;
                     }
 
-                    if (inp.ch == 'c') {
+                    switch (inp.ch) {
+                    case 'c':
                         enter_insert_mode([&]() {
                             vim_delete_range(a, b);
                             move_cursor(a);
                         });
-                    } else {
+                        break;
+                    case 'd':
                         vim_delete_range(a, b);
                         move_cursor_normal(a);
+                        break;
+                    case 'y': {
+                        vim_yank_text(buf->get_text(a, b));
+                        move_cursor_normal(a);
+                        break;
+                    }
                     }
                     break;
                 }
@@ -4074,25 +4241,44 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
                     cur2 start = new_cur2(0, y1);
                     cur2 end = new_cur2(0, y2+1);
 
-                    if (y2 == lines.len-1) {
+                    bool at_end = (y2 == lines.len-1);
+                    if (at_end) {
                         start = buf->dec_cur(start);
                         end = new_cur2(lines[y2].len, y2);
                     }
 
-                    if (inp.ch == 'c') {
+                    switch (inp.ch) {
+                    case 'c':
                         enter_insert_mode([&]() {
                             vim_delete_range(start, end);
                             move_cursor(open_newline(y1));
                         });
-                    } else {
+                        break;
+                    case 'd': {
                         vim_delete_range(start, end);
                         auto to = new_cur2(0, y1);
                         if (y1 >= lines.len) {
-                            // TODO: find first non whitespace
-                            to = new_cur2(0, lines.len-1);
+                            int y = lines.len-1;
+                            to = new_cur2(first_nonspace_cp(y), y);
                         }
                         move_cursor_normal(to);
+                        break;
                     }
+                    case 'y': {
+                        auto real_start = start;
+                        if (at_end)
+                            real_start = buf->inc_cur(start);
+
+                        auto text = buf->get_text(real_start, end);
+                        if (at_end)
+                            text = cp_strcat(text, "\n");
+
+                        vim_yank_text(text);
+                        move_cursor_normal(real_start);
+                        break;
+                    }
+                    }
+                    break;
                 }
                 }
                 return true;
@@ -4183,8 +4369,6 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
             }
             break;
         }
-        case 'y':
-            break;
         case '~':
             break;
         case '!':

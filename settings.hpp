@@ -44,6 +44,7 @@ struct Options {
     serde_bool send_crash_reports = true; // serde(10)
     serde_int fps_limit_enum = 60; // serde(11)
     serde_bool open_last_folder = true; // serde(12)
+    serde_bool vim_use_clipboard = false; // serde(13)
 };
 
 struct Build_Profile {

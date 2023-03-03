@@ -2803,6 +2803,17 @@ void UI::draw_everything() {
                         wnd.something_that_needs_restart_was_changed = true;
 
                     im_small_newline();
+
+                    im::Indent();
+                    {
+                        im_with_disabled(!tmp.enable_vim_mode, [&]() {
+                            im::Checkbox("Use clipboard for Vim", &tmp.vim_use_clipboard);
+                        });
+                    }
+                    im::Unindent();
+
+                    im_small_newline();
+
                     im::Checkbox("Automatically format on save", &tmp.format_on_save);
 
                     im_small_newline();
