@@ -130,6 +130,13 @@ struct Selection {
     List<Selection_Range> *ranges;
 };
 
+enum Find_Matching_Brace_Result {
+    FMB_ERROR,
+    FMB_OK,
+    FMB_AST_NOT_FOUND,
+    FMB_MATCH_NOT_FOUND,
+};
+
 struct Editor {
     u32 id;
     Pool mem;
@@ -329,6 +336,10 @@ struct Editor {
     void vim_yank_text(ccstr text);
     ccstr vim_paste_text();
     void indent_block(int y1, int y2, int indents);
+
+    Find_Matching_Brace_Result find_matching_brace_with_ast(uchar ch, cur2 pos, cur2 *out);
+    cur2 find_matching_brace_with_text(uchar ch, cur2 pos);
+    cur2 find_matching_brace(uchar ch, cur2 pos);
 };
 
 void vim_copy_command(Vim_Command *dest, Vim_Command *src);

@@ -1885,7 +1885,6 @@ void Editor::backspace_in_replace_mode() {
 }
 
 void Editor::type_char(uchar ch, bool is_replace_mode) {
-
     // ...wait, why did i comment this out
     // i think it was because it was completing when i didn't want it to
     // handle typing a dot when an import is selected
@@ -1947,32 +1946,8 @@ void Editor::type_char(uchar ch, bool is_replace_mode) {
     case '}':
     case ')':
     case ']': {
-
-        // ========================================
-        // bunch of code to find the matching brace
-        // ========================================
-
-        if (lang != LANG_GO) break;
-
-        if (!cur.x) break;
-
+        cp_assert(cur.x > 0); // we just typed
         auto rbrace_pos = buf->dec_cur(cur);
-
-        Ts_Ast_Type brace_type = TS_ERROR, other_brace_type = TS_ERROR;
-        switch (ch) {
-        case '}':
-            brace_type = TS_RBRACE;
-            other_brace_type = TS_LBRACE;
-            break;
-        case ')':
-            brace_type = TS_RPAREN;
-            other_brace_type = TS_LPAREN;
-            break;
-        case ']':
-            brace_type = TS_RBRACK;
-            other_brace_type = TS_LBRACK;
-            break;
-        }
 
         auto &line = buf->lines[rbrace_pos.y];
         bool starts_with_spaces = true;
@@ -1985,70 +1960,11 @@ void Editor::type_char(uchar ch, bool is_replace_mode) {
 
         if (!starts_with_spaces) break;
 
-        Parser_It it;
-        it.init(buf);
-
-        auto root_node = new_ast_node(ts_tree_root_node(buf->tree), &it);
-
-        Ast_Node *rbrace_node = new_object(Ast_Node);
-        bool rbrace_found = false;
-
-        find_nodes_containing_pos(root_node, rbrace_pos, false, [&](auto it) {
-            if (it->type() == brace_type) {
-                memcpy(rbrace_node, it, sizeof(Ast_Node));
-                rbrace_found = true;
-                return WALK_ABORT;
-            }
-            return WALK_CONTINUE;
-        });
-
-        if (!rbrace_found) break;
-
-        auto walk_upwards = [&](auto curr) -> Ast_Node * {
-            while (true) {
-                // try to get prev
-                auto prev = curr->prev_all();
-                if (!isastnull(prev)) return prev;
-
-                // unable to? get parent, try again
-                curr = curr->parent();
-                if (isastnull(curr)) return curr;
-            }
-        };
-
-        auto curr = walk_upwards(rbrace_node);
-        int depth = 1;
-
-        i32 lbrace_line = -1;
-
-        fn<void(Ast_Node*)> process_node = [&](Ast_Node* node) {
-            if (lbrace_line != -1) return;
-            if (node->is_missing()) return;
-
-            SCOPED_FRAME();
-            auto children = new_list(Ast_Node*, node->all_child_count());
-            FOR_ALL_NODE_CHILDREN (node) children->append(it);
-            for (; children->len > 0; children->len--)
-                process_node(*children->last());
-
-            if (node->type() == brace_type)
-                depth++;
-            if (node->type() == other_brace_type) {
-                depth--;
-                if (!depth) {
-                    lbrace_line = node->start().y;
-                    return;
-                }
-            }
-        };
-
-        for (; !isastnull(curr) && lbrace_line == -1; curr = walk_upwards(curr))
-            process_node(curr);
-
-        if (lbrace_line == -1) break;
+        auto pos = find_matching_brace((uchar)ch, rbrace_pos);
+        if (pos == NULL_CUR) break;
 
         auto indentation = new_list(uchar);
-        For (&buf->lines[lbrace_line]) {
+        For (&buf->lines[pos.y]) {
             if (it == '\t' || it == ' ')
                 indentation->append(it);
             else
@@ -2064,13 +1980,10 @@ void Editor::type_char(uchar ch, bool is_replace_mode) {
             // i think this will become more clear once we figure out how enter
             // works in replace mode
         } else {
-            // that is so fucking asinine, why don't we just buf->remove() and move_cursor()???
-            // is it because of our stupid nvim integration that we couldn't call move_cursor() safely?????????
-            // yeah i think it's because had to keep track of our insert_start and shit like that
-
             // "backspace" to start of line
-            buf->remove(new_cur2(0, cur.y), cur);
-            move_cursor(new_cur2(0, cur.y));
+            // we can't just buf->remove() and move_cursor() because we are
+            // in insert mode, and there is backspace logic that needs to run
+            while (cur.x > 0) backspace_in_insert_mode();
 
             // insert indentation
             auto pos = cur;
@@ -2893,6 +2806,7 @@ done:
     case '0':
     case '^':
     case '$':
+    case '%':
     case 'w':
     case 'W':
     case 'e':
@@ -3396,6 +3310,43 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             ret->dest = new_cur2(0, y);
             ret->type = MOTION_LINE;
             return ret;
+        }
+
+        case '%': {
+            if (cmd->o_count == 0 && cmd->m_count == 0) {
+                auto it = iter();
+                uchar ch = 0;
+
+                for (; !it.eof(); it.next()) {
+                    switch (it.peek()) {
+                    case '{':
+                    case '[':
+                    case '(':
+                    case '}':
+                    case ']':
+                    case ')':
+                        ch = it.peek();
+                        break;
+                    }
+                    if (ch) break;
+                }
+
+                if (!ch) break;
+
+                auto res = find_matching_brace(ch, it.pos);
+                if (res == NULL_CUR) break;
+
+                ret->dest = res;
+                ret->type = MOTION_CHAR_INCL;
+                return ret;
+            } else {
+                if (count > 100) break;
+
+                int y = min(lines.len * count / 100, lines.len-1);
+                ret->dest = new_cur2(first_nonspace_cp(y), y);
+                ret->type = MOTION_CHAR_EXCL;
+                return ret;
+            }
         }
 
         case 'j':
@@ -4522,6 +4473,142 @@ cur2 Editor::open_newline(int y) {
     auto end = new_cur2(indent_len, y);
     vim_save_inserted_indent(start, end);
     return end;
+}
+
+Find_Matching_Brace_Result Editor::find_matching_brace_with_ast(uchar ch, cur2 pos, cur2 *out) {
+    cp_assert(lang == LANG_GO);
+
+    Ts_Ast_Type brace_type = TS_ERROR;
+    Ts_Ast_Type other_brace_type = TS_ERROR;
+    bool forward = false;
+
+    switch (ch) {
+    case '}': brace_type = TS_RBRACE; other_brace_type = TS_LBRACE; forward = false; break;
+    case ')': brace_type = TS_RPAREN; other_brace_type = TS_LPAREN; forward = false; break;
+    case ']': brace_type = TS_RBRACK; other_brace_type = TS_LBRACK; forward = false; break;
+    case '{': brace_type = TS_LBRACE; other_brace_type = TS_RBRACE; forward = true; break;
+    case '(': brace_type = TS_LPAREN; other_brace_type = TS_RPAREN; forward = true; break;
+    case '[': brace_type = TS_LBRACK; other_brace_type = TS_RBRACK; forward = true; break;
+    default:
+        cp_panic("find_matching_brace_with_ast called with invalid ch");
+    }
+
+    Parser_It it;
+    it.init(buf);
+    auto root_node = new_ast_node(ts_tree_root_node(buf->tree), &it);
+
+    Ast_Node *brace_node = NULL;
+
+    find_nodes_containing_pos(root_node, pos, false, [&](auto it) {
+        if (it->type() != brace_type)
+            return WALK_CONTINUE;
+
+        brace_node = new_object(Ast_Node);
+        memcpy(brace_node, it, sizeof(Ast_Node));
+        return WALK_ABORT;
+    });
+
+    if (!brace_node) return FMB_AST_NOT_FOUND;
+
+    auto walk_upwards = [&](auto curr) -> Ast_Node * {
+        while (true) {
+            // try to get sibling
+            auto sib = forward ? curr->next_all() : curr->prev_all();
+            if (!isastnull(sib)) return sib;
+
+            // unable to? get parent, try again
+            curr = curr->parent();
+            if (isastnull(curr)) return NULL;
+        }
+    };
+
+    auto curr = walk_upwards(brace_node);
+    int depth = 1;
+    cur2 ret = NULL_CUR;
+
+    fn<void(Ast_Node*)> process_node = [&](Ast_Node* node) {
+        if (ret != NULL_CUR) return;
+        if (node->is_missing()) return;
+
+        SCOPED_FRAME();
+
+        auto children = new_list(Ast_Node*, node->all_child_count());
+        FOR_ALL_NODE_CHILDREN (node) children->append(it);
+
+        if (forward) {
+            For (children)
+                process_node(it);
+        } else {
+            for (; children->len > 0; children->len--)
+                process_node(*children->last());
+        }
+
+        if (node->type() == brace_type)
+            depth++;
+        if (node->type() == other_brace_type) {
+            if (!(--depth)) {
+                ret = node->start();
+                return;
+            }
+        }
+    };
+
+    for (; !isastnull(curr) && ret == NULL_CUR; curr = walk_upwards(curr))
+        process_node(curr);
+
+    if (ret == NULL_CUR)
+        return FMB_MATCH_NOT_FOUND;
+
+    *out = ret;
+    return FMB_OK;
+}
+
+cur2 Editor::find_matching_brace_with_text(uchar ch, cur2 pos) {
+    bool forward;
+    uchar other;
+
+    switch (ch) {
+    case '{': forward = true; other = '}'; break;
+    case '(': forward = true; other = ')'; break;
+    case '[': forward = true; other = ']'; break;
+    case '}': forward = false; other = '{'; break;
+    case ')': forward = false; other = '('; break;
+    case ']': forward = false; other = '['; break;
+    default:
+        cp_panic("find_matching_brace_with_text called with invalid char");
+        break;
+    }
+
+    auto it = iter(pos);
+    int depth = 0;
+
+    while (!(forward ? it.eof() : it.bof())) {
+        if (it.peek() == ch) {
+            depth++;
+        } else if (it.peek() == other) {
+            if (--depth == 0) {
+                return it.pos;
+            }
+        }
+        forward ? it.next() : it.prev();
+    }
+
+    return NULL_CUR;
+}
+
+cur2 Editor::find_matching_brace(uchar ch, cur2 pos) {
+    if (lang == LANG_GO) {
+        cur2 ret;
+        int result = find_matching_brace_with_ast(ch, pos, &ret);
+        if (result == FMB_OK) return ret;
+        if (result == FMB_AST_NOT_FOUND) {
+            // the brace didn't belong to an ast node, this means it's part of
+            // a string or comment, proceed with text-based match
+            return find_matching_brace_with_text(ch, pos);
+        }
+        return NULL_CUR;
+    }
+    return find_matching_brace_with_text(ch, pos);
 }
 
 bool Editor::vim_handle_input(Vim_Command_Input *input) {
