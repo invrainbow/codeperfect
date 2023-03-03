@@ -2657,12 +2657,19 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
         }
     } else {
         switch (it.ch) {
-        case 'u':
-        case 'J':
         case 'i':
         case 'I':
         case 'a':
         case 'A':
+            if (world.vim_mode() == VI_VISUAL)
+                break;
+            skip_motion = true;
+            out->op.append(it);
+            ptr++;
+            break;
+
+        case 'u':
+        case 'J':
         case 'R':
         case 'o':
         case 'O':
@@ -2861,6 +2868,10 @@ done:
 
     case 'i':
     case 'a': {
+        // text objects require visual mode or an operator
+        if (world.vim_mode() != VI_VISUAL && !out->op.len)
+            break;
+
         ptr++;
         if (eof()) return VIM_PARSE_WAIT;
 
@@ -3202,33 +3213,95 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
 
         case 'i':
         case 'a': {
-            ret->type = (inp.ch == 'i' ? MOTION_OBJECT_INNER : MOTION_OBJECT);
+            ret->type = (inp.ch == 'i' ? MOTION_OBJ_INNER : MOTION_OBJ);
 
             auto arg = get_second_char_arg();
             if (!arg) break;
 
             // TODO
             switch (arg) {
-            case 'w': break;
-            case 'W': break;
-            case 's': break;
-            case 'p': break;
-            case '[': break;
-            case ']': break;
-            case '(': break;
-            case ')': break;
-            case 'b': break;
-            case '<': break;
-            case '>': break;
-            case 'B': break;
-            case '{': break;
-            case '}': break;
-            case 't': break;
-            case '\'': break;
-            case '"': break;
-            case '`': break;
-            case 'a': break;
-            case 'f': break;
+            case 'w':
+            case 'W': {
+                auto it = iter(c);
+                auto type = gr_type(it.gr_peek());
+
+                auto is_edge = [&](Grapheme gr) {
+                    if (arg == 'w')
+                        return gr_type(gr) != type;
+                    return gr_isspace(gr) != (type == GR_SPACE);
+                };
+
+                while (!it.eof()) {
+                    auto old = it.pos;
+                    it.gr_next();
+                    if (it.eof() || is_edge(it.gr_peek())) {
+                        it.pos = old;
+                        break;
+                    }
+                }
+
+                if (ret->type == MOTION_OBJ) {
+                    // for aw/aW, eat up the spaces after too
+                    while (!it.eof()) {
+                        auto old = it.pos;
+                        it.gr_next();
+                        if (it.eof() || !gr_isspace(it.gr_peek())) {
+                            it.pos = old;
+                            break;
+                        }
+                    }
+                }
+
+                ret->dest = it.pos;
+
+                it.pos = c;
+                while (!it.bof()) {
+                    auto old = it.pos;
+                    if (is_edge(it.gr_prev())) {
+                        it.pos = old;
+                        break;
+                    }
+                }
+
+                ret->object_start = it.pos;
+                return ret;
+            }
+            case 's':
+                break;
+            case 'p':
+                break;
+            case '[':
+                break;
+            case ']':
+                break;
+            case '(':
+                break;
+            case ')':
+                break;
+            case 'b':
+                break;
+            case '<':
+                break;
+            case '>':
+                break;
+            case 'B':
+                break;
+            case '{':
+                break;
+            case '}':
+                break;
+            case 't':
+                break;
+            case '\'':
+                break;
+            case '"':
+                break;
+            case '`':
+                break;
+            case 'a':
+                break;
+            case 'f':
+                break;
             }
             break;
         }
@@ -3730,18 +3803,22 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
 
     auto &op = cmd->op;
     if (!op.len) {
-        cp_assert(motion_result);
+        auto mr = motion_result;
+        cp_assert(mr);
 
-        auto pos = motion_result->dest;
-        if (pos.y >= lines.len) {
-            pos.y = lines.len-1;
-            pos.x = lines[pos.y].len-1;
+        // clamp dest
+        auto end = mr->dest;
+        if (end.y >= lines.len) {
+            end.y = lines.len-1;
+            end.x = lines[end.y].len-1;
         }
+        int len = lines[end.y].len;
+        if (end.x >= len && len > 0) end.x = len-1;
 
-        int len = lines[pos.y].len;
-        if (pos.x >= len && len > 0) pos.x = len-1;
+        if (world.vim_mode() == VI_VISUAL && mr->type == MOTION_OBJ || mr->type == MOTION_OBJ_INNER)
+            vim.visual_start = mr->object_start;
 
-        move_cursor_normal(pos);
+        move_cursor_normal(end);
         return true;
     }
 
@@ -3976,6 +4053,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             vim_handle_visual_mode_key(SEL_LINE);
             return true;
         case 'i':
+            if (mode != VI_NORMAL) return false;
             enter_insert_mode([]() { return; });
             *can_dotrepeat = true;
             return true;
@@ -4233,12 +4311,19 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                 cp_assert(motion_result);
 
                 switch (motion_result->type) {
+                // is there even any difference between OBJ and OBJ_INNER outside of vim_eval_motion?
+                case MOTION_OBJ:
+                case MOTION_OBJ_INNER:
                 case MOTION_CHAR_INCL:
                 case MOTION_CHAR_EXCL: {
-                    cur2 a = c, b = motion_result->dest;
+                    cur2 a = c;
+                    cur2 b = motion_result->dest;
+                    if (motion_result->type == MOTION_OBJ || motion_result->type == MOTION_OBJ_INNER)
+                        a = motion_result->object_start;
+
                     ORDER(a, b);
 
-                    if (motion_result->type == MOTION_CHAR_INCL) {
+                    if (motion_result->type != MOTION_CHAR_EXCL) {
                         auto it = iter(b);
                         it.gr_peek();
                         it.gr_next();

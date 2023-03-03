@@ -25,8 +25,6 @@ struct Buffer_It {
     int fake_end_offset;
     bool append_chars_to_end;
     ccstr chars_to_append_to_end;
-    cur2 gr_saved_next_from_peek;
-    bool gr_has_saved_next; // zii
 
     bool eof();
     uchar peek();
@@ -37,13 +35,8 @@ struct Buffer_It {
     bool eol() { return peek() == '\n' || eof(); }
     uchar get(cur2 _pos);
 
-    Grapheme gr_read_from_current_pos(cur2 *end);
-    Grapheme gr_peek();
-    // next does not return grapheme so that it can just use the saved
-    // position of peek() to move forward. the operation of back() requires us
-    // to read a grapheme from the pos it lands on, so it costs nothing to
-    // just return that grapheme
-    void gr_next();
+    Grapheme gr_peek(cur2 *end = NULL);
+    Grapheme gr_next();
     Grapheme gr_prev();
 };
 

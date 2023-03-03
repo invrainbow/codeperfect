@@ -100,7 +100,7 @@ uchar Buffer_It::next() {
     return ret;
 }
 
-Grapheme Buffer_It::gr_read_from_current_pos(cur2 *end) {
+Grapheme Buffer_It::gr_peek(cur2 *end) {
     if (eof()) return NULL;
 
     cur2 start = pos;
@@ -114,20 +114,12 @@ Grapheme Buffer_It::gr_read_from_current_pos(cur2 *end) {
         ret->append(next());
     } while (!eof() && !gc.feed(peek()));
 
-    *end = pos;
+    if (end) *end = pos;
     pos = start;
     return ret;
 }
 
-Grapheme Buffer_It::gr_peek() {
-    auto ret = gr_read_from_current_pos(&gr_saved_next_from_peek);
-    if (ret) gr_has_saved_next = true;
-    return ret;
-}
-
 Grapheme Buffer_It::gr_prev() {
-    gr_saved_next_from_peek = NULL_CUR;
-
     auto current_pos = pos;
 
     // i guess the thing i don't know is... let's say you have a grapheme
@@ -140,7 +132,7 @@ Grapheme Buffer_It::gr_prev() {
         prev();
 
         cur2 end = NULL_CUR;
-        auto gr = gr_read_from_current_pos(&end);
+        auto gr = gr_peek(&end);
 
         // the grapheme starting at this pos no longer ends at current_pos
         if (!gr || end != current_pos) {
@@ -158,13 +150,11 @@ Grapheme Buffer_It::gr_prev() {
     return last_gr;
 }
 
-void Buffer_It::gr_next() {
-    if (!gr_has_saved_next) {
-        gr_peek();
-        cp_assert(gr_has_saved_next);
-    }
-    pos = gr_saved_next_from_peek;
-    gr_has_saved_next = false;
+Grapheme Buffer_It::gr_next() {
+    cur2 newpos;
+    auto ret = gr_peek(&newpos);
+    pos = newpos;
+    return ret;
 }
 
 void Cstr_To_Ustr::init() {

@@ -103,14 +103,14 @@ enum Motion_Type {
     MOTION_LINE,
     MOTION_CHAR_INCL,
     MOTION_CHAR_EXCL,
-    MOTION_OBJECT, // ???
-    MOTION_OBJECT_INNER, // ???
+    MOTION_OBJ,
+    MOTION_OBJ_INNER,
 };
 
 struct Eval_Motion_Result {
     Motion_Type type;
     cur2 dest; // anything else?
-    bool inclusive;
+    cur2 object_start; // for MOTION_OBJECT and MOTION_OBJECT_INNER
 };
 
 enum Selection_Type {
