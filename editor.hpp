@@ -91,6 +91,12 @@ struct Vim_Command {
     List<Vim_Command_Input> op;
     int m_count;
     List<Vim_Command_Input> motion;
+
+    void init() {
+        ptr0(this);
+        op.init();
+        motion.init();
+    }
 };
 
 enum Motion_Type {
@@ -233,6 +239,14 @@ struct Editor {
 
         List<char> yank_register;
         bool yank_register_filled;
+
+        struct {
+            bool filled;
+            Vim_Command command;
+            bool has_input;
+            Vim_Mode input_mode;
+            List<uchar> input_chars;
+        } dotrepeat;
     } vim;
 
     Client_Parameter_Hint parameter_hint;
@@ -297,7 +311,7 @@ struct Editor {
     bool vim_handle_input(Vim_Command_Input *input);
 
     Eval_Motion_Result* vim_eval_motion(Vim_Command *cmd);
-    bool vim_exec_command(Vim_Command *cmd);
+    bool vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat);
     int first_nonspace_cp(int y);
     cur2 open_newline(int y);
     cur2 handle_alt_move(bool back, bool backspace);
@@ -310,12 +324,14 @@ struct Editor {
     void vim_save_inserted_indent(cur2 start, cur2 end);
     void vim_enter_insert_mode(Vim_Command *cmd, fn<void()> prep);
     void vim_enter_replace_mode();
-    void vim_return_to_normal_mode();
+    void vim_return_to_normal_mode(bool from_dotrepeat = false);
     cur2 vim_join_lines(int y, int count);
     void vim_yank_text(ccstr text);
     ccstr vim_paste_text();
     void indent_block(int y1, int y2, int indents);
 };
+
+void vim_copy_command(Vim_Command *dest, Vim_Command *src);
 
 Parse_Lang determine_lang(ccstr filepath);
 
