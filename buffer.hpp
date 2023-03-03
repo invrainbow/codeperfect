@@ -237,9 +237,11 @@ struct Buffer {
     void internal_update_mark_tree();
     int internal_distance_between(cur2 a, cur2 b);
 
-    void insert(cur2 start, uchar* text, s32 len, bool applying_change = false);
+    cur2 insert(cur2 start, uchar* text, s32 len, bool applying_change = false);
     void remove(cur2 start, cur2 end, bool applying_change = false);
     void remove_lines(u32 y1, u32 y2);
+
+    cur2 insert(cur2 start, uchar uch) { return insert(start, &uch, 1); }
 
     Buffer_It iter(cur2 c);
     cur2 inc_cur(cur2 c);

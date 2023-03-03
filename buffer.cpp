@@ -603,7 +603,7 @@ void Buffer::internal_append_line(uchar* text, s32 len) {
     dirty = true;
 }
 
-void Buffer::insert(cur2 start, uchar* text, s32 len, bool applying_change) {
+cur2 Buffer::insert(cur2 start, uchar* text, s32 len, bool applying_change) {
     i32 x = start.x, y = start.y;
 
     internal_start_edit(start, start);
@@ -636,6 +636,9 @@ void Buffer::insert(cur2 start, uchar* text, s32 len, bool applying_change) {
     auto line = &lines[y];
     s32 total_len = line->len + len;
 
+    // honestly this routine is probably pretty slow, i've been hesitant to
+    // fuck with it because it's been reliable but some good perf gains to be
+    // had here, especially with large undos etc
     if (has_newline) {
         uchar* buf = alloc_temp_array(total_len);
         defer { free_temp_array(buf, total_len); };
@@ -667,6 +670,7 @@ void Buffer::insert(cur2 start, uchar* text, s32 len, bool applying_change) {
         bytecounts[y] += bc;
     }
 
+    // easier/better way to calculate this?
     auto end = start;
     for (int i = 0; i < len; i++) {
         if (text[i] == '\n') {
@@ -704,6 +708,7 @@ void Buffer::insert(cur2 start, uchar* text, s32 len, bool applying_change) {
 
     internal_finish_edit(end);
     dirty = true;
+    return end;
 }
 
 void Buffer::update_tree() {

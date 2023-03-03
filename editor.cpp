@@ -161,12 +161,8 @@ void Editor::insert_text_in_insert_mode(ccstr s) {
     auto text = cstr_to_ustr(s);
     if (!text->len) return;
 
-    buf->insert(cur, text->items, text->len);
-    auto c = cur;
-    for (u32 i = 0; i < text->len; i++)
-        c = buf->inc_cur(c);
-
-    move_cursor(c);
+    auto newcur = buf->insert(cur, text->items, text->len);
+    move_cursor(newcur);
 }
 
 void Editor::perform_autocomplete(AC_Result *result) {
@@ -832,10 +828,10 @@ void Editor::perform_autocomplete(AC_Result *result) {
         // perform the edit
         // i don't think we need to create a batch here? as long as it follows the flow of normal text editing
         buf->remove(ac_start, cur);
-        buf->insert(ac_start, name->items, name->len);
+        auto newcur = buf->insert(ac_start, name->items, name->len);
 
         // move cursor forward
-        move_cursor(new_cur2(ac_start.x + name->len, ac_start.y));
+        move_cursor(newcur);
 
         // clear out last_closed_autocomplete
         last_closed_autocomplete = NULL_CUR;
@@ -1951,15 +1947,11 @@ void Editor::type_char(uchar ch, bool is_replace_mode) {
 
             buf->remove(cur, it.pos);
         }
-
-        buf->insert(cur, &ch, 1);
-        move_cursor(buf->inc_cur(cur));
-
+        move_cursor(buf->insert(cur, ch));
         if (replacing)
             vim.replace_end = cur;
     } else {
-        buf->insert(cur, &ch, 1);
-        move_cursor(buf->inc_cur(cur));
+        move_cursor(buf->insert(cur, ch));
     }
 
     if (lang != LANG_GO) return;
@@ -2126,12 +2118,10 @@ void Editor::type_char(uchar ch, bool is_replace_mode) {
 
             // insert indentation
             auto pos = cur;
-            buf->insert(pos, indentation->items, indentation->len);
-            pos.x += indentation->len;
+            pos = buf->insert(pos, indentation->items, indentation->len);
 
             // insert the brace
-            buf->insert(pos, &ch, 1);
-            pos.x++;
+            pos = buf->insert(pos, ch);
 
             // move cursor after everything we typed
             move_cursor(pos);
@@ -2656,10 +2646,8 @@ cur2 Editor::vim_join_lines(int y, int count) {
         bool add_space = (x < lines[y+1].len && lines[y+1][x] != ')');
 
         buf->remove(start, end);
-        if (add_space) {
-            uchar space = ' ';
-            buf->insert(start, &space, 1);
-        }
+        if (add_space)
+            buf->insert(start, ' ');
         last_start = start;
     }
     return last_start;
@@ -4248,8 +4236,7 @@ cur2 Editor::open_newline(int y) {
     if (y == 0) {
         // if it's the first line, start at 0, 0 and insert
         // indent + \n, or rather, just \n
-        uchar newline = '\n';
-        buf->insert(new_cur2(0, 0), &newline, 1);
+        buf->insert(new_cur2(0, 0), '\n');
         return new_cur2(0, 0);
     }
 
