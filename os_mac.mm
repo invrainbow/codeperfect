@@ -59,7 +59,7 @@ int run_nsalert(NSAlert *alert) {
     return ret;
 }
 
-Ask_User_Result ask_user_yes_no(ccstr text, ccstr title, ccstr yeslabel, ccstr nolabel, bool cancel) {
+Ask_User_Result os_ask_user_yes_no(ccstr text, ccstr title, ccstr yeslabel, ccstr nolabel, bool cancel) {
     @autoreleasepool {
         auto alert = make_nsalert(text, title);
         int i = 0;
@@ -93,7 +93,7 @@ Ask_User_Result ask_user_yes_no(ccstr text, ccstr title, ccstr yeslabel, ccstr n
     }
 }
 
-void tell_user(ccstr text, ccstr title) {
+void os_tell_user(ccstr text, ccstr title) {
     @autoreleasepool {
         auto alert = make_nsalert(text, title);
         [alert addButtonWithTitle:@"OK"];
@@ -102,7 +102,7 @@ void tell_user(ccstr text, ccstr title) {
     }
 }
 
-bool let_user_select_file(Select_File_Opts* opts) {
+bool os_let_user_select_file(Select_File_Opts* opts) {
     @autoreleasepool {
         NSSavePanel *panel = nil;
         // NSWindow *keyWindow = [[NSApplication sharedApplication] keyWindow];

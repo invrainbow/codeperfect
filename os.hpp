@@ -268,6 +268,7 @@ struct Select_File_Opts {
 };
 
 bool let_user_select_file(Select_File_Opts* opts);
+bool os_let_user_select_file(Select_File_Opts* opts);
 bool copy_file(ccstr src, ccstr dest);
 bool ensure_directory_exists(ccstr path);
 bool delete_rm_rf(ccstr path);
@@ -399,9 +400,11 @@ enum Ask_User_Result {
     ASKUSER_CANCEL,
 };
 
-Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title, ccstr yeslabel, ccstr nolabel);
 Ask_User_Result ask_user_yes_no(ccstr text, ccstr title, ccstr yeslabel, ccstr nolabel, bool cancel = false);
+Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title, ccstr yeslabel, ccstr nolabel);
 void tell_user(ccstr text, ccstr title);
+Ask_User_Result os_ask_user_yes_no(ccstr text, ccstr title, ccstr yeslabel, ccstr nolabel, bool cancel = false);
+void os_tell_user(ccstr text, ccstr title);
 
 #define tell_user_error(text) tell_user(text, NULL)
 

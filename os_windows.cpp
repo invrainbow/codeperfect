@@ -400,7 +400,7 @@ void sleep_milliseconds(u32 milliseconds) {
     Sleep((DWORD)milliseconds);
 }
 
-bool let_user_select_file(Select_File_Opts* opts) {
+bool os_let_user_select_file(Select_File_Opts* opts) {
     SCOPED_FRAME();
 
     HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
@@ -865,13 +865,13 @@ Ask_User_Result message_box(ccstr text, ccstr title, int flags) {
     return ASKUSER_ERROR;
 }
 
-Ask_User_Result ask_user_yes_no(ccstr text, ccstr title, ccstr, ccstr, bool cancel) {
+Ask_User_Result os_ask_user_yes_no(ccstr text, ccstr title, ccstr, ccstr, bool cancel) {
     if (cancel)
         return message_box(text, title, MB_YESNOCANCEL | MB_ICONEXCLAMATION | MB_TOPMOST);
     return message_box(text, title, MB_YESNO | MB_ICONWARNING | MB_TOPMOST);
 }
 
-void tell_user(ccstr text, ccstr title) {
+void os_tell_user(ccstr text, ccstr title) {
     message_box(text, title, MB_OK | MB_ICONWARNING | MB_TOPMOST);
 }
 
