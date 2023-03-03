@@ -77,8 +77,14 @@ ccstr cp_sprintf(ccstr fmt, ...) {
 }
 
 ccstr cp_strcat(ccstr a, ccstr b) {
-    // TODO: do this properly lol
-    return cp_sprintf("%s%s", a, b);
+    int la = strlen(a);
+    int lb = strlen(b);
+
+    auto ret = new_array(char, la+lb+1);
+    memcpy(ret+0, a, la);
+    memcpy(ret+la, b, lb);
+    ret[la+lb] = '\0';
+    return ret;
 }
 
 List<ccstr> *split_string(ccstr str, char sep) {

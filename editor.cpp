@@ -19,6 +19,7 @@ bool Editor::is_modifiable() {
     return false;
 }
 
+// returned ranges are ordered
 Selection *Editor::get_selection(Selection_Type sel_type) {
     if (sel_type == SEL_NONE)
         sel_type = vim.visual_type;
@@ -3133,7 +3134,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
         return true;
     };
 
-    auto &c = cur;
+    auto c = cur;
     auto &lines = buf->lines;
     auto ret = new_object(Eval_Motion_Result);
 
@@ -3315,27 +3316,28 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             auto arg = get_second_char_arg();
             if (!arg) break;
 
+            // TODO
             switch (arg) {
-            case 'w': break; // TODO
-            case 'W': break; // TODO
-            case 's': break; // TODO
-            case 'p': break; // TODO
-            case '[': break; // TODO
-            case ']': break; // TODO
-            case '(': break; // TODO
-            case ')': break; // TODO
-            case 'b': break; // TODO
-            case '<': break; // TODO
-            case '>': break; // TODO
-            case 'B': break; // TODO
-            case '{': break; // TODO
-            case '}': break; // TODO
-            case 't': break; // TODO
-            case '\'': break; // TODO
-            case '"': break; // TODO
-            case '`': break; // TODO
-            case 'a': break; // TODO
-            case 'f': break; // TODO
+            case 'w': break;
+            case 'W': break;
+            case 's': break;
+            case 'p': break;
+            case '[': break;
+            case ']': break;
+            case '(': break;
+            case ')': break;
+            case 'b': break;
+            case '<': break;
+            case '>': break;
+            case 'B': break;
+            case '{': break;
+            case '}': break;
+            case 't': break;
+            case '\'': break;
+            case '"': break;
+            case '`': break;
+            case 'a': break;
+            case 'f': break;
             }
             break;
         }
@@ -4357,8 +4359,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
 
                 auto end = it.pos;
 
-                buf->hist_batch_mode = true;
-                defer { buf->hist_batch_mode = false; };
+                SCOPED_BATCH_CHANGE(buf);
 
                 buf->remove(start, end);
                 buf->insert(start, new_text->items, new_text->len);
