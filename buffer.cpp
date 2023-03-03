@@ -292,7 +292,7 @@ cur2 Buffer::hist_redo() {
 
     auto ret = NULL_CUR;
 
-    for (auto it = history[hist_curr]; it; it = it->next){
+    for (auto it = history[hist_curr]; it; it = it->next) {
         hist_apply_change(it, false);
         if (!it->next) ret = it->start;
     }
@@ -608,20 +608,6 @@ cur2 Buffer::insert(cur2 start, uchar* text, s32 len, bool applying_change) {
 
     internal_start_edit(start, start);
 
-    Change *change = NULL;
-    bool need_new_change = false;
-
-    if (use_history && !applying_change) {
-        auto c = hist_get_latest_change_for_append();
-        if (c) {
-            if (start == c->new_end || hist_batch_mode) {
-                change = c;
-                if (start != c->new_end)
-                    need_new_change = true;
-            }
-        }
-    }
-
     bool has_newline = false;
     for (u32 i = 0; i < len; i++) {
         if (text[i] == '\n') {
@@ -681,30 +667,8 @@ cur2 Buffer::insert(cur2 start, uchar* text, s32 len, bool applying_change) {
         }
     }
 
-    if (use_history && !applying_change) {
-        auto start_of_chars_to_copy = start;
-        while (start_of_chars_to_copy < end) {
-            if (!change || change->new_text.len == change->new_text.cap || need_new_change) {
-                need_new_change = false;
-
-                if (!change) {
-                    change = hist_push();
-                } else {
-                    change->next = hist_alloc();
-                    change = change->next;
-                }
-                change->start = start_of_chars_to_copy;
-                change->old_end = start_of_chars_to_copy;
-            }
-
-            auto it = iter(start_of_chars_to_copy);
-            while (it.pos != end && change->new_text.len < change->new_text.cap)
-                change->new_text.append(it.next());
-
-            change->new_end = it.pos;
-            start_of_chars_to_copy = it.pos;
-        }
-    }
+    if (use_history && !applying_change)
+        internal_commit_insert_to_history(start, end);
 
     internal_finish_edit(end);
     dirty = true;
@@ -840,8 +804,8 @@ void Buffer::internal_update_mark_tree() {
 
 Change* Buffer::hist_alloc() {
     auto ret = world.change_fridge.alloc();
-    ret->old_text.init(LIST_FIXED, _countof(ret->_old_text), ret->_old_text);
-    ret->new_text.init(LIST_FIXED, _countof(ret->_new_text), ret->_new_text);
+    ret->old_text.init(LIST_CHUNK, CHUNK0);
+    ret->new_text.init(LIST_CHUNK, CHUNK0);
     return ret;
 }
 
@@ -849,7 +813,11 @@ void Buffer::hist_free(int i) {
     auto change = history[i];
     while (change) {
         auto next = change->next;
+
+        change->old_text.cleanup();
+        change->new_text.cleanup();
         world.change_fridge.free(change);
+
         change = next;
     }
 }
@@ -897,89 +865,133 @@ int Buffer::internal_distance_between(cur2 a, cur2 b) {
     return total + (lines[a.y].len - a.x + 1) + b.x;
 }
 
+void Buffer::internal_commit_insert_to_history(cur2 start, cur2 end) {
+    Change *change = NULL;
+
+    auto c = hist_get_latest_change_for_append();
+    if (c) {
+        if (start == c->new_end || hist_batch_mode)
+            change = c;
+
+        if (c->new_text.len + internal_distance_between(start, end) < CHUNKMAX) {
+            c->new_end = end;
+
+            auto it = iter(start);
+            while (it.pos != end)
+                change->new_text.append(it.next());
+            return;
+        }
+    }
+
+    while (start < end) {
+        if (change) {
+            change->next = hist_alloc();
+            change = change->next;
+        } else {
+            change = hist_push();
+        }
+
+        change->start = start;
+        change->old_end = start;
+
+        auto it = iter(start);
+        for (; it.pos != end; it.next())
+            if (!change->new_text.append(it.peek()))
+                break;
+
+        change->new_end = it.pos;
+        start = it.pos;
+    }
+}
+
+void Buffer::internal_commit_remove_to_history(cur2 start, cur2 end) {
+    Change *change = NULL;
+
+    auto c = hist_get_latest_change_for_append();
+    if (c) {
+        if (c->new_end == end || hist_batch_mode)
+            change = c;
+
+        // Up here in the next block is where we do various forms of
+        // "surgery" on the existing change with stupid math. If we don't
+        // find a reason to break out in this block here, below we will
+        // only be adding on to change->next.
+
+        if (c->new_end == end) {
+            if (c->start <= start) {
+                c->new_end = start;
+                c->new_text.len -= internal_distance_between(start, end);
+                return;
+            }
+
+            // handle the "backspace repeatedly" optimization
+            if (internal_distance_between(start, end) + c->old_text.len < CHUNKMAX) {
+                // we have an existing change and we're deleting past the start,
+                // this means we're completing wiping out any text we've written
+                c->new_text.len = 0;
+                c->start = start;
+                c->new_end = start;
+
+                auto new_end = c->start;
+
+                // basically, prepend to old_text
+                auto tmp = new_list(uchar);
+                For (&c->old_text) tmp->append(it);
+                c->old_text.len = 0;
+                for (auto it = iter(start); it.pos != new_end; it.next())
+                    c->old_text.append(it.peek());
+                For (tmp) c->old_text.append(it);
+                return;
+            }
+        }
+    }
+
+    auto old_start = start;
+
+    while (start < end) {
+        // grab our next change...
+        // if change != NULL, i.e. we're tacking on, then alloc and set its next
+        // otherwise, create a new entry
+        if (change) {
+            change->next = hist_alloc();
+            change = change->next;
+        } else {
+            change = hist_push();
+        }
+
+        change->start = old_start;
+        change->new_end = old_start;
+        change->old_text.len = 0;
+
+        auto it = iter(start);
+        for (; it.pos != end; it.next())
+            if (!change->old_text.append(it.peek()))
+                break;
+
+        // take old_start + (it.pos - start)
+        auto adjusted_end = old_start;
+        if (it.pos.y != start.y) {
+            adjusted_end.x = it.pos.x;
+            adjusted_end.y += (it.pos.y - start.y);
+        } else {
+            adjusted_end.x += (it.pos.x - start.x);
+        }
+        change->old_end = adjusted_end;
+
+        start = it.pos;
+    }
+}
+
 void Buffer::remove(cur2 start, cur2 end, bool applying_change) {
     if (start == end) return;
 
-    i32 x1 = start.x, y1 = start.y;
-    i32 x2 = end.x, y2 = end.y;
-
     internal_start_edit(start, end);
 
-    do {
-        if (!use_history) break;
-        if (applying_change) break;
+    if (use_history && !applying_change)
+        internal_commit_remove_to_history(start, end);
 
-        Change *change = NULL;
-        bool need_new_change = false;
-
-        auto c = hist_get_latest_change_for_append();
-        if (c) {
-            if (c->new_end == end || hist_batch_mode) {
-                change = c;
-                if (c->new_end != end)
-                    need_new_change = true;
-            }
-        }
-
-        if (change && !need_new_change) {
-            if (change->start <= start) {
-                change->new_end = start;
-                change->new_text.len -= internal_distance_between(start, end);
-                break;
-            }
-
-            // we have an existing change and we're deleting past the start,
-            // this means we're completing wiping out any text we've written
-            change->new_text.len = 0;
-        }
-
-        auto end_of_chars_to_copy = end;
-
-        // if we are going to be appending to this change
-        if (change && !need_new_change)
-            end_of_chars_to_copy = change->start;
-
-        while (start < end_of_chars_to_copy) {
-            if (!change || change->old_text.len == change->old_text.cap || need_new_change) {
-                need_new_change = false;
-                Change *new_change = NULL;
-                if (!change) {
-                    change = hist_push();
-                } else {
-                    change->next = hist_alloc();
-                    change = change->next;
-                }
-                change->old_end = end_of_chars_to_copy;
-            }
-
-            int rem = change->old_text.cap - change->old_text.len;
-            int chars = 0;
-            auto it = iter(end_of_chars_to_copy);
-
-            do {
-                it.prev();
-                chars++;
-            } while (chars < rem && it.pos != start);
-
-            change->start = it.pos;
-            change->new_end = it.pos;
-
-            {
-                auto tmp = new_list(uchar);
-                For (&change->old_text)
-                    tmp->append(it);
-
-                change->old_text.len = 0;
-                for (; it.pos != end_of_chars_to_copy; it.next())
-                    change->old_text.append(it.peek());
-                For (tmp)
-                    change->old_text.append(it);
-            }
-
-            end_of_chars_to_copy = change->start;
-        }
-    } while (0);
-
+    i32 x1 = start.x, y1 = start.y;
+    i32 x2 = end.x, y2 = end.y;
     if (y1 == y2) {
         // TODO: If we can shrink the line, should we?
         if (lines[y1].len > x2)

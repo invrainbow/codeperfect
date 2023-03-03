@@ -693,8 +693,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
             return NULL;
         };
 
-        buf->hist_batch_mode = true;
-        defer { buf->hist_batch_mode = false; };
+        SCOPED_BATCH_CHANGE(buf);
 
         auto import_to_add = see_if_we_need_autoimport();
         if (import_to_add) {
@@ -2554,8 +2553,7 @@ void Editor::toggle_comment(int ystart, int yend) {
 
     cur2 new_cur = new_cur2(-1, ystart);
     {
-        buf->hist_batch_mode = true;
-        defer { buf->hist_batch_mode = false; };
+        SCOPED_BATCH_CHANGE(buf);
 
         if (is_commented()) {
             // remove comments
@@ -2631,8 +2629,7 @@ int Editor::first_nonspace_cp(int y) {
 }
 
 cur2 Editor::vim_join_lines(int y, int count) {
-    buf->hist_batch_mode = true;
-    defer { buf->hist_batch_mode = false; };
+    SCOPED_BATCH_CHANGE(buf);
 
     auto &lines = buf->lines;
 
@@ -2655,8 +2652,7 @@ cur2 Editor::vim_join_lines(int y, int count) {
 
 // y1 to y2 inclusive
 void Editor::indent_block(int y1, int y2, int indents) {
-    buf->hist_batch_mode = true;
-    defer { buf->hist_batch_mode = false; };
+    SCOPED_BATCH_CHANGE(buf);
 
     for (int y = y1; y <= y2; y++) {
         auto x = first_nonspace_cp(y);
@@ -3645,9 +3641,9 @@ cur2 Editor::vim_delete_selection(Selection *selection) {
 }
 
 void Editor::vim_enter_insert_mode(Vim_Command *cmd, fn<void()> prep) {
-    buf->hist_batch_mode = true; // unset in vim_leave_insert_mode
+    buf->hist_batch_start(); // end in vim_return_to_normal_mode()
 
-    prep(); // call this after setting hist_batch_mode
+    prep(); // call this after starting history batch
 
     vim.insert_start = cur;
 
@@ -3663,7 +3659,7 @@ void Editor::vim_enter_insert_mode(Vim_Command *cmd, fn<void()> prep) {
 }
 
 void Editor::vim_enter_replace_mode() {
-    buf->hist_batch_mode = true;
+    buf->hist_batch_start(); // end in vim_return_to_normal_mode()
 
     vim.replace_start = cur;
     vim.replace_end = cur;
@@ -4116,8 +4112,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd) {
                 cp_assert(!motion_result);
                 auto sel = get_selection();
 
-                buf->hist_batch_mode = true;
-                defer { buf->hist_batch_mode = false; };
+                SCOPED_BATCH_CHANGE(buf);
 
                 switch (sel->type) {
                 case SEL_CHAR:

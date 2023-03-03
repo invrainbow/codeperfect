@@ -164,8 +164,8 @@ struct Change {
     cur2 start;
     cur2 old_end;
     cur2 new_end;
-    uchar _old_text[64];
-    uchar _new_text[64];
+    // uchar _old_text[64];
+    // uchar _new_text[64];
     List<uchar> old_text;
     List<uchar> new_text;
     Change *next;
@@ -205,6 +205,21 @@ struct Buffer {
 
     bool hist_batch_mode;
     bool hist_force_push_next_change;
+    int hist_batch_refs;
+
+    void hist_batch_start() {
+        hist_force_push_next_change = true;
+        hist_batch_mode = true;
+        hist_batch_refs++;
+    }
+
+    void hist_batch_end() {
+        hist_batch_refs--;
+        if (hist_batch_refs == 0) {
+            hist_batch_mode = false;
+            hist_force_push_next_change = true;
+        }
+    }
 
     int hist_inc(int i) { return i == _countof(history) - 1 ? 0 : i + 1; }
     int hist_dec(int i) { return !i ? _countof(history) - 1 : i - 1; }
@@ -243,6 +258,9 @@ struct Buffer {
 
     cur2 insert(cur2 start, uchar uch) { return insert(start, &uch, 1); }
 
+    void internal_commit_remove_to_history(cur2 start, cur2 end);
+    void internal_commit_insert_to_history(cur2 start, cur2 end);
+
     Buffer_It iter(cur2 c);
     cur2 inc_cur(cur2 c);
     cur2 dec_cur(cur2 c);
@@ -268,5 +286,18 @@ struct Buffer {
     bool is_valid(cur2 c);
     cur2 fix_cur(cur2 c);
 };
+
+struct Scoped_Batch_Change {
+    Buffer *buf;
+    Scoped_Batch_Change(Buffer *_buf) {
+        buf = _buf;
+        buf->hist_batch_start();
+    }
+    ~Scoped_Batch_Change() {
+        buf->hist_batch_end();
+    }
+};
+
+#define SCOPED_BATCH_CHANGE(buf) Scoped_Batch_Change GENSYM(SCOPED_BATCH_CHANGE)(buf)
 
 s32 uchar_size(uchar c);

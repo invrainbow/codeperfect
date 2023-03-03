@@ -2299,8 +2299,7 @@ void handle_command(Command cmd, bool from_menu) {
             int maxy = result->highlight_end.y;
 
             {
-                editor->buf->hist_batch_mode = true;
-                defer { editor->buf->hist_batch_mode = false; };
+                SCOPED_BATCH_CHANGE(editor->buf);
 
                 Fori (result->insert_starts) {
                     auto start = it;
