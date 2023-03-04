@@ -77,12 +77,13 @@ Selection *Editor::get_selection(Selection_Type sel_type) {
             ORDER(ay, by);
 
             for (int y = ay; y <= by; y++) {
-                auto ax = buf->idx_vcp_to_cp(y, avx);
                 int len = buf->lines[y].len;
+
+                auto ax = buf->idx_vcp_to_cp(y, avx);
                 if (ax > len) continue;
 
                 auto bx = min(buf->idx_vcp_to_cp(y, bvx), len);
-                add_range(new_cur2(ax, y), new_cur2(bx, y));
+                add_range(new_cur2(ax, y), buf->inc_gr(new_cur2(bx, y)));
             }
             return ret;
         }
