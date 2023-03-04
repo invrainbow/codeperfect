@@ -2749,6 +2749,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
         case 'v':
         case 'V':
         case 'D':
+        case 'Y':
         case 'C':
         case 'p':
         case 'P':
@@ -4343,6 +4344,20 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             }
             }
             break;
+
+        case 'Y': {
+            switch (world.vim_mode()) {
+            case VI_NORMAL: {
+                int yend = min(lines.len-1, c.y + o_count - 1);
+                auto end = new_cur2(lines[yend].len, yend);
+                vim_yank_text(buf->get_text(c, end));
+                return true;
+            }
+            case VI_VISUAL:
+                return true;
+            }
+            break;
+        }
 
         case 'D':
         case 'C':
