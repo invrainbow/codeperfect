@@ -426,7 +426,7 @@ void handle_key_event(Window_Event *it) {
     case CP_KEY_UP:
         if (move_autocomplete_cursor(editor, key == CP_KEY_DOWN ? 1 : -1))
             return;
-        // if we didn't handle autocomplete, pass on to future handlers
+        // pass through
         break;
     }
 
@@ -436,6 +436,13 @@ void handle_key_event(Window_Event *it) {
         case CP_KEY_SPACE:
             editor->trigger_autocomplete(false, false);
             return;
+        case CP_KEY_C:
+            if (world.vim.on && world.vim_mode() != VI_NORMAL) {
+                editor->vim_return_to_normal_mode();
+                return;
+            }
+            // pass through
+            break;
         }
         break;
 
