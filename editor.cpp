@@ -90,14 +90,16 @@ Selection *Editor::get_selection(Selection_Type sel_type) {
         return NULL;
     }
 
-    if (!selecting) return NULL;
+    if (selecting) {
+        ret->type = SEL_CHAR;
+        auto a = select_start;
+        auto b = cur;
+        ORDER(a, b);
+        add_range(a, b);
+        return ret;
+    }
 
-    ret->type = SEL_CHAR;
-    auto a = select_start;
-    auto b = cur;
-    ORDER(a, b);
-    add_range(a, b);
-    return ret;
+    return NULL;
 }
 
 ccstr Editor::get_autoindent(int for_y) {
@@ -3760,10 +3762,7 @@ cur2 Editor::vim_delete_range(cur2 start, cur2 end) {
     return vim_delete_selection(&sel);
 }
 
-cur2 Editor::vim_delete_selection(Selection *sel) {
-    auto text = get_selection_text(sel);
-    vim_yank_text(text);
-
+cur2 Editor::delete_selection(Selection *sel) {
     switch (sel->type) {
     case SEL_CHAR:
     case SEL_BLOCK: {
@@ -3782,6 +3781,12 @@ cur2 Editor::vim_delete_selection(Selection *sel) {
     }
 
     return sel->ranges->at(0).start;
+}
+
+cur2 Editor::vim_delete_selection(Selection *sel) {
+    auto text = get_selection_text(sel);
+    vim_yank_text(text);
+    return delete_selection(sel);
 }
 
 // expects dest to be initialized

@@ -1807,7 +1807,7 @@ bool is_command_enabled(Command cmd) {
     case CMD_CUT:
     case CMD_COPY: {
         auto editor = get_current_editor();
-        return editor && editor->selecting;
+        return editor && (editor->selecting || world.vim_mode() == VI_VISUAL);
     }
 
     case CMD_GENERATE_IMPLEMENTATION:
@@ -1815,7 +1815,6 @@ bool is_command_enabled(Command cmd) {
     case CMD_FIND_IMPLEMENTATIONS:
     case CMD_FIND_INTERFACES:
         return get_current_editor();
-
     }
 
     return true;
@@ -2383,23 +2382,23 @@ void handle_command(Command cmd, bool from_menu) {
 
     case CMD_CUT:
     case CMD_COPY: {
-        // TODO: integrate with vim
-
         auto editor = get_current_editor();
         if (!editor) break;
-        if (!editor->selecting) break;
 
-        auto a = editor->select_start;
-        auto b = editor->cur;
-        ORDER(a, b);
+        auto sel = editor->get_selection();
+        if (!sel) break;
 
-        auto s = editor->buf->get_text(a, b);
+        auto s = editor->get_selection_text(sel);
         world.window->set_clipboard_string(s);
 
         if (cmd == CMD_CUT) {
-            editor->buf->remove(a, b);
-            editor->selecting = false;
-            editor->move_cursor(a);
+            auto start = editor->delete_selection(sel);
+            editor->move_cursor(start);
+            if (world.vim.on) {
+                // we shouldn't be here otherwise
+                cp_assert(world.vim_mode() == VI_VISUAL);
+                editor->vim_return_to_normal_mode();
+            }
         }
         break;
     }

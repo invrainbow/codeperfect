@@ -323,6 +323,7 @@ struct Editor {
     cur2 open_newline(int y);
     cur2 handle_alt_move(bool back, bool backspace);
     Selection* get_selection(Selection_Type override_type = SEL_NONE);
+    cur2 delete_selection(Selection *sel);
     ccstr get_selection_text(Selection *selection);
     void vim_handle_visual_mode_key(Selection_Type type);
     cur2 vim_delete_selection(Selection *selection);
