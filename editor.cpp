@@ -4745,11 +4745,13 @@ cur2 Editor::find_matching_brace_with_text(uchar ch, cur2 pos) {
 
     switch (ch) {
     case '{': forward = true; other = '}'; break;
-    case '(': forward = true; other = ')'; break;
-    case '[': forward = true; other = ']'; break;
     case '}': forward = false; other = '{'; break;
+    case '(': forward = true; other = ')'; break;
     case ')': forward = false; other = '('; break;
+    case '[': forward = true; other = ']'; break;
     case ']': forward = false; other = '['; break;
+    case '<': forward = false; other = '>'; break;
+    case '>': forward = false; other = '<'; break;
     default:
         cp_panic("find_matching_brace_with_text called with invalid char");
         break;
