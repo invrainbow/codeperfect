@@ -918,11 +918,11 @@ void Buffer::internal_commit_remove_to_history(cur2 start, cur2 end) {
             if (internal_distance_between(start, end) + c->old_text.len < CHUNKMAX) {
                 // we have an existing change and we're deleting past the start,
                 // this means we're completing wiping out any text we've written
+                auto new_end = c->start;
+
                 c->new_text.len = 0;
                 c->start = start;
                 c->new_end = start;
-
-                auto new_end = c->start;
 
                 // basically, prepend to old_text
                 auto tmp = new_list(uchar);
