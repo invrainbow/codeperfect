@@ -2722,6 +2722,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
 
         case 'g': {
             ptr++;
+            if (eof()) return VIM_PARSE_WAIT;
 
             auto ch = peek_char();
             switch (ch) {
@@ -2737,6 +2738,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
                 out->op.append(char_input(ch));
                 goto done;
             case 'd':
+            case 'I':
                 ptr++;
                 out->op.append(it);
                 out->op.append(char_input(ch));
@@ -3918,6 +3920,13 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         return true;
     }
 
+    auto get_second_char_arg = [&]() -> uchar {
+        if (op.len < 2) return 0;
+        auto &inp = op[1];
+        if (inp.is_key) return 0;
+        return inp.ch;
+    };
+
     auto inp = op[0];
     if (inp.is_key) {
         switch (inp.mods) {
@@ -4505,11 +4514,8 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             break;
         }
         case 'r': {
-            if (op.len < 2) break;
-            auto &inp2 = op[1];
-            if (inp2.is_key) break;
-
-            auto arg = inp2.ch;
+            auto arg = get_second_char_arg();
+            if (!arg) break;
 
             switch (mode) {
             case VI_VISUAL: {
@@ -4595,22 +4601,31 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         case '=':
             break;
         case 'g': {
-            auto it2 = op[1];
-            if (!it2.is_key) {
-                switch (it2.ch) {
-                case 'q':
-                case 'w':
-                case '?':
-                case '@':
-                case '~':
-                case 'u':
-                case 'U':
-                    break;
-                case 'd': {
-                    handle_goto_definition();
-                    break;
+            auto arg = get_second_char_arg();
+            switch (arg) {
+            case 'q':
+            case 'w':
+            case '?':
+            case '@':
+            case '~':
+            case 'u':
+            case 'U':
+                break;
+            case 'I':
+                switch (world.vim_mode()) {
+                case VI_NORMAL:
+                    move_cursor(new_cur2(0, c.y));
+                    enter_insert_mode([]() { return; });
+                    *can_dotrepeat = true;
+                    return true;
+                case VI_VISUAL:
+                    move_cursor(new_cur2(0, c.y));
+                    return true;
                 }
-                }
+                break;
+            case 'd':
+                handle_goto_definition();
+                return true;
             }
             break;
         }
