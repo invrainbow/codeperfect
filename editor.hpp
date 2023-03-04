@@ -339,9 +339,9 @@ struct Editor {
     void vim_enter_insert_mode(Vim_Command *cmd, fn<void()> prep);
     void vim_enter_replace_mode();
     void vim_return_to_normal_mode(bool from_dotrepeat = false);
-    cur2 vim_join_lines(int y, int count);
     void vim_yank_text(ccstr text);
     void vim_handle_visual_S(Vim_Command *cmd);
+    cur2 vim_handle_J(Vim_Command *cmd, bool add_spaces);
     ccstr vim_paste_text();
     void indent_block(int y1, int y2, int indents);
 };

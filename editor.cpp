@@ -2531,26 +2531,59 @@ void Editor::vim_handle_visual_S(Vim_Command *cmd) {
     });
 }
 
-cur2 Editor::vim_join_lines(int y, int count) {
-    SCOPED_BATCH_CHANGE(buf);
+cur2 Editor::vim_handle_J(Vim_Command *cmd, bool add_spaces) {
+    int y, count;
 
-    auto &lines = buf->lines;
-
-    cur2 last_start = NULL_CUR;
-    for (int i = 0; i < count; i++) {
-        if (y == lines.len-1) break;
-
-        auto start = new_cur2(lines[y].len, y);
-        auto x = first_nonspace_cp(y+1);
-        auto end = new_cur2(x, y+1);
-        bool add_space = (x < lines[y+1].len && lines[y+1][x] != ')');
-
-        buf->remove(start, end);
-        if (add_space)
-            buf->insert(start, ' ');
-        last_start = start;
+    switch (world.vim_mode()) {
+    case VI_NORMAL: {
+        int o_count = cmd->o_count == 0 ? 1 : cmd->o_count;
+        y = cur.y;
+        count = max(o_count - 1, 1);
+        break;
     }
-    return last_start;
+    case VI_VISUAL: {
+        auto sel = get_selection();
+
+        int y1 = sel->ranges->at(0).start.y;
+        int y2 = sel->ranges->last()->end.y;
+        ORDER(y1, y2);
+
+        y = y1;
+        count = y2-y1;
+        break;
+    }
+    default:
+        return NULL_CUR;
+    }
+
+    // do the joining
+    cur2 pos = NULL_CUR;
+    {
+        SCOPED_BATCH_CHANGE(buf);
+
+        auto &lines = buf->lines;
+        cur2 last_start = NULL_CUR;
+
+        for (int i = 0; i < count; i++) {
+            if (y == lines.len-1) break;
+
+            auto start = new_cur2(lines[y].len, y);
+            auto x = first_nonspace_cp(y+1);
+            auto end = new_cur2(x, y+1);
+            bool add_space = add_spaces && x < lines[y+1].len && lines[y+1][x] != ')';
+
+            buf->remove(start, end);
+            if (add_space)
+                buf->insert(start, ' ');
+            last_start = start;
+        }
+
+        pos = last_start;
+    }
+
+    if (world.vim_mode() == VI_VISUAL)
+        vim_return_to_normal_mode();
+    return pos;
 }
 
 // y1 to y2 inclusive
@@ -2749,6 +2782,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
                 goto done;
             case 'd':
             case 'I':
+            case 'J':
                 ptr++;
                 out->op.append(it);
                 out->op.append(char_input(ch));
@@ -4336,29 +4370,14 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             move_cursor_normal(pos);
             return true;
         }
-        case 'J':
-            switch (world.vim_mode()) {
-            case VI_NORMAL: {
-                auto pos = vim_join_lines(c.y, max(o_count - 1, 1));
-                move_cursor_normal(pos);
-                *can_dotrepeat = true;
-                return true;
-            }
-            case VI_VISUAL: {
-                auto sel = get_selection();
+        case 'J': {
+            auto pos = vim_handle_J(cmd, true);
+            if (pos == NULL_CUR) break;
 
-                int y1 = sel->ranges->at(0).start.y;
-                int y2 = sel->ranges->last()->end.y;
-                ORDER(y1, y2);
-
-                auto pos = vim_join_lines(y1, y2-y1);
-                vim_return_to_normal_mode();
-                move_cursor_normal(pos);
-                *can_dotrepeat = true;
-                return true;
-            }
-            }
-            break;
+            move_cursor_normal(pos);
+            *can_dotrepeat = true;
+            return true;
+        }
         case 'x': {
             switch (world.vim_mode()) {
             case VI_NORMAL: {
@@ -4666,6 +4685,14 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             case 'd':
                 handle_goto_definition();
                 return true;
+            case 'J': {
+                auto pos = vim_handle_J(cmd, false);
+                if (pos == NULL_CUR) break;
+
+                move_cursor_normal(pos);
+                *can_dotrepeat = true;
+                return true;
+            }
             }
             break;
         }
