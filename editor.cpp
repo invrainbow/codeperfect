@@ -4201,10 +4201,13 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             return true;
         }
         case 'I': {
-            move_cursor(new_cur2(first_nonspace_cp(c.y), c.y));
-            enter_insert_mode([]() { return; });
-            *can_dotrepeat = true;
-            return true;
+            if (world.vim_mode() == VI_NORMAL) {
+                move_cursor(new_cur2(first_nonspace_cp(c.y), c.y));
+                enter_insert_mode([]() { return; });
+                *can_dotrepeat = true;
+                return true;
+            }
+            break;
         }
         case 'o':
         case 'O':
