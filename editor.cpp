@@ -2759,6 +2759,42 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             ptr++;
             break;
 
+        case '[': {
+            ptr++;
+            if (eof()) return VIM_PARSE_WAIT;
+
+            auto ch = peek_char();
+            switch (ch) {
+            case 'p':
+                ptr++;
+                out->op.append(it);
+                out->op.append(char_input(ch));
+                skip_motion = true;
+                break;
+            }
+
+            ptr--;
+            break;
+        }
+
+        case ']': {
+            ptr++;
+            if (eof()) return VIM_PARSE_WAIT;
+
+            auto ch = peek_char();
+            switch (ch) {
+            case 'p':
+                ptr++;
+                out->op.append(it);
+                out->op.append(char_input(ch));
+                skip_motion = true;
+                break;
+            }
+
+            ptr--;
+            break;
+        }
+
         case 'c':
         case 'd':
         case '>':
@@ -4143,6 +4179,14 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                     vim_return_to_normal_mode(true); // from_dotrepeat
                 }
             }
+            break;
+        }
+
+        case ']': {
+            break;
+        }
+
+        case '[': {
             break;
         }
 
