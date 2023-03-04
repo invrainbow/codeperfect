@@ -239,7 +239,7 @@ struct Editor {
 
         struct {
             bool inserted;
-            int buf_tree_version;
+            int buf_version;
             cur2 start;
             cur2 end;
         } inserted_indent;

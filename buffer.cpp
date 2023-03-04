@@ -731,6 +731,8 @@ void Buffer::internal_finish_edit(cur2 new_end) {
         update_tree();
     }
 
+    // set this here or in .remove() and .insert()?
+    buf_version++;
     internal_update_mark_tree();
 }
 

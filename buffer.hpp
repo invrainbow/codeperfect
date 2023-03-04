@@ -175,6 +175,7 @@ struct Buffer {
     bool dirty;
     TSTree *tree;
     int tree_version;
+    int buf_version;
     TSTreeCursor cursor;
     bool tree_dirty;
     int lang;

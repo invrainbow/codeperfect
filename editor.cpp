@@ -2056,7 +2056,7 @@ void Editor::vim_save_inserted_indent(cur2 start, cur2 end) {
     if (!world.vim.on) return;
 
     vim.inserted_indent.inserted = true;
-    vim.inserted_indent.buf_tree_version = buf->tree_version;
+    vim.inserted_indent.buf_version = buf->buf_version;
     vim.inserted_indent.start = start;
     vim.inserted_indent.end = end;
 }
@@ -3896,7 +3896,7 @@ void Editor::vim_return_to_normal_mode(bool from_dotrepeat) {
         auto &ref = vim.inserted_indent;
         // TODO: so far we're only handling indent for insert mode. Need to
         // support for replace mode too. But that comes with handling Enter.
-        if (mode == VI_INSERT && ref.inserted && ref.buf_tree_version == buf->tree_version) {
+        if (mode == VI_INSERT && ref.inserted && ref.buf_version == buf->buf_version) {
             buf->remove(ref.start, ref.end);
             move_cursor(ref.start);
         } else {
@@ -3906,7 +3906,6 @@ void Editor::vim_return_to_normal_mode(bool from_dotrepeat) {
                 move_cursor(new_cur2(x, cur.y));
             }
         }
-
 
         buf->hist_batch_end(); // started when entering vi_insert and vi_replace
         if (!from_dotrepeat) {
