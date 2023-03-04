@@ -4670,20 +4670,18 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
 
                 SCOPED_BATCH_CHANGE(buf);
 
-                switch (sel->type) {
-                case SEL_CHAR:
-                case SEL_LINE: {
-                    auto range = sel->ranges->at(0);
-                    cur2 start, end;
-                    cp_assert(start < end);
+                For (sel->ranges) {
+                    auto &range = it;
 
-                    if (sel->type == SEL_CHAR) {
-                        start = range.start;
-                        end = range.end;
-                    } else {
+                    cur2 start, end;
+                    if (sel->type == SEL_LINE) {
                         start = new_cur2(0, range.start.y);
                         end = new_cur2(lines[range.end.y].len, range.end.y);
+                    } else {
+                        start = range.start;
+                        end = range.end;
                     }
+                    cp_assert(start < end);
 
                     for (int y = start.y; y <= end.y; y++) {
                         int x0 = (y == start.y ? start.x : 0);
@@ -4704,12 +4702,6 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
 
                     move_cursor_normal(start);
                     vim_return_to_normal_mode();
-                    break;
-                }
-                case SEL_BLOCK:
-                    // this is going to be fucking obnoxious lol
-                    For (sel->ranges) {}
-                    break;
                 }
 
                 *can_dotrepeat = true;
