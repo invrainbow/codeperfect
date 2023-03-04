@@ -3894,11 +3894,16 @@ cur2 Editor::delete_selection(Selection *sel) {
     switch (sel->type) {
     case SEL_CHAR:
     case SEL_BLOCK: {
-        int len = sel->ranges->len;
-        for (int i = len-1; i >= 0; i--) {
-            auto &it = sel->ranges->at(i);
+        // it should be safe to go forwards since the only time we have
+        // multiple ranges is SEL_BLOCK, and then all the blocks are on
+        // separate lines and don't touch newlines.
+        //
+        // if we go forwards undo lands in right spot but redo is wrong
+        // vice versa if we go backwards
+        // what we really need is a way to group a bunch of edits together in history
+        // so that they share a starting cursor point
+        For (sel->ranges)
             buf->remove(it.start, it.end);
-        }
         break;
     }
     case SEL_LINE: {
