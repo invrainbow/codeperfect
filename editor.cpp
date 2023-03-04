@@ -3218,7 +3218,6 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             auto arg = get_second_char_arg();
             if (!arg) break;
 
-            // TODO
             switch (arg) {
             case 'w':
             case 'W': {
@@ -3266,42 +3265,134 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                 ret->object_start = it.pos;
                 return ret;
             }
-            case 's':
-                break;
-            case 'p':
-                break;
+
             case '[':
-                break;
             case ']':
-                break;
             case '(':
-                break;
             case ')':
-                break;
             case 'b':
-                break;
-            case '<':
-                break;
-            case '>':
-                break;
             case 'B':
-                break;
             case '{':
-                break;
-            case '}':
-                break;
-            case 't':
-                break;
-            case '\'':
-                break;
+            case '}': {
+                char open, close;
+                switch (arg) {
+                case '[': open = '['; close = ']'; break;
+                case ']': open = '['; close = ']'; break;
+                case '(': open = '('; close = ')'; break;
+                case ')': open = '('; close = ')'; break;
+                case 'b': open = '('; close = ')'; break;
+                case 'B': open = '{'; close = '}'; break;
+                case '{': open = '{'; close = '}'; break;
+                case '}': open = '{'; close = '}'; break;
+                case '<': open = '<'; close = '>'; break;
+                case '>': open = '<'; close = '>'; break;
+                }
+
+                // note for iw/aw: when visual select is one char long it will
+                // select whole word, but if select is multiple chars, it will
+                // only select rightward
+
+                // ( asdf ( asdf asdf ( asdf asdf ) ) asdf )
+
+                // 1. walk left from start of range to find the first unmatched `open` brace
+                // 2. call find_matching_brace to find the `close` brace
+                // 3. if we're "already covering" open:close then repeat the process, this time starting on open?
+                //    a. if ret->type == MOTION_OBJ, we have to be *covering* it
+                //       - i don't actually think this can happen, since if we were covering it, step 1 would
+                //         already move to the next outer brace
+                //    b. if ret->type == MOTION_OBJ_INNER, we must be covering [open+1, close-1]
+                // 4. note: i guess it's the same for iw/aw, except it's rightward?
+
+                auto find_next_pair_with_range = [&](cur2 *start, cur2 *end) -> bool {
+                    // find the open brace
+                    auto it = iter(*start);
+                    int depth = 1;
+                    while (!it.bof()) {
+                        auto ch = it.prev();
+                        if (ch == close) {
+                            depth++;
+                        }
+                        if (ch == open) {
+                            if (--depth == 0)
+                                break;
+                        }
+                    }
+                    if (depth) return false;
+
+                    // find the close brace
+                    auto closing = find_matching_brace(open, it.pos);
+                    if (closing == NULL_CUR) return false;
+
+                    *start = it.pos;
+                    *end = closing;
+                    return true;
+                };
+
+                // define our current range
+                auto start = (world.vim_mode() == VI_VISUAL ? vim.visual_start : c);
+                auto end = c;
+
+                bool error = false;
+
+                for (int i = 0; i < count; i++) {
+                    auto newstart = start;
+                    auto newend = end;
+                    if (!find_next_pair_with_range(&newstart, &newend)) {
+                        error = true;
+                        break;
+                    }
+
+                    // determine if we need to repeat the previous process
+                    // i.e. if we're already "covering" the given range
+                    auto is_already_covering = [&]() {
+                        auto a = newstart;
+                        auto b = newend;
+                        if (ret->type == MOTION_OBJ_INNER) {
+                            a = buf->inc_cur(a);
+                            b = buf->dec_cur(b);
+                        }
+                        return (start <= a && end >= b);
+                    };
+
+                    if (is_already_covering()) {
+                        if (!find_next_pair_with_range(&newstart, &newend)) {
+                            error = true;
+                            break;
+                        }
+                    }
+
+                    start = newstart;
+                    end = newend;
+                }
+
+                if (error) break;
+
+                if (ret->type == MOTION_OBJ_INNER) {
+                    start = buf->inc_cur(start);
+                    end = buf->dec_cur(end);
+                }
+
+                ret->object_start = start;
+                ret->dest = end;
+                return ret;
+            }
+
             case '"':
-                break;
+            case '\'':
             case '`':
+                // TODO: i think strings are slightly different from braces,
+                // can't be nested, have to handle backslashes, etc
                 break;
-            case 'a':
-                break;
-            case 'f':
-                break;
+
+            // experimental
+            case 't': break; // toplevel?
+            case 'a': break; // argument?
+            case 'f': break; // function?
+                             // think about supporting ast based text objects (it is literally our strength)
+
+            // these are low priority, i just don't believe anyone uses them whilst coding
+            case 's': break;
+            case 'p': break;
             }
             break;
         }
