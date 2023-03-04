@@ -137,6 +137,13 @@ enum Find_Matching_Brace_Result {
     FMB_MATCH_NOT_FOUND,
 };
 
+// zii
+struct Type_Char_Opts {
+    bool replace_mode;
+    // basically, is this triggered in code for the purpose of getting type_char logic, but we don't actually want the user effects like triggering autocomplete etc
+    bool automated;
+};
+
 struct Editor {
     u32 id;
     Pool mem;
@@ -237,6 +244,9 @@ struct Editor {
         cur2 replace_end;
         List<uchar> replace_old_chars;
 
+        // for dotrepeat in insert/replace mode
+        int edit_backspaced_graphemes;
+
         struct {
             bool inserted;
             int buf_version;
@@ -253,6 +263,7 @@ struct Editor {
             bool has_input;
             Vim_Mode input_mode;
             List<uchar> input_chars;
+            int backspaced_graphemes;
         } dotrepeat;
     } vim;
 
@@ -279,7 +290,7 @@ struct Editor {
     void filter_autocomplete_results(Autocomplete* ac);
     void trigger_parameter_hint();
 
-    void type_char(uchar ch, bool is_replace_mode = false /* >:( */);
+    void type_char(uchar ch, Type_Char_Opts *opts = NULL);
     void update_autocomplete(bool triggered_by_ident);
     void update_parameter_hint();
 
@@ -293,7 +304,7 @@ struct Editor {
     void format_on_save(bool fix_imports);
     void handle_save(bool about_to_close = false);
     bool is_current_editor();
-    cur2 backspace_in_insert_mode(bool dry_run = false);
+    void backspace_in_insert_mode();
     void backspace_in_replace_mode();
     void ensure_cursor_on_screen();
     void ensure_cursor_on_screen_by_moving_view(Ensure_Cursor_Mode mode = ECM_NONE);

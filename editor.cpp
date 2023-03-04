@@ -1853,17 +1853,24 @@ curr_change.new_end_point = cur_to_tspoint(cur);
 */
 
 void Editor::backspace_in_replace_mode() {
+    auto old_cur = cur;
+
+    auto it = iter();
+    if (it.bof()) return;
+    it.gr_prev();
+    auto start = it.pos;
+
     if (cur <= vim.replace_start) {
         // move cursor but don't delete
-        auto start = backspace_in_insert_mode(true); // dry run
         move_cursor(start);
         vim.replace_start = start;
+        vim.edit_backspaced_graphemes++;
         return;
     }
 
     // delete the char, then insert old character if we're in range
-    auto old_cur = cur;
-    auto start = backspace_in_insert_mode();
+    buf->remove(start, cur);
+    move_cursor(start);
 
     if (old_cur > vim.replace_end) return;
 
@@ -1886,15 +1893,17 @@ void Editor::backspace_in_replace_mode() {
     vim.replace_end = start;
 }
 
-void Editor::type_char(uchar ch, bool is_replace_mode) {
+void Editor::type_char(uchar ch, Type_Char_Opts *opts) {
+    if (!opts) opts = new_object(Type_Char_Opts);
+
     // ...wait, why did i comment this out
     // i think it was because it was completing when i didn't want it to
     // handle typing a dot when an import is selected
     /*
     bool already_typed = false;
     do {
-        // commented out now, but if we bring it back, don't run it when is_replace_mode
-        if (is_replace_mode) break;
+        // commented out now, but if we bring it back, don't run it when opts->replace_mode
+        if (opts->replace_mode) break;
         if (ch != '.') break;
 
         if (!autocomplete.ac.results) break;
@@ -1913,7 +1922,7 @@ void Editor::type_char(uchar ch, bool is_replace_mode) {
     if (!already_typed) type_char(ch);
     */
 
-    if (is_replace_mode) {
+    if (opts->replace_mode) {
         bool replacing = (cur.x < buf->lines[cur.y].len);
         if (replacing) {
             auto it = iter();
@@ -1973,35 +1982,47 @@ void Editor::type_char(uchar ch, bool is_replace_mode) {
                 break;
         }
 
-        // ===============================================
+        // ======================================
         // code that actually performs the dedent
-        // this is probably what we care about for replace
-        // ===============================================
+        // ======================================
 
-        if (is_replace_mode) {
-            // i think this will become more clear once we figure out how enter
-            // works in replace mode
-        } else {
-            // "backspace" to start of line
-            // we can't just buf->remove() and move_cursor() because we are
-            // in insert mode, and there is backspace logic that needs to run
-            while (cur.x > 0) backspace_in_insert_mode();
+        // start at cur
+        pos = cur;
 
-            // insert indentation
-            auto pos = cur;
-            pos = buf->insert(pos, indentation->items, indentation->len);
+        // remove the indentation without calling backspace (don't set
+        // insert_start or replace_start or update edit_backspaced_graphemes)
+        auto start = new_cur2(0, pos.y);
+        buf->remove(start, pos);
+        pos = start;
 
-            // insert the brace
-            pos = buf->insert(pos, ch);
+        // insert indentation
+        pos = buf->insert(pos, indentation->items, indentation->len);
 
-            // move cursor after everything we typed
-            move_cursor(pos);
+        // set this as the new insert_start/replace_start, don't call edit_backspaced_graphemes
+        // honestly this is a huge hack and i hate it
+        if (world.vim.on) {
+            switch (world.vim_mode()) {
+            case VI_INSERT:
+                if (pos < vim.insert_start)
+                    vim.insert_start = pos;
+                break;
+            case VI_REPLACE:
+                if (pos < vim.replace_start)
+                    vim.replace_start = pos;
+                break;
+            }
         }
+
+        // now insert the brace
+        pos = buf->insert(pos, ch);
+
+        // move cursor after everything we typed
+        move_cursor(pos);
         break;
     }
     }
 
-    if (is_replace_mode) return;  // the rest is insert mode only
+    if (opts->replace_mode || opts->automated) return;
 
     switch (ch) {
     case '.':
@@ -2066,18 +2087,22 @@ void Editor::update_autocomplete(bool triggered_by_ident) {
         trigger_autocomplete(false, triggered_by_ident);
 }
 
-cur2 Editor::backspace_in_insert_mode(bool dry_run) {
+void Editor::backspace_in_insert_mode() {
     auto it = iter();
-    if (it.bof()) return new_cur2(0, 0);
+    if (it.bof()) return;
     it.gr_prev();
 
-    if (!dry_run) {
-        buf->remove(it.pos, cur);
-        move_cursor(it.pos);
+    buf->remove(it.pos, cur);
+    move_cursor(it.pos);
+
+    if (world.vim.on) {
+        if (it.pos < vim.insert_start) {
+            vim.insert_start = it.pos;
+            vim.edit_backspaced_graphemes++;
+        }
     }
 
     last_closed_autocomplete = NULL_CUR;
-    return it.pos;
 }
 
 bool Editor::optimize_imports() {
@@ -3874,6 +3899,7 @@ void Editor::vim_enter_insert_mode(Vim_Command *cmd, fn<void()> prep) {
     prep(); // call this after starting history batch
 
     vim.insert_start = cur;
+    vim.edit_backspaced_graphemes = 0;
     vim_copy_command(&vim.insert_command, cmd); // why are we doing this?
 
     world.vim_set_mode(VI_INSERT);
@@ -3885,6 +3911,8 @@ void Editor::vim_enter_replace_mode() {
     vim.replace_start = cur;
     vim.replace_end = cur;
     vim.replace_old_chars.len = 0;
+    vim.edit_backspaced_graphemes = 0;
+
     world.vim_set_mode(VI_REPLACE);
 }
 
@@ -3914,6 +3942,7 @@ void Editor::vim_return_to_normal_mode(bool from_dotrepeat) {
                 auto b = buf->inc_cur(cur);
                 ORDER(a, b);
 
+                vim.dotrepeat.backspaced_graphemes = vim.edit_backspaced_graphemes;
                 vim.dotrepeat.input_chars.len = 0;
                 for (auto it = iter(a); it.pos != b; it.next())
                     vim.dotrepeat.input_chars.append(it.peek());
@@ -4092,25 +4121,22 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                     if (mode != dr.input_mode)
                         return false;
 
-                    switch (mode) {
-                    case VI_INSERT: {
-                        auto pos = buf->insert(cur, dr.input_chars.items, dr.input_chars.len);
-                        move_cursor(pos);
-                        break;
-                    }
-                    case VI_REPLACE: {
-                        For (&dr.input_chars) {
-                            // This seems like it might be super slow as there
-                            // might be a bunch of shit that happens on each
-                            // type_char call. Currently when is_replace_mode
-                            // is true, everything is turned off. But that
-                            // might change in the future. Might be better to
-                            // have a flag like "skip_all_checks" or
-                            // "just_insert" or something.
-                            type_char(it, /* is_replace_mode = */true);
+                    for (int i = 0; i < dr.backspaced_graphemes; i++) {
+                        switch (mode) {
+                        case VI_INSERT:
+                            backspace_in_insert_mode();
+                            break;
+                        case VI_REPLACE:
+                            backspace_in_replace_mode();
+                            break;
                         }
-                        break;
                     }
+
+                    For (&dr.input_chars) {
+                        Type_Char_Opts opts; ptr0(&opts);
+                        opts.replace_mode = (mode == VI_REPLACE);
+                        opts.automated = true;
+                        type_char(it, &opts);
                     }
 
                     vim_return_to_normal_mode(true); // from_dotrepeat

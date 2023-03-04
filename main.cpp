@@ -887,7 +887,9 @@ void handle_window_event(Window_Event *it) {
         if (!ed->is_modifiable()) break;
 
         ed->delete_selection();
-        ed->type_char(ch, world.vim_mode() == VI_REPLACE);
+        Type_Char_Opts opts; ptr0(&opts);
+        opts.replace_mode = world.vim_mode() == VI_REPLACE;
+        ed->type_char(ch, &opts);
         break;
     }
     }
