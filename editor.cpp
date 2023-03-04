@@ -2521,7 +2521,7 @@ int Editor::first_nonspace_cp(int y) {
     return it.pos.x;
 }
 
-void Editor::vim_handle_capital_s(Vim_Command *cmd) {
+void Editor::vim_handle_visual_S(Vim_Command *cmd) {
     vim_enter_insert_mode(cmd, [&]() {
         auto selection = get_selection(SEL_LINE);
         auto range = selection->ranges->at(0);
@@ -4212,7 +4212,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                 *can_dotrepeat = true;
                 return true;
             case VI_VISUAL:
-                vim_handle_capital_s(cmd);
+                vim_handle_visual_S(cmd);
                 *can_dotrepeat = true;
                 return true;
             }
@@ -4278,7 +4278,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                 *can_dotrepeat = true;
                 return true;
             case VI_VISUAL: {
-                vim_handle_capital_s(cmd);
+                vim_handle_visual_S(cmd);
                 *can_dotrepeat = true;
                 return true;
             }
