@@ -2751,14 +2751,33 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
         }
         case 'z': {
             ptr++;
-            auto ch = peek_char();
-            switch (ch) {
-            case 'f':
-                ptr++;
-                out->op.append(char_input('z'));
-                out->op.append(char_input(ch));
-                goto done;
+            if (eof()) return VIM_PARSE_WAIT;
+
+            auto it2 = peek();
+            bool is_zscroll = false;
+
+            if (it2.is_key) {
+                is_zscroll = (it2.key == CP_KEY_ENTER && it2.mods == 0);
+            } else {
+                switch (it2.ch) {
+                case 't':
+                case '.':
+                case 'z':
+                case '-':
+                case 'b':
+                    is_zscroll = true;
+                    break;
+                }
             }
+
+            if (is_zscroll) {
+                ptr++;
+                out->op.append(it);
+                out->op.append(it2);
+                skip_motion = true;
+                break;
+            }
+
             ptr--;
             break;
         }
@@ -4630,13 +4649,53 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             break;
         }
         case 'z': {
-            auto it2 = op[1];
-            if (!it2.is_key) {
-                switch (it2.ch) {
-                case 'f': {
+            uchar arg = 0;
+            auto &inp2 = cmd->op[1];
+            if (inp2.is_key) {
+                // if this happens enough, maybe just turn all non-mod enter
+                // key events into winev_char with ch = '\n'
+                if (inp2.mods == CP_MOD_NONE && inp2.key == CP_KEY_ENTER)
+                    arg = '\n';
+                else
+                    break;
+            } else {
+                arg = inp2.ch;
+            }
+
+            switch (arg) {
+            case '\n':
+            case 't':
+            case '.':
+            case 'z':
+            case '-':
+            case 'b': {
+                enum Screen_Pos { SCREEN_TOP, SCREEN_MIDDLE, SCREEN_BOTTOM };
+
+                Screen_Pos screen_pos;
+                bool reset_cursor;
+
+                switch (arg) {
+                case '\n':
+                case 't':
+                    view.y = relu_sub(c.y, options.scrolloff);
+                    reset_cursor = (arg == '\n');
+                    break;
+                case '.':
+                case 'z':
+                    view.y = relu_sub(c.y, view.h / 2);
+                    reset_cursor = (arg == '.');
+                    break;
+                case '-':
+                case 'b':
+                    view.y = relu_sub(c.y + options.scrolloff + 1, view.h);
+                    reset_cursor = (arg == '-');
                     break;
                 }
-                }
+
+                if (reset_cursor)
+                    move_cursor(new_cur2(first_nonspace_cp(c.y), c.y));
+                break;
+            }
             }
             break;
         }
