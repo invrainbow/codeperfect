@@ -312,6 +312,12 @@ struct Editor {
     void ast_navigate_prev();
     void ast_navigate_next();
 
+    Find_Matching_Brace_Result find_matching_brace_with_ast(uchar ch, cur2 pos, cur2 *out);
+    cur2 find_matching_brace_with_text(uchar ch, cur2 pos);
+    cur2 find_matching_brace(uchar ch, cur2 pos);
+
+    // === vim stuff ===
+
     Vim_Parse_Status vim_parse_command(Vim_Command *out);
     bool vim_handle_char(u32 ch);
     bool vim_handle_key(int key, int mods);
@@ -337,10 +343,6 @@ struct Editor {
     void vim_yank_text(ccstr text);
     ccstr vim_paste_text();
     void indent_block(int y1, int y2, int indents);
-
-    Find_Matching_Brace_Result find_matching_brace_with_ast(uchar ch, cur2 pos, cur2 *out);
-    cur2 find_matching_brace_with_text(uchar ch, cur2 pos);
-    cur2 find_matching_brace(uchar ch, cur2 pos);
 };
 
 void vim_copy_command(Vim_Command *dest, Vim_Command *src);
