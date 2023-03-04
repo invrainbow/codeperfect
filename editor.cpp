@@ -4464,6 +4464,8 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             return true;
         }
         case 'x': {
+            SCOPED_BATCH_CHANGE(buf);
+
             switch (world.vim_mode()) {
             case VI_NORMAL: {
                 auto it = iter();
