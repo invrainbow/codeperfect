@@ -2521,6 +2521,16 @@ int Editor::first_nonspace_cp(int y) {
     return it.pos.x;
 }
 
+void Editor::vim_handle_capital_s(Vim_Command *cmd) {
+    vim_enter_insert_mode(cmd, [&]() {
+        auto selection = get_selection(SEL_LINE);
+        auto range = selection->ranges->at(0);
+        vim_delete_lines(range.start.y, range.end.y);
+        auto start = open_newline(range.start.y);
+        move_cursor(start);
+    });
+}
+
 cur2 Editor::vim_join_lines(int y, int count) {
     SCOPED_BATCH_CHANGE(buf);
 
@@ -4196,9 +4206,16 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             return true;
         }
         case 'R': {
-            vim_enter_replace_mode();
-            *can_dotrepeat = true;
-            return true;
+            switch (world.vim_mode()) {
+            case VI_NORMAL:
+                vim_enter_replace_mode();
+                *can_dotrepeat = true;
+                return true;
+            case VI_VISUAL:
+                vim_handle_capital_s(cmd);
+                *can_dotrepeat = true;
+                return true;
+            }
         }
         case 'I': {
             if (world.vim_mode() == VI_NORMAL) {
@@ -4227,40 +4244,41 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             break;
 
         case 's':
+            switch (world.vim_mode()) {
+            case VI_NORMAL:
+                enter_insert_mode([&]() {
+                    auto it = iter(c);
+                    it.gr_next();
+                    vim_delete_range(c, it.pos);
+                    // move_cursor(c); // redundant
+                });
+                *can_dotrepeat = true;
+                return true;
+            case VI_VISUAL: {
+                enter_insert_mode([&]() {
+                    auto selection = get_selection();
+                    auto start = vim_delete_selection(selection);
+                    move_cursor(start);
+                });
+                *can_dotrepeat = true;
+                return true;
+            }
+            }
+            break;
+
         case 'S':
             switch (world.vim_mode()) {
             case VI_NORMAL:
                 enter_insert_mode([&]() {
-                    cur2 start, end;
-                    if (inp.ch == 's') {
-                        start = c;
-                        auto gr = buf->idx_cp_to_gr(c.y, c.x);
-                        auto cp = buf->idx_gr_to_cp(c.y, gr+1);
-                        end = new_cur2(cp, c.y);
-                    } else {
-                        start = new_cur2(first_nonspace_cp(c.y), c.y);
-                        end = new_cur2(lines[c.y].len, c.y);
-                    }
-
+                    auto start = new_cur2(first_nonspace_cp(c.y), c.y);
+                    auto end = new_cur2(lines[c.y].len, c.y);
                     vim_delete_range(start, end);
                     move_cursor(start);
                 });
                 *can_dotrepeat = true;
                 return true;
             case VI_VISUAL: {
-                enter_insert_mode([&]() {
-                    cur2 start;
-                    if (inp.ch == 's') {
-                        auto selection = get_selection();
-                        start = vim_delete_selection(selection);
-                    } else {
-                        auto selection = get_selection(SEL_LINE);
-                        auto range = selection->ranges->at(0);
-                        vim_delete_lines(range.start.y, range.end.y);
-                        start = open_newline(range.start.y);
-                    }
-                    move_cursor(start);
-                });
+                vim_handle_capital_s(cmd);
                 *can_dotrepeat = true;
                 return true;
             }

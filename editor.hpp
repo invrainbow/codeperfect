@@ -341,6 +341,7 @@ struct Editor {
     void vim_return_to_normal_mode(bool from_dotrepeat = false);
     cur2 vim_join_lines(int y, int count);
     void vim_yank_text(ccstr text);
+    void vim_handle_capital_s(Vim_Command *cmd);
     ccstr vim_paste_text();
     void indent_block(int y1, int y2, int indents);
 };
