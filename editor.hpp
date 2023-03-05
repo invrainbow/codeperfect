@@ -107,10 +107,20 @@ enum Motion_Type {
     MOTION_OBJ_INNER,
 };
 
-struct Eval_Motion_Result {
+struct Motion_Result {
     Motion_Type type;
     cur2 dest; // anything else?
     cur2 object_start; // for MOTION_OBJECT and MOTION_OBJECT_INNER
+};
+
+struct Motion_Range {
+    cur2 start;
+    cur2 end;
+    bool is_line;
+    // stuff for is_line
+    bool at_end;
+    int y1;
+    int y2;
 };
 
 enum Selection_Type {
@@ -334,7 +344,7 @@ struct Editor {
     bool vim_handle_key(int key, int mods);
     bool vim_handle_input(Vim_Command_Input *input);
 
-    Eval_Motion_Result* vim_eval_motion(Vim_Command *cmd);
+    Motion_Result* vim_eval_motion(Vim_Command *cmd);
     bool vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat);
     int first_nonspace_cp(int y);
     cur2 open_newline(int y);
@@ -354,7 +364,10 @@ struct Editor {
     void vim_handle_visual_S(Vim_Command *cmd);
     cur2 vim_handle_J(Vim_Command *cmd, bool add_spaces);
     ccstr vim_paste_text();
+    cur2 vim_handle_text_transform_command(char command, Motion_Result *motion_result);
+    Motion_Range* vim_process_motion(Motion_Result *motion_result);
     void indent_block(int y1, int y2, int indents);
+    void vim_transform_text(uchar command, cur2 a, cur2 b);
 };
 
 void vim_copy_command(Vim_Command *dest, Vim_Command *src);

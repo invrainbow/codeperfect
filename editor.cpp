@@ -2641,6 +2641,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
     auto bof = [&]() { return ptr == 0; };
     auto eof = [&]() { return ptr == vim.command_buffer->len; };
     auto peek = [&]() { return vim.command_buffer->at(ptr); };
+    auto mode = world.vim_mode();
 
     auto peek_char = [&]() -> char {
         if (eof()) return 0;
@@ -2719,7 +2720,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
                 skip_motion = true;
                 break;
             case CP_KEY_V:
-                switch (world.vim_mode()) {
+                switch (mode) {
                 case VI_NORMAL:
                 case VI_VISUAL:
                     out->op.append(it);
@@ -2736,7 +2737,15 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
         case 'I':
         case 'a':
         case 'A':
-            if (world.vim_mode() == VI_VISUAL)
+            if (mode == VI_VISUAL)
+                break;
+            skip_motion = true;
+            out->op.append(it);
+            ptr++;
+            break;
+
+        case 'U':
+            if (mode != VI_VISUAL)
                 break;
             skip_motion = true;
             out->op.append(it);
@@ -2744,6 +2753,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             break;
 
         case 'u':
+        case '~':
         case 'J':
         case 'R':
         case 'o':
@@ -2805,9 +2815,8 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
         case '>':
         case '<':
         case 'y':
-        case '~':
         case '=':
-            if (world.vim_mode() == VI_VISUAL)
+            if (mode == VI_VISUAL)
                 skip_motion = true;
             out->op.append(it);
             ptr++;
@@ -2838,11 +2847,17 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             switch (ch) {
             case 'q':
             case 'w':
-            case '?':
             case '@':
+                ptr++;
+                out->op.append(it);
+                out->op.append(char_input(ch));
+                goto done;
             case '~':
             case 'u':
             case 'U':
+            case '?':
+                if (mode == VI_VISUAL)
+                    skip_motion = true;
                 ptr++;
                 out->op.append(it);
                 out->op.append(char_input(ch));
@@ -3003,7 +3018,7 @@ done:
     case 'i':
     case 'a': {
         // text objects require visual mode or an operator
-        if (world.vim_mode() != VI_VISUAL && !out->op.len)
+        if (mode != VI_VISUAL && !out->op.len)
             break;
 
         ptr++;
@@ -3154,7 +3169,7 @@ Gr_Type gr_type(Grapheme gr) {
     return GR_OTHER;
 }
 
-Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
+Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
     auto &motion = cmd->motion;
     if (!motion.len) return NULL;
 
@@ -3172,7 +3187,7 @@ Eval_Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
 
     auto c = cur;
     auto &lines = buf->lines;
-    auto ret = new_object(Eval_Motion_Result);
+    auto ret = new_object(Motion_Result);
 
     int o_count = (cmd->o_count == 0 ? 1 : cmd->o_count);
     int m_count = (cmd->m_count == 0 ? 1 : cmd->m_count);
@@ -4005,6 +4020,119 @@ void Editor::vim_return_to_normal_mode(bool from_dotrepeat) {
     world.vim_set_mode(VI_NORMAL, /* calling_from_vim_return_to_normal_mode = */ true);
 }
 
+Motion_Range* Editor::vim_process_motion(Motion_Result *motion_result) {
+    auto ret = new_object(Motion_Range);
+
+    switch (motion_result->type) {
+    // is there even any difference between OBJ and OBJ_INNER outside of vim_eval_motion?
+    case MOTION_OBJ:
+    case MOTION_OBJ_INNER:
+    case MOTION_CHAR_INCL:
+    case MOTION_CHAR_EXCL: {
+        cur2 a = cur;
+        cur2 b = motion_result->dest;
+        if (motion_result->type == MOTION_OBJ || motion_result->type == MOTION_OBJ_INNER)
+            a = motion_result->object_start;
+
+        ORDER(a, b);
+
+        if (motion_result->type != MOTION_CHAR_EXCL) {
+            auto it = iter(b);
+            it.gr_peek();
+            it.gr_next();
+            b = it.pos;
+        }
+
+        ret->start = a;
+        ret->end = b;
+        ret->is_line = false;
+        break;
+    }
+    case MOTION_LINE: {
+        int y1 = cur.y;
+        int y2 = motion_result->dest.y;
+
+        if (y1 > y2) {
+            int tmp = y1;
+            y1 = y2;
+            y2 = tmp;
+        }
+
+        cur2 start = new_cur2(0, y1);
+        cur2 end = new_cur2(0, y2+1);
+
+        bool at_end = (y2 == buf->lines.len-1);
+        if (at_end) {
+            start = buf->dec_cur(start);
+            end = new_cur2(buf->lines[y2].len, y2);
+        }
+
+        ret->start = start;
+        ret->end = end;
+        ret->is_line = false;
+        ret->at_end = at_end;
+        ret->y1 = y1;
+        ret->y2 = y2;
+    }
+    }
+    return ret;
+}
+
+void Editor::vim_transform_text(uchar command, cur2 a, cur2 b) {
+    auto transform_char = [&](uchar it) -> uchar {
+        switch (command) {
+        case '?': // g?
+            if ('a' <= it && it <= 'z')
+                return 'a' + ((it - 'a' + 13) % 26);
+            else if ('A' <= it && it <= 'A')
+                return 'A' + ((it - 'A' + 13) % 26);
+            break;
+        case '~':
+            if ('a' <= it && it <= 'z')
+                return toupper(it);
+            if ('A' <= it && it <= 'Z')
+                return tolower(it);
+            break;
+        case 'u':
+            if ('A' <= it && it <= 'Z')
+                return tolower(it);
+            break;
+        case 'U':
+            if ('a' <= it && it <= 'z')
+                return toupper(it);
+            break;
+        }
+        return it;
+    };
+
+    auto new_chars = new_list(uchar);
+    auto it = iter(a);
+    while (!it.eof() && it.pos != b)
+        new_chars->append(transform_char(it.next()));
+    buf->remove(a, b);
+    buf->insert(a, new_chars->items, new_chars->len);
+}
+
+cur2 Editor::vim_handle_text_transform_command(char command, Motion_Result *motion_result) {
+    SCOPED_BATCH_CHANGE(buf);
+
+    switch (world.vim_mode()) {
+    case VI_VISUAL: {
+        auto sel = get_selection();
+        For (sel->ranges)
+            vim_transform_text(command, it.start, it.end);
+        vim_return_to_normal_mode();
+        return sel->ranges->at(0).start;
+    }
+    case VI_NORMAL: {
+        auto res = vim_process_motion(motion_result);
+        vim_transform_text(command, res->start, res->end);
+        return res->start;
+    }
+    }
+    return NULL_CUR;
+}
+
 bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
     *can_dotrepeat = false;
 
@@ -4455,14 +4583,63 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             }
             break;
 
-        case 'u': {
-            cur2 pos;
-            for (int i = 0; i < o_count; i++) {
-                pos = buf->hist_undo();
-                if (pos == NULL_CUR) return true;
+        case 'U':
+            if (mode == VI_VISUAL) {
+                auto pos = vim_handle_text_transform_command(inp.ch, NULL);
+                if (pos != NULL_CUR) {
+                    move_cursor_normal(pos);
+                    *can_dotrepeat = true;
+                    return true;
+                }
             }
-            move_cursor_normal(pos);
-            return true;
+
+        case '~':
+            switch (mode) {
+            case VI_NORMAL: {
+                auto start = c;
+                auto it = iter(start);
+                for (int i = 0; i < o_count && !it.eol(); i++)
+                    it.next();
+                auto end = it.pos;
+
+                vim_transform_text('~', start, end);
+                move_cursor_normal(end);
+                *can_dotrepeat = true;
+                return true;
+            }
+            case VI_VISUAL: {
+                auto pos = vim_handle_text_transform_command(inp.ch, NULL);
+                if (pos != NULL_CUR) {
+                    move_cursor_normal(pos);
+                    *can_dotrepeat = true;
+                    return true;
+                }
+            }
+            }
+            break;
+
+        case 'u': {
+            switch (mode) {
+            case VI_NORMAL: {
+                cur2 pos;
+                for (int i = 0; i < o_count; i++) {
+                    pos = buf->hist_undo();
+                    if (pos == NULL_CUR) return true;
+                }
+                move_cursor_normal(pos);
+                return true;
+            }
+            case VI_VISUAL: {
+                auto pos = vim_handle_text_transform_command(inp.ch, NULL);
+                if (pos != NULL_CUR) {
+                    move_cursor_normal(pos);
+                    *can_dotrepeat = true;
+                    return true;
+                }
+                break;
+            }
+            }
+            break;
         }
         case 'J': {
             auto pos = vim_handle_J(cmd, true);
@@ -4534,133 +4711,85 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             break;
         }
 
-        case 'c':
-        case 'd':
-        case 'y': {
+        case 'c': {
             SCOPED_BATCH_CHANGE(buf);
-
             switch (mode) {
             case VI_VISUAL: {
-                cp_assert(!motion_result);
                 auto sel = get_selection();
-                cp_assert(sel);
-
-                switch (inp.ch) {
-                case 'c':
-                    enter_insert_mode([&]() {
-                        move_cursor(vim_delete_selection(sel));
-                    });
-                    break;
-                case 'd': {
-                    auto start = vim_delete_selection(sel);
-                    vim_return_to_normal_mode();
-                    move_cursor_normal(start);
-                    break;
-                }
-                case 'y': {
-                    vim_yank_text(get_selection_text(sel));
-                    vim_return_to_normal_mode();
-                    move_cursor_normal(sel->ranges->at(0).start);
-                    break;
-                }
-                }
+                enter_insert_mode([&]() {
+                    move_cursor(vim_delete_selection(sel));
+                });
                 *can_dotrepeat = true;
                 return true;
             }
             case VI_NORMAL: {
-                cp_assert(motion_result);
+                auto res = vim_process_motion(motion_result);
+                enter_insert_mode([&]() {
+                    vim_delete_range(res->start, res->end);
+                    move_cursor(open_newline(res->y1));
+                });
+                *can_dotrepeat = true;
+                return true;
+            }
+            }
+            break;
+        }
 
-                switch (motion_result->type) {
-                // is there even any difference between OBJ and OBJ_INNER outside of vim_eval_motion?
-                case MOTION_OBJ:
-                case MOTION_OBJ_INNER:
-                case MOTION_CHAR_INCL:
-                case MOTION_CHAR_EXCL: {
-                    cur2 a = c;
-                    cur2 b = motion_result->dest;
-                    if (motion_result->type == MOTION_OBJ || motion_result->type == MOTION_OBJ_INNER)
-                        a = motion_result->object_start;
-
-                    ORDER(a, b);
-
-                    if (motion_result->type != MOTION_CHAR_EXCL) {
-                        auto it = iter(b);
-                        it.gr_peek();
-                        it.gr_next();
-                        b = it.pos;
-                    }
-
-                    switch (inp.ch) {
-                    case 'c':
-                        enter_insert_mode([&]() {
-                            vim_delete_range(a, b);
-                            move_cursor(a);
-                        });
-                        break;
-                    case 'd':
-                        vim_delete_range(a, b);
-                        move_cursor_normal(a);
-                        break;
-                    case 'y': {
-                        vim_yank_text(buf->get_text(a, b));
-                        move_cursor_normal(a);
-                        break;
-                    }
-                    }
-                    break;
+        case 'd': {
+            SCOPED_BATCH_CHANGE(buf);
+            switch (mode) {
+            case VI_VISUAL: {
+                auto sel = get_selection();
+                auto start = vim_delete_selection(sel);
+                vim_return_to_normal_mode();
+                move_cursor_normal(start);
+                *can_dotrepeat = true;
+                return true;
+            }
+            case VI_NORMAL: {
+                auto res = vim_process_motion(motion_result);
+                if (res->is_line) {
+                    vim_delete_range(res->start, res->end);
+                    int y = min(res->y1, lines.len-1);
+                    move_cursor_normal(new_cur2(first_nonspace_cp(y), y));
+                } else {
+                    vim_delete_range(res->start, res->end);
+                    move_cursor_normal(res->start);
                 }
-                case MOTION_LINE: {
-                    int y1 = c.y;
-                    int y2 = motion_result->dest.y;
+                *can_dotrepeat = true;
+                return true;
+            }
+            }
+            break;
+        }
 
-                    if (y1 > y2) {
-                        int tmp = y1;
-                        y1 = y2;
-                        y2 = tmp;
-                    }
+        case 'y': {
+            SCOPED_BATCH_CHANGE(buf);
+            switch (mode) {
+            case VI_VISUAL: {
+                auto sel = get_selection();
+                vim_yank_text(get_selection_text(sel));
+                vim_return_to_normal_mode();
+                move_cursor_normal(sel->ranges->at(0).start);
+                *can_dotrepeat = true;
+                return true;
+            }
+            case VI_NORMAL: {
+                auto res = vim_process_motion(motion_result);
+                if (res->is_line) {
+                    auto real_start = res->start;
+                    if (res->at_end)
+                        real_start = buf->inc_cur(real_start);
 
-                    cur2 start = new_cur2(0, y1);
-                    cur2 end = new_cur2(0, y2+1);
+                    auto text = buf->get_text(real_start, res->end);
+                    if (res->at_end)
+                        text = cp_strcat(text, "\n");
 
-                    bool at_end = (y2 == lines.len-1);
-                    if (at_end) {
-                        start = buf->dec_cur(start);
-                        end = new_cur2(lines[y2].len, y2);
-                    }
-
-                    switch (inp.ch) {
-                    case 'c':
-                        enter_insert_mode([&]() {
-                            vim_delete_range(start, end);
-                            move_cursor(open_newline(y1));
-                        });
-                        break;
-                    case 'd': {
-                        vim_delete_range(start, end);
-                        auto to = new_cur2(0, y1);
-                        if (y1 >= lines.len) {
-                            int y = lines.len-1;
-                            to = new_cur2(first_nonspace_cp(y), y);
-                        }
-                        move_cursor_normal(to);
-                        break;
-                    }
-                    case 'y': {
-                        auto real_start = start;
-                        if (at_end)
-                            real_start = buf->inc_cur(start);
-
-                        auto text = buf->get_text(real_start, end);
-                        if (at_end)
-                            text = cp_strcat(text, "\n");
-
-                        vim_yank_text(text);
-                        move_cursor_normal(real_start);
-                        break;
-                    }
-                    }
-                    break;
-                }
+                    vim_yank_text(text);
+                    move_cursor_normal(real_start);
+                } else {
+                    vim_yank_text(buf->get_text(res->start, res->end));
+                    move_cursor_normal(res->start);
                 }
                 *can_dotrepeat = true;
                 return true;
@@ -4741,8 +4870,6 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             }
             break;
         }
-        case '~':
-            break;
         case '!':
             break;
         case '=':
@@ -4752,12 +4879,22 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             switch (arg) {
             case 'q':
             case 'w':
-            case '?':
             case '@':
+                break;
+
             case '~':
             case 'u':
             case 'U':
+            case '?': {
+                auto pos = vim_handle_text_transform_command(arg, motion_result);
+                if (pos != NULL_CUR) {
+                    move_cursor_normal(pos);
+                    *can_dotrepeat = true;
+                    return true;
+                }
                 break;
+            }
+
             case 'I':
                 switch (world.vim_mode()) {
                 case VI_NORMAL:
