@@ -1481,6 +1481,10 @@ void Editor::ast_navigate_next() {
 }
 
 void Editor::cleanup() {
+    // before exiting, if we're in normal mode, get out
+    if (world.vim.on && world.vim_mode() != VI_NORMAL)
+        vim_return_to_normal_mode();
+
     buf->cleanup();
     mem.cleanup();
     if (world.vim.on)
