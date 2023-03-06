@@ -261,6 +261,7 @@ struct Buffer {
     i32 cur_to_offset(cur2 c);
     cur2 offset_to_cur(i32 off, bool nothrow = true);
     cur2 inc_gr(cur2 c);
+    cur2 dec_gr(cur2 c);
 
     // this is so stupid lmao
     u32 idx_byte_to_gr(int y, int off);

@@ -1025,6 +1025,13 @@ cur2 Buffer::inc_gr(cur2 c) {
     return it.pos;
 }
 
+cur2 Buffer::dec_gr(cur2 c) {
+    auto it = iter(c);
+    if (!it.bof())
+        it.gr_prev();
+    return it.pos;
+}
+
 cur2 Buffer::dec_cur(cur2 c) {
     auto it = iter(c);
     it.prev();

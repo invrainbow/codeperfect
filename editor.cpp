@@ -2975,7 +2975,23 @@ done:
         ptr++;
         out->motion.append(it);
         return VIM_PARSE_DONE;
+    case '[':
+    case ']': {
+        ptr++;
+        if (eof()) return VIM_PARSE_WAIT;
 
+        auto ch = peek_char();
+        switch (ch) {
+        case '[':
+        case ']':
+            ptr++;
+            out->motion.append(it);
+            out->motion.append(char_input(ch));
+            return VIM_PARSE_DONE;
+        }
+        ptr--;
+        break;
+    }
     case 'g': {
         ptr++;
         if (eof()) return VIM_PARSE_WAIT;
@@ -3324,6 +3340,71 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             }
 
             ret->dest = pos;
+            ret->type = MOTION_CHAR_EXCL;
+            return ret;
+        }
+
+        case '[':
+        case ']': {
+            auto arg = get_second_char_arg();
+            if (arg != '[' && arg != ']') break;
+
+            bool forward = (inp.ch == ']');
+            bool find_close = (arg != inp.ch);
+
+            auto try_using_ast = [&]() -> bool {
+                if (lang != LANG_GO) return false;;
+                auto root = new_ast_node(ts_tree_root_node(buf->tree), NULL);
+                if (root->type() != TS_SOURCE_FILE) return false;
+
+                Ast_Node *target = NULL;
+
+                int i = 0;
+                FOR_NODE_CHILDREN (root) {
+                    if (it->end() >= c) {
+                        target = it;
+                        break;
+                    }
+                    i++;
+                }
+
+                cur2 dest = c;
+                for (i = 0; i < count; i++) {
+                    if (forward) {
+                        if (!find_close || buf->inc_gr(dest) >= target->end()) {
+                            target = target->next();
+                            if (!target) break;
+                        }
+                    } else {
+                        if (find_close || dest == target->start()) {
+                            target = target->prev();
+                            if (!target) break;
+                        }
+                    }
+                    dest = (find_close ? buf->dec_gr(target->end()) : target->start());
+                }
+                ret->dest = dest;
+                return true;
+            };
+
+            if (!try_using_ast()) {
+                int y = cur.y;
+
+                for (int i = 0; i < count; i++) {
+                    uchar target = (find_close ? '}' : '{');
+                    if (forward) {
+                        for (; y < lines.len-1; y++)
+                            if (lines[y].len && lines[y][0] == target)
+                                break;
+                    } else {
+                        for (; y > 0; y--)
+                            if (lines[y].len && lines[y][0] == target)
+                                break;
+                    }
+                }
+                ret->dest = new_cur2(0, y);
+            }
+
             ret->type = MOTION_CHAR_EXCL;
             return ret;
         }
