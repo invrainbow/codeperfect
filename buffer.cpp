@@ -153,7 +153,7 @@ Grapheme Buffer_It::gr_prev() {
 Grapheme Buffer_It::gr_next() {
     cur2 newpos;
     auto ret = gr_peek(&newpos);
-    pos = newpos;
+    if (ret) pos = newpos;
     return ret;
 }
 
