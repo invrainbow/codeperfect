@@ -2978,7 +2978,6 @@ done:
 
     case 'g': {
         ptr++;
-
         if (eof()) return VIM_PARSE_WAIT;
 
         auto ch = peek_char();
@@ -2992,11 +2991,11 @@ done:
         case '^':
         case '$':
             ptr++;
-            out->motion.append(char_input('g'));
+            out->motion.append(it);
             out->motion.append(char_input(ch));
             return VIM_PARSE_DONE;
         }
-
+        ptr--;
         break;
     }
     case 'f':
