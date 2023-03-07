@@ -4521,15 +4521,17 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             auto text = cstr_to_ustr(raw_text);
             bool as_line = (*text->last() == '\n');
 
-            // pastes `text` at given `pos` and returns pos where cursor should be placed after
-            auto paste_and_get_last_char = [&](cur2 pos) -> cur2 {
-                buf->insert(pos, text->items, text->len);
-
-                // go to last character of inserted text
-                auto it = iter(pos);
-                for (int i = 0; i < text->len - 1; i++)
-                    it.next();
-                return it.pos;
+            auto paste_and_move_cursor = [&](cur2 pos) {
+                auto newpos = NULL_CUR;
+                for (int i = 0; i < o_count; i++) {
+                    // for line based pasting, move cursor to beginning of first line
+                    if (as_line && i == 0)
+                        newpos = new_cur2(first_nonspace_cp(pos.y), pos.y);
+                    pos = buf->insert(pos, text->items, text->len);
+                }
+                if (newpos == NULL_CUR)
+                    newpos = buf->dec_gr(pos);
+                move_cursor_normal(newpos);
             };
 
             switch (world.vim_mode()) {
@@ -4549,9 +4551,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                             buf->insert(range.start, '\n');
                             y++;
                         }
-
-                        buf->insert(new_cur2(0, y), text->items, text->len);
-                        move_cursor_normal(new_cur2(first_nonspace_cp(y), y));
+                        paste_and_move_cursor(new_cur2(0, y));
                         break;
                     }
                     case SEL_BLOCK:
@@ -4563,9 +4563,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                     case SEL_CHAR:
                     case SEL_LINE: {
                         vim_delete_selection(sel);
-                        auto pos = sel->ranges->at(0).start;
-                        auto newpos = paste_and_get_last_char(pos);
-                        move_cursor_normal(newpos);
+                        paste_and_move_cursor(sel->ranges->at(0).start);
                         break;
                     }
                     case SEL_BLOCK:
@@ -4589,16 +4587,12 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                     } else {
                         y = c.y;
                     }
-                    buf->insert(new_cur2(0, y), text->items, text->len);
-                    // go to first nonspace of begining of inserted text
-                    move_cursor_normal(new_cur2(first_nonspace_cp(y), y));
+                    paste_and_move_cursor(new_cur2(0, y));
                 } else {
                     cur2 pos = c;
                     if (inp.ch == 'p')
                         pos = buf->inc_gr(pos);
-
-                    auto newpos = paste_and_get_last_char(pos);
-                    move_cursor_normal(newpos);
+                    paste_and_move_cursor(pos);
                 }
                 *can_dotrepeat = true;
                 return true;
