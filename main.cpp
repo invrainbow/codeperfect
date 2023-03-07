@@ -477,9 +477,20 @@ void handle_key_event(Window_Event *it) {
 
         auto indent_chars = editor->get_autoindent(editor->cur.y);
         auto start = editor->cur;
+
+        // remove any existing indent, this happens if you have "foo  bar" and
+        // press enter right after "foo", the next line will contain "  bar"
+        editor->buf->remove(start, new_cur2(editor->first_nonspace_cp(start.y), start.y));
+
+        // insert the new indent
         editor->insert_text_in_insert_mode(indent_chars);
-        auto end = editor->cur;
-        editor->vim_save_inserted_indent(start, end);
+
+        // if we're at the end of the line, save this indent so it can be
+        // deleted if the user escapes out without further edits
+        auto cur = editor->cur;
+        if (cur.x == editor->buf->lines[cur.y].len)
+            editor->vim_save_inserted_indent(start, cur);
+
         return;
     }
     case CP_KEY_BACKSPACE: {

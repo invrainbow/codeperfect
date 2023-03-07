@@ -4170,8 +4170,12 @@ void Editor::vim_return_to_normal_mode(bool from_dotrepeat) {
         // TODO: so far we're only handling indent for insert mode. Need to
         // support for replace mode too. But that comes with handling Enter.
         if (mode == VI_INSERT && ref.inserted && ref.buf_version == buf->buf_version) {
-            buf->remove(ref.start, ref.end);
-            move_cursor(ref.start);
+            // honestly should be an assert, but i dunno when this might fail
+            // can't just buf->remove() and move_cursor(), need to backspace,
+            // because we need the backspace logic
+            if (cur == ref.end)
+                while (cur > ref.start)
+                    backspace_in_insert_mode();
         } else {
             auto gr = buf->idx_cp_to_gr(cur.y, cur.x);
             if (gr) {
