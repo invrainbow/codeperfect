@@ -3132,6 +3132,8 @@ ccstr render_command(Vim_Command *cmd) {
 }
 
 bool gr_isspace(Grapheme gr) {
+    if (!gr) return false;
+
     if (gr->len == 1) {
         auto uch = gr->at(0);
         if (uch < 127 && isspace(uch))
@@ -3141,6 +3143,8 @@ bool gr_isspace(Grapheme gr) {
 }
 
 bool gr_isident(Grapheme gr) {
+    if (!gr) return false;
+
     if (gr->len == 1) {
         auto uch = gr->at(0);
         if (isident(uch))
@@ -3174,13 +3178,13 @@ enum Gr_Type {
     GR_SPACE,
     GR_IDENT,
     GR_OTHER,
+    GR_NULL,
 };
 
 Gr_Type gr_type(Grapheme gr) {
-    if (gr_isspace(gr))
-        return GR_SPACE;
-    if (gr_isident(gr))
-        return GR_IDENT;
+    if (!gr) return GR_NULL;
+    if (gr_isspace(gr)) return GR_SPACE;
+    if (gr_isident(gr)) return GR_IDENT;
     return GR_OTHER;
 }
 
@@ -3450,48 +3454,147 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             switch (arg) {
             case 'w':
             case 'W': {
-                auto it = iter(c);
-                auto type = gr_type(it.gr_peek());
+                // look at char under start
+                // walk backward and eat all chars with same type
+                //
+                // for iw,
+                //
+                //     1. look to right to find current word
+                //     2. if whole word highlighted, look rightward for next word
+                //
+                // for aw,
+                //
+                //     if char under start is a space, grab all spaces + next word
+                //     otherwise, grab next word + all spaces
+                //     if whole range highlighted, repeat this process rightward
 
-                auto is_edge = [&](Grapheme gr) {
-                    if (arg == 'w')
-                        return gr_type(gr) != type;
-                    return gr_isspace(gr) != (type == GR_SPACE);
-                };
-
-                while (!it.eof()) {
-                    auto old = it.pos;
-                    it.gr_next();
-                    if (it.eof() || is_edge(it.gr_peek())) {
-                        it.pos = old;
-                        break;
-                    }
+                bool already_had_visual = false;
+                cur2 start, end;
+                if (world.vim_mode() == VI_VISUAL) {
+                    if (vim.visual_start != c)
+                        already_had_visual = true;
+                    start = vim.visual_start;
+                    end = c;
+                } else {
+                    start = c;
+                    end = c;
                 }
 
-                if (ret->type == MOTION_OBJ) {
-                    // for aw/aW, eat up the spaces after too
+                // auto start = (world.vim_mode() == VI_VISUAL ? vim.visual_start : c);
+                // auto end = c;
+                bool forward = start <= end;
+                // SWAP(start, end);
+
+                auto is_edge = [&](Grapheme gr, Gr_Type starting_type) {
+                    if (arg == 'w')
+                        return (gr_type(gr) != starting_type);
+                    return (gr_isspace(gr) != (starting_type == GR_SPACE));
+                };
+
+                auto it = iter();
+
+                auto advance = [&]() { forward ? it.gr_next () : it.gr_prev(); };
+
+                auto literally_eat_forward = [&](fn<bool(Grapheme)> check) {
                     while (!it.eof()) {
                         auto old = it.pos;
                         it.gr_next();
-                        if (it.eof() || !gr_isspace(it.gr_peek())) {
+                        if (it.eof() || check(it.gr_peek())) {
                             it.pos = old;
                             break;
                         }
                     }
-                }
+                };
 
-                ret->dest = it.pos;
+                auto literally_eat_backward = [&](fn<bool(Grapheme)> check) {
+                    while (!it.bof()) {
+                        auto old = it.pos;
+                        if (check(it.gr_prev())) {
+                            it.pos = old;
+                            break;
+                        }
+                    }
+                };
 
-                it.pos = c;
-                while (!it.bof()) {
-                    auto old = it.pos;
-                    if (is_edge(it.gr_prev())) {
-                        it.pos = old;
-                        break;
+                auto eat_forward = [&](auto check) {
+                    if (forward)
+                        literally_eat_forward(check);
+                    else
+                        literally_eat_backward(check);
+                };
+
+                auto eat_backward = [&](auto check) {
+                    if (forward)
+                        literally_eat_backward(check);
+                    else
+                        literally_eat_forward(check);
+                };
+
+                Grapheme starting_gr = 0;
+
+                {
+                    it.pos = start;
+                    starting_gr = it.gr_peek();
+
+                    if (!already_had_visual) {
+                        // walk backward to find start of word
+                        auto type = gr_type(starting_gr);
+                        eat_backward([&](auto x) { return is_edge(x, type); });
+                        start = it.pos;
                     }
                 }
 
-                ret->object_start = it.pos;
+                auto find_next_word = [&]() {
+                    auto eat_spaces = [&]() {
+                        eat_forward([&](auto x) { return !gr_isspace(x); });
+                    };
+
+                    auto eat_word = [&]() {
+                        auto type = gr_type(it.gr_peek());
+                        eat_forward([&](auto x) { return is_edge(x, type); });
+                    };
+
+                    if (ret->type == MOTION_OBJ_INNER) {
+                        eat_word();
+                        return;
+                    }
+
+                    if (starting_gr != NULL && gr_isspace(starting_gr)) {
+                        eat_spaces();
+                        advance();
+                        eat_word();
+                    } else {
+                        eat_word();
+
+                        auto old = it.pos;
+                        advance();
+                        if (gr_isspace(it.gr_peek())) {
+                            eat_spaces();
+                        } else {
+                            it.pos = old;
+                        }
+                    }
+                };
+
+                for (int i = 0; i < count && !(forward ? it.eof() : it.bof()); i++) {
+                    it.pos = end;
+
+                    find_next_word();
+                    // if the word we found is already captured by our range, find the next word
+                    if (forward ? (it.pos <= end) : (it.pos >= end)) {
+                        advance();
+                        if (!(forward ? it.eof() : it.bof()))
+                            find_next_word();
+                    }
+
+                    end = it.pos;
+                }
+
+                if (already_had_visual)
+                    ret->type = MOTION_CHAR_INCL;
+                else
+                    ret->object_start = start;
+                ret->dest = end;
                 return ret;
             }
 
@@ -3897,7 +4000,7 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                 auto type = gr_type(it.gr_peek());
                 it.gr_next();
 
-                if (type == GR_SPACE || is_end(it.gr_peek(), type))
+                if (!it.eof() && (type == GR_SPACE || is_end(it.gr_peek(), type)))
                     while (!it.eof() && gr_isspace(it.gr_peek()))
                         it.gr_next();
 
@@ -4250,17 +4353,17 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         auto mr = motion_result;
         cp_assert(mr);
 
-        // clamp dest
         auto end = mr->dest;
-        if (end.y >= lines.len) {
-            end.y = lines.len-1;
-            end.x = lines[end.y].len-1;
-        }
-        int len = lines[end.y].len;
-        if (end.x >= len && len > 0) end.x = len-1;
-
-        if (world.vim_mode() == VI_VISUAL && mr->type == MOTION_OBJ || mr->type == MOTION_OBJ_INNER)
+        if (world.vim_mode() != VI_VISUAL) {
+            if (end.y >= lines.len) {
+                end.y = lines.len-1;
+                end.x = lines[end.y].len-1;
+            }
+            int len = lines[end.y].len;
+            if (end.x >= len && len > 0) end.x = len-1;
+        } else if (mr->type == MOTION_OBJ || mr->type == MOTION_OBJ_INNER) {
             vim.visual_start = mr->object_start;
+        }
 
         move_cursor_normal(end);
         return true;
