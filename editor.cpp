@@ -4538,11 +4538,9 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             break;
         }
 
-        case ']': {
-            break;
-        }
-
+        case ']':
         case '[': {
+            // TODO: ]p [p etc
             break;
         }
 
