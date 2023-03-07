@@ -4806,7 +4806,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                 auto res = vim_process_motion(motion_result);
                 enter_insert_mode([&]() {
                     vim_delete_range(res->start, res->end);
-                    move_cursor(open_newline(res->y1));
+                    move_cursor(res->is_line ? open_newline(res->y1) : res->start);
                 });
                 *can_dotrepeat = true;
                 return true;
