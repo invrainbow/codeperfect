@@ -275,6 +275,9 @@ struct Editor {
             List<uchar> input_chars;
             int backspaced_graphemes;
         } dotrepeat;
+
+        Mark *local_marks[26];
+        Mark *global_marks[36]; // A-Z and 0-9
     } vim;
 
     Client_Parameter_Hint parameter_hint;

@@ -70,6 +70,7 @@ enum Mark_Type {
     MARK_SEARCH_RESULT,
     MARK_HISTORY,
     MARK_TEST,
+    MARK_VIM_MARK,
 };
 
 struct Mark_Tree;

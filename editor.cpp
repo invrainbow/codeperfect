@@ -1487,8 +1487,21 @@ void Editor::cleanup() {
 
     buf->cleanup();
     mem.cleanup();
-    if (world.vim.on)
+    if (world.vim.on) {
+        For (&vim.local_marks) {
+            if (it) {
+                it->cleanup();
+                world.mark_fridge.free(it);
+            }
+        }
+        For (&vim.global_marks) {
+            if (it) {
+                it->cleanup();
+                world.mark_fridge.free(it);
+            }
+        }
         vim.mem.cleanup();
+    }
     world.history.remove_invalid_marks();
 }
 
@@ -2773,6 +2786,24 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             out->op.append(it);
             ptr++;
             break;
+
+        case 'm':
+        case '`': { // in neovim ` is a motion, but fuck that, it's too hard
+            ptr++;
+            if (eof()) return VIM_PARSE_WAIT;
+
+            auto ch = peek_char();
+            if (isalnum(ch)) {
+                ptr++;
+                out->op.append(it);
+                out->op.append(char_input(ch));
+                skip_motion = true;
+                break;
+            }
+
+            ptr--;
+            break;
+        }
 
         case '[': {
             ptr++;
@@ -4513,6 +4544,70 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
 
         case '[': {
             break;
+        }
+
+        case 'm': {
+            auto arg = get_second_char_arg();
+            if (!arg) break;
+            if (!isalnum(arg)) break;
+
+            auto mark = world.mark_fridge.alloc();
+            buf->mark_tree.insert_mark(MARK_VIM_MARK, cur, mark);
+
+            auto clear_marks = [&](Mark** marks, int idx) {
+                if (marks[idx]) {
+                    marks[idx]->cleanup();
+                    world.mark_fridge.free(marks[idx]);
+                    marks[idx] = NULL;
+                }
+            };
+
+            if (isdigit(arg) || isupper(arg)) {
+                int idx = (isdigit(arg) ? arg-'0'+26 : arg-'A');
+                For (&world.panes)
+                    For (&it.editors)
+                        clear_marks(it.vim.global_marks, idx);
+                vim.global_marks[idx] = mark;
+            } else {
+                clear_marks(vim.local_marks, arg - 'a');
+                vim.local_marks[arg - 'a'] = mark;
+            }
+            return true;
+        }
+
+        case '`': {
+            auto arg = get_second_char_arg();
+            if (!arg) break;
+            if (!isalnum(arg)) break;
+
+            Mark *mark = NULL;
+            Editor *editor = NULL;
+
+            auto try_editor = [&](Editor *ed, Mark **marks, int idx) {
+                if (marks[idx]) {
+                    mark = marks[idx];
+                    editor = ed;
+                    return true;
+                }
+                return false;
+            };
+
+            auto find_mark = [&]() -> bool {
+                if (isupper(arg) || isdigit(arg)) {
+                    int idx = (isdigit(arg) ? arg-'0'+26 : arg-'A');
+                    For (&world.panes)
+                        For (&it.editors)
+                            if (try_editor(&it, it.vim.global_marks, idx))
+                                return true;
+                    return false;
+                }
+                return try_editor(this, vim.local_marks, arg - 'a');
+            };
+
+            if (!find_mark()) return false;
+
+            focus_editor_by_id(editor->id, mark->pos());
+            return true;
         }
 
         case 'p':
