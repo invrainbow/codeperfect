@@ -438,7 +438,7 @@ void handle_key_event(Window_Event *it) {
             return;
         case CP_KEY_C:
             if (world.vim.on && world.vim_mode() != VI_NORMAL) {
-                editor->vim_return_to_normal_mode();
+                editor->vim_return_to_normal_mode_user_input();
                 return;
             }
             // pass through
@@ -1571,10 +1571,9 @@ int realmain(int argc, char **argv) {
                 auto res = check_path(filedir);
 
                 if (res == CPR_NONEXISTENT)
-                    For (&world.panes)
-                        For (&it.editors)
-                            if (are_filepaths_equal(it.filepath, filepath))
-                                it.file_was_deleted = true;
+                    For (get_all_editors())
+                        if (are_filepaths_equal(it->filepath, filepath))
+                            it->file_was_deleted = true;
 
                 if (res != CPR_DIRECTORY) filedir = cp_dirname(filedir);
                 if (streq(filedir, ".")) filedir = "";

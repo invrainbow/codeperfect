@@ -88,15 +88,28 @@ enum Vim_Parse_Status {
 
 struct Vim_Command {
     int o_count;
-    List<Vim_Command_Input> op;
+    List<Vim_Command_Input> *op;
     int m_count;
-    List<Vim_Command_Input> motion;
+    List<Vim_Command_Input> *motion;
 
     void init() {
         ptr0(this);
-        op.init();
-        motion.init();
+        op = new_list(Vim_Command_Input);
+        motion = new_list(Vim_Command_Input);
     }
+
+    Vim_Command *copy();
+};
+
+struct Vim_Dotrepeat_Input {
+    bool filled;
+    List<Vim_Command> *commands;
+    bool has_input;
+    Vim_Mode input_mode;
+    List<uchar> *input_chars;
+    int backspaced_graphemes;
+
+    Vim_Dotrepeat_Input* copy();
 };
 
 enum Motion_Type {
@@ -268,12 +281,10 @@ struct Editor {
         bool yank_register_filled;
 
         struct {
-            bool filled;
-            Vim_Command command;
-            bool has_input;
-            Vim_Mode input_mode;
-            List<uchar> input_chars;
-            int backspaced_graphemes;
+            Pool mem_finished;
+            Pool mem_working;
+            Vim_Dotrepeat_Input input_finished;
+            Vim_Dotrepeat_Input input_working;
         } dotrepeat;
 
         Mark *local_marks[26];
@@ -363,6 +374,7 @@ struct Editor {
     void vim_enter_insert_mode(Vim_Command *cmd, fn<void()> prep);
     void vim_enter_replace_mode();
     void vim_return_to_normal_mode(bool from_dotrepeat = false);
+    void vim_return_to_normal_mode_user_input();
     void vim_yank_text(ccstr text);
     void vim_handle_visual_S(Vim_Command *cmd);
     cur2 vim_handle_J(Vim_Command *cmd, bool add_spaces);
@@ -371,6 +383,7 @@ struct Editor {
     Motion_Range* vim_process_motion(Motion_Result *motion_result);
     void indent_block(int y1, int y2, int indents);
     void vim_transform_text(uchar command, cur2 a, cur2 b);
+    void vim_dotrepeat_commit();
 };
 
 void vim_copy_command(Vim_Command *dest, Vim_Command *src);

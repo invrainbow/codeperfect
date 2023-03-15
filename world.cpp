@@ -660,10 +660,9 @@ Editor* get_current_editor() {
 }
 
 Editor* find_editor(find_editor_func f) {
-    for (auto&& pane : world.panes)
-        For (&pane.editors)
-            if (f(&it))
-                return &it;
+    For (get_all_editors())
+        if (f(it))
+            return it;
     return NULL;
 }
 
@@ -830,18 +829,16 @@ void kick_off_build(Build_Profile *build_profile) {
                 // world.error_list.show = false;
             }
 
-            For (&world.panes) {
-                For (&it.editors) {
-                    auto &editor = it;
-                    auto path = get_path_relative_to(it.filepath, world.current_path);
+            For (get_all_editors()) {
+                auto editor = it;
+                auto path = get_path_relative_to(it->filepath, world.current_path);
 
-                    For (&build->errors) {
-                        if (!it.valid) continue;
-                        if (!are_filepaths_equal(path, it.file)) continue;
+                For (&build->errors) {
+                    if (!it.valid) continue;
+                    if (!are_filepaths_equal(path, it.file)) continue;
 
-                        auto pos = new_cur2(it.col - 1, it.row - 1);
-                        editor.buf->mark_tree.insert_mark(MARK_BUILD_ERROR, pos, it.mark);
-                    }
+                    auto pos = new_cur2(it.col - 1, it.row - 1);
+                    editor->buf->mark_tree.insert_mark(MARK_BUILD_ERROR, pos, it.mark);
                 }
             }
             break;
@@ -974,17 +971,14 @@ void handle_goto_definition(cur2 pos) {
 }
 
 void save_all_unsaved_files() {
-    for (auto&& pane : world.panes) {
-        For (&pane.editors) {
-            // TODO: handle untitled files; and when we do, put it behind a
-            // flag, because save_all_unsaved_files() is now depended on and we
-            // can't break existing functionality
-            if (it.is_untitled) continue;
+    For (get_all_editors()) {
+        // TODO: handle untitled files; and when we do, put it behind a
+        // flag, because save_all_unsaved_files() is now depended on and we
+        // can't break existing functionality
+        if (it->is_untitled) continue;
+        if (!path_has_descendant(world.current_path, it->filepath)) continue;
 
-            if (!path_has_descendant(world.current_path, it.filepath)) continue;
-
-            it.handle_save(false);
-        }
+        it->handle_save(false);
     }
 }
 
@@ -1377,10 +1371,9 @@ void Build::cleanup() {
 }
 
 bool has_unsaved_files() {
-    For (&world.panes)
-        For (&it.editors)
-            if (it.is_unsaved())
-                return true;
+    For (get_all_editors())
+        if (it->is_unsaved())
+            return true;
     return false;
 }
 
@@ -1723,10 +1716,9 @@ bool is_command_enabled(Command cmd) {
     }
 
     case CMD_SAVE_ALL:
-        For (&world.panes)
-            For (&it.editors)
-                if (it.is_modifiable())
-                    return true;
+        For (get_all_editors())
+            if (it->is_modifiable())
+                return true;
         return false;
 
     case CMD_GO_TO_PREVIOUS_ERROR:
@@ -3958,4 +3950,12 @@ void set_zoom_level(int level) {
         serde.init(&f);
         serde.write_type(&options, SERDE_OPTIONS);
     }
+}
+
+List<Editor*> *get_all_editors() {
+    auto ret = new_list(Editor*);
+    For (&world.panes)
+        For (&it.editors)
+            ret->append(&it);
+    return ret;
 }

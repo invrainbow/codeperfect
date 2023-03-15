@@ -893,3 +893,5 @@ NORETURN void crash_handler(int sig);
 void recalc_display_size();
 
 void set_zoom_level(int level);
+
+List<Editor*> *get_all_editors();

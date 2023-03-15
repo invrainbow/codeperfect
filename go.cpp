@@ -716,12 +716,9 @@ void Go_Indexer::reload_editor(void *editor) {
 // @Write
 // Should only be called from main thread.
 void Go_Indexer::reload_all_editors(bool force) {
-    For (&world.panes) {
-        For (&it.editors) {
-            if (!it.buf->tree_dirty && !force) continue;
-            reload_editor(&it);
-        }
-    }
+    For (get_all_editors())
+        if (it->buf->tree_dirty || force)
+            reload_editor(it);
 }
 
 

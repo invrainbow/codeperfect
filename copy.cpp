@@ -4,6 +4,7 @@
 #include "settings.hpp"
 #include "go.hpp"
 #include "dbg.hpp"
+#include "editor.hpp"
 
 // -----
 // stupid c++ template shit
@@ -71,7 +72,6 @@ List<T> *copy_list(List<T*> *arr) {
     auto copy_func = [&](T **it) -> T* { return copy_object(*it); };
     return copy_list<T>(arr, copy_func);
 }
-
 
 // -----
 // actual code that tells us how to copy objects
@@ -454,3 +454,17 @@ Work_Trie_Node *Work_Trie_Node::copy() {
     return ret;
 }
 */
+
+Vim_Dotrepeat_Input *Vim_Dotrepeat_Input::copy() {
+    auto ret = clone(this);
+    ret->commands = copy_list(commands);
+    ret->input_chars = copy_raw_list(input_chars);
+    return ret;
+}
+
+Vim_Command *Vim_Command::copy() {
+    auto ret = clone(this);
+    ret->op = copy_raw_list(op);
+    ret->motion = copy_raw_list(motion);
+    return ret;
+}

@@ -1263,7 +1263,7 @@ bool Editor::trigger_escape(cur2 go_here_after) {
         // autocomplete/parameter? will setting it to true in the vim handler
         // here break anything?
         handled = true;
-        vim_return_to_normal_mode();
+        vim_return_to_normal_mode_user_input();
     }
 
     if (autocomplete.ac.results) {
@@ -1363,8 +1363,8 @@ void Editor::init() {
         vim.insert_command.init();
         vim.replace_old_chars.init();
         vim.yank_register.init();
-        vim.dotrepeat.command.init();
-        vim.dotrepeat.input_chars.init();
+        vim.dotrepeat.mem_working.init();
+        vim.dotrepeat.mem_finished.init();
     }
 
     {
@@ -1500,6 +1500,9 @@ void Editor::cleanup() {
                 world.mark_fridge.free(it);
             }
         }
+
+        vim.dotrepeat.mem_finished.cleanup();
+        vim.dotrepeat.mem_working.cleanup();
         vim.mem.cleanup();
     }
     world.history.remove_invalid_marks();
@@ -2712,7 +2715,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
         case CP_MOD_NONE:
             switch (it.key) {
             case CP_KEY_TAB:
-                out->op.append(it);
+                out->op->append(it);
                 skip_motion = true;
                 break;
             }
@@ -2729,14 +2732,14 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             case CP_KEY_U:
             case CP_KEY_B:
             case CP_KEY_F:
-                out->op.append(it);
+                out->op->append(it);
                 skip_motion = true;
                 break;
             case CP_KEY_V:
                 switch (mode) {
                 case VI_NORMAL:
                 case VI_VISUAL:
-                    out->op.append(it);
+                    out->op->append(it);
                     skip_motion = true;
                     break;
                 }
@@ -2753,7 +2756,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             if (mode == VI_VISUAL)
                 break;
             skip_motion = true;
-            out->op.append(it);
+            out->op->append(it);
             ptr++;
             break;
 
@@ -2761,7 +2764,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             if (mode != VI_VISUAL)
                 break;
             skip_motion = true;
-            out->op.append(it);
+            out->op->append(it);
             ptr++;
             break;
 
@@ -2783,7 +2786,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
         case 'P':
         case '.':
             skip_motion = true;
-            out->op.append(it);
+            out->op->append(it);
             ptr++;
             break;
 
@@ -2793,10 +2796,10 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             if (eof()) return VIM_PARSE_WAIT;
 
             auto ch = peek_char();
-            if (isalnum(ch)) {
+            if (ch < 127 && isalnum(ch)) {
                 ptr++;
-                out->op.append(it);
-                out->op.append(char_input(ch));
+                out->op->append(it);
+                out->op->append(char_input(ch));
                 skip_motion = true;
                 break;
             }
@@ -2813,8 +2816,8 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             switch (ch) {
             case 'p':
                 ptr++;
-                out->op.append(it);
-                out->op.append(char_input(ch));
+                out->op->append(it);
+                out->op->append(char_input(ch));
                 skip_motion = true;
                 break;
             }
@@ -2831,8 +2834,8 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             switch (ch) {
             case 'p':
                 ptr++;
-                out->op.append(it);
-                out->op.append(char_input(ch));
+                out->op->append(it);
+                out->op->append(char_input(ch));
                 skip_motion = true;
                 break;
             }
@@ -2849,7 +2852,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
         case '=':
             if (mode == VI_VISUAL)
                 skip_motion = true;
-            out->op.append(it);
+            out->op->append(it);
             ptr++;
             break;
 
@@ -2860,8 +2863,8 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             auto ch = peek_char();
             if (ch) {
                 ptr++;
-                out->op.append(it);
-                out->op.append(char_input(ch));
+                out->op->append(it);
+                out->op->append(char_input(ch));
                 skip_motion = true;
                 break;
             }
@@ -2880,8 +2883,8 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             case 'w':
             case '@':
                 ptr++;
-                out->op.append(it);
-                out->op.append(char_input(ch));
+                out->op->append(it);
+                out->op->append(char_input(ch));
                 goto done;
             case '~':
             case 'u':
@@ -2890,15 +2893,15 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
                 if (mode == VI_VISUAL)
                     skip_motion = true;
                 ptr++;
-                out->op.append(it);
-                out->op.append(char_input(ch));
+                out->op->append(it);
+                out->op->append(char_input(ch));
                 goto done;
             case 'd':
             case 'I':
             case 'J':
                 ptr++;
-                out->op.append(it);
-                out->op.append(char_input(ch));
+                out->op->append(it);
+                out->op->append(char_input(ch));
                 skip_motion = true;
                 goto done;
             }
@@ -2929,8 +2932,8 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
 
             if (is_zscroll) {
                 ptr++;
-                out->op.append(it);
-                out->op.append(it2);
+                out->op->append(it);
+                out->op->append(it2);
                 skip_motion = true;
                 break;
             }
@@ -2942,13 +2945,13 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
     }
 done:
 
-    // skip_motion implies o->op.len > 0
+    // skip_motion implies o->op->len > 0
     if (skip_motion) return VIM_PARSE_DONE;
 
     if (eof()) return VIM_PARSE_WAIT;
 
     out->m_count = 0;
-    if (out->o_count && !out->op.len) {
+    if (out->o_count && !out->op->len) {
         out->m_count = out->o_count;
         out->o_count = 0;
     } else {
@@ -2961,7 +2964,7 @@ done:
     if (it.is_key) {
         if (it.key == CP_KEY_ENTER) {
             ptr++;
-            out->motion.append(it);
+            out->motion->append(it);
             return VIM_PARSE_DONE;
         }
 
@@ -2970,7 +2973,7 @@ done:
             switch (it.key) {
             case CP_KEY_M:
                 ptr++;
-                out->motion.append(it);
+                out->motion->append(it);
                 return VIM_PARSE_DONE;
             }
             break;
@@ -3004,7 +3007,7 @@ done:
     case '}':
     case '{':
         ptr++;
-        out->motion.append(it);
+        out->motion->append(it);
         return VIM_PARSE_DONE;
     case '[':
     case ']': {
@@ -3016,8 +3019,8 @@ done:
         case '[':
         case ']':
             ptr++;
-            out->motion.append(it);
-            out->motion.append(char_input(ch));
+            out->motion->append(it);
+            out->motion->append(char_input(ch));
             return VIM_PARSE_DONE;
         }
         ptr--;
@@ -3038,8 +3041,8 @@ done:
         case '^':
         case '$':
             ptr++;
-            out->motion.append(it);
-            out->motion.append(char_input(ch));
+            out->motion->append(it);
+            out->motion->append(char_input(ch));
             return VIM_PARSE_DONE;
         }
         ptr--;
@@ -3054,8 +3057,8 @@ done:
 
         auto ch = peek_char();
         if (ch) {
-            out->motion.append(it);
-            out->motion.append(char_input(ch));
+            out->motion->append(it);
+            out->motion->append(char_input(ch));
             return VIM_PARSE_DONE;
         }
         break;
@@ -3064,7 +3067,7 @@ done:
     case 'i':
     case 'a': {
         // text objects require visual mode or an operator
-        if (mode != VI_VISUAL && !out->op.len)
+        if (mode != VI_VISUAL && !out->op->len)
             break;
 
         ptr++;
@@ -3092,16 +3095,16 @@ done:
         case '`':
         case 'a':
         case 'f': // function
-            out->motion.append(it);
-            out->motion.append(char_input(ch));
+            out->motion->append(it);
+            out->motion->append(char_input(ch));
             return VIM_PARSE_DONE;
         }
         break;
     }
     default: {
-        if (out->op.len != 1) break;
+        if (out->op->len != 1) break;
 
-        auto inp = out->op[0];
+        auto inp = out->op->at(0);
         if (inp.is_key) break;
         if (inp.ch != it.ch) break;
 
@@ -3111,7 +3114,7 @@ done:
         case 'c':
         case '>':
         case '<':
-            out->motion.append(inp);
+            out->motion->append(inp);
             return VIM_PARSE_DONE;
         }
         break;
@@ -3148,16 +3151,16 @@ ccstr render_command(Vim_Command *cmd) {
     Text_Renderer rend; rend.init();
 
     rend.write("operator: %d ", cmd->o_count);
-    if (cmd->op.len)
-        rend.write("%s", render_command_buffer(&cmd->op));
+    if (cmd->op->len)
+        rend.write("%s", render_command_buffer(cmd->op));
     else
-        rend.write("<none>", render_command_buffer(&cmd->op));
+        rend.write("<none>", render_command_buffer(cmd->op));
 
     rend.write(" | motion: %d ", cmd->m_count);
-    if (cmd->motion.len)
-        rend.write("%s", render_command_buffer(&cmd->motion));
+    if (cmd->motion->len)
+        rend.write("%s", render_command_buffer(cmd->motion));
     else
-        rend.write("<none>", render_command_buffer(&cmd->motion));
+        rend.write("<none>", render_command_buffer(cmd->motion));
 
     return rend.finish();
 }
@@ -3220,17 +3223,17 @@ Gr_Type gr_type(Grapheme gr) {
 }
 
 Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
-    auto &motion = cmd->motion;
-    if (!motion.len) return NULL;
+    auto motion = cmd->motion;
+    if (!motion->len) return NULL;
 
-    auto &op = cmd->op;
+    auto op = cmd->op;
 
     auto is_op = [&](ccstr s) {
         int len = strlen(s);
-        if (len != op.len) return false;
+        if (len != op->len) return false;
 
         for (int i = 0; i < len; i++)
-            if (op[i].is_key || op[i].ch != s[i])
+            if (op->at(i).is_key || op->at(i).ch != s[i])
                 return false;
         return true;
     };
@@ -3253,8 +3256,8 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
     };
 
     auto get_second_char_arg = [&]() -> uchar {
-        if (motion.len < 2) return 0;
-        auto &inp = motion[1];
+        if (motion->len < 2) return 0;
+        auto &inp = motion->at(1);
         if (inp.is_key) return 0;
         return inp.ch;
     };
@@ -3264,7 +3267,7 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
         goto_line_first_nonspace(y);
     };
 
-    auto inp = motion[0];
+    auto inp = motion->at(0);
     if (inp.is_key) {
         switch (inp.key) {
         case CP_KEY_ENTER:
@@ -4155,18 +4158,19 @@ cur2 Editor::vim_delete_selection(Selection *sel) {
     return delete_selection(sel);
 }
 
+// copies *into* dest inline, instead of making a complete copy
 // expects dest to be initialized
 void vim_copy_command(Vim_Command *dest, Vim_Command *src) {
     dest->m_count = src->m_count;
     dest->o_count = src->o_count;
 
-    dest->op.len = 0;
-    For (&src->op)
-        dest->op.append(it);
+    dest->op->len = 0;
+    For (src->op)
+        dest->op->append(it);
 
-    dest->motion.len = 0;
-    For (&src->motion)
-        dest->motion.append(it);
+    dest->motion->len = 0;
+    For (src->motion)
+        dest->motion->append(it);
 }
 
 void Editor::vim_enter_insert_mode(Vim_Command *cmd, fn<void()> prep) {
@@ -4190,6 +4194,17 @@ void Editor::vim_enter_replace_mode() {
     vim.edit_backspaced_graphemes = 0;
 
     world.vim_set_mode(VI_REPLACE);
+}
+
+// like vim_return_to_normal_mode but triggered by user
+void Editor::vim_return_to_normal_mode_user_input() {
+    /*
+    // if we're directly escaping out of visual mode, wipe dotrepeat (we didn't perform any operations)
+    if (world.vim_mode() == VI_VISUAL) {
+        vim.dotrepeat.input_working.filled = false;
+    }
+    */
+    vim_return_to_normal_mode();
 }
 
 void Editor::vim_return_to_normal_mode(bool from_dotrepeat) {
@@ -4216,19 +4231,28 @@ void Editor::vim_return_to_normal_mode(bool from_dotrepeat) {
         }
 
         buf->hist_batch_end(); // started when entering vi_insert and vi_replace
-        if (!from_dotrepeat) {
-            if (vim.dotrepeat.filled) {
-                auto a = mode == VI_INSERT ? vim.insert_start : vim.replace_start;
-                auto b = buf->inc_cur(cur);
-                ORDER(a, b);
 
-                vim.dotrepeat.backspaced_graphemes = vim.edit_backspaced_graphemes;
-                vim.dotrepeat.input_chars.len = 0;
-                for (auto it = iter(a); it.pos != b; it.next())
-                    vim.dotrepeat.input_chars.append(it.peek());
-                vim.dotrepeat.has_input = true;
-            }
-        }
+        do {
+            if (from_dotrepeat) break;
+
+            auto &iw = vim.dotrepeat.input_working;
+            if (!iw.filled) break;
+            if (!iw.has_input) break; // ?
+            if (iw.input_mode != mode) break;
+
+            iw.backspaced_graphemes = vim.edit_backspaced_graphemes;
+            iw.input_chars->len = 0;
+
+            auto a = mode == VI_INSERT ? vim.insert_start : vim.replace_start;
+            auto b = buf->inc_cur(cur);
+            ORDER(a, b);
+
+            for (auto it = iter(a); it.pos != b; it.next())
+                iw.input_chars->append(it.peek());
+
+            vim_dotrepeat_commit();
+        } while (0);
+
         vim.insert_start = NULL_CUR;
         break;
     }
@@ -4357,7 +4381,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
     auto mode = world.vim_mode();
 
     auto motion_result = vim_eval_motion(cmd);
-    if (cmd->motion.len && !motion_result)
+    if (cmd->motion->len && !motion_result)
         return false;
 
     auto &c = cur;
@@ -4383,8 +4407,8 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         vim_enter_insert_mode(cmd, f);
     };
 
-    auto &op = cmd->op;
-    if (!op.len) {
+    auto op = cmd->op;
+    if (!op->len) {
         auto mr = motion_result;
         cp_assert(mr);
 
@@ -4405,13 +4429,13 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
     }
 
     auto get_second_char_arg = [&]() -> uchar {
-        if (op.len < 2) return 0;
-        auto &inp = op[1];
+        if (op->len < 2) return 0;
+        auto &inp = op->at(1);
         if (inp.is_key) return 0;
         return inp.ch;
     };
 
-    auto inp = op[0];
+    auto inp = op->at(0);
     if (inp.is_key) {
         switch (inp.mods) {
         case CP_MOD_NONE:
@@ -4497,44 +4521,48 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         case '.': {
             if (world.vim_mode() != VI_NORMAL) return false;
 
-            auto &dr = vim.dotrepeat;
-            if (!dr.filled) return false;
+            auto &vdi = vim.dotrepeat.input_finished;
+            if (!vdi.filled) return false;
 
-            // "play back" the dotrepeat
-            Vim_Command tmp; tmp.init();
-            vim_copy_command(&tmp, &dr.command);
-            if (cmd->o_count != 0) {
-                tmp.o_count = cmd->o_count;
-                tmp.m_count = 0;
-            }
-            bool junk;
-            if (vim_exec_command(&tmp, &junk)) {
-                if (dr.has_input) {
-                    auto mode = world.vim_mode();
-                    if (mode != dr.input_mode)
-                        return false;
+            bool failed = false, junk;
+            For (vdi.commands) {
+                Vim_Command tmp; tmp.init();
+                vim_copy_command(&tmp, &it);
+                if (cmd->o_count != 0) {
+                    tmp.o_count = cmd->o_count;
+                    tmp.m_count = 0;
+                }
 
-                    for (int i = 0; i < dr.backspaced_graphemes; i++) {
-                        switch (mode) {
-                        case VI_INSERT:
-                            backspace_in_insert_mode();
-                            break;
-                        case VI_REPLACE:
-                            backspace_in_replace_mode();
-                            break;
-                        }
-                    }
-
-                    For (&dr.input_chars) {
-                        Type_Char_Opts opts; ptr0(&opts);
-                        opts.replace_mode = (mode == VI_REPLACE);
-                        opts.automated = true;
-                        type_char(it, &opts);
-                    }
-
-                    vim_return_to_normal_mode(true); // from_dotrepeat
+                if (!vim_exec_command(&tmp, &junk)) {
+                    failed = true;
+                    break; // or continue?
                 }
             }
+
+            if (failed) break;
+            if (!vdi.has_input) break;
+
+            auto mode = world.vim_mode();
+
+            for (int i = 0; i < vdi.backspaced_graphemes; i++) {
+                switch (mode) {
+                case VI_INSERT:
+                    backspace_in_insert_mode();
+                    break;
+                case VI_REPLACE:
+                    backspace_in_replace_mode();
+                    break;
+                }
+            }
+
+            For (vdi.input_chars) {
+                Type_Char_Opts opts; ptr0(&opts);
+                opts.replace_mode = (mode == VI_REPLACE);
+                opts.automated = true;
+                type_char(it, &opts);
+            }
+
+            vim_return_to_normal_mode(true); // from_dotrepeat
             break;
         }
 
@@ -4562,9 +4590,8 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
 
             if (isdigit(arg) || isupper(arg)) {
                 int idx = (isdigit(arg) ? arg-'0'+26 : arg-'A');
-                For (&world.panes)
-                    For (&it.editors)
-                        clear_marks(it.vim.global_marks, idx);
+                For (get_all_editors())
+                    clear_marks(it->vim.global_marks, idx);
                 vim.global_marks[idx] = mark;
             } else {
                 clear_marks(vim.local_marks, arg - 'a');
@@ -4593,10 +4620,9 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             auto find_mark = [&]() -> bool {
                 if (isupper(arg) || isdigit(arg)) {
                     int idx = (isdigit(arg) ? arg-'0'+26 : arg-'A');
-                    For (&world.panes)
-                        For (&it.editors)
-                            if (try_editor(&it, it.vim.global_marks, idx))
-                                return true;
+                    For (get_all_editors())
+                        if (try_editor(it, it->vim.global_marks, idx))
+                            return true;
                     return false;
                 }
                 return try_editor(this, vim.local_marks, arg - 'a');
@@ -4698,9 +4724,11 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         }
         case 'v':
             vim_handle_visual_mode_key(SEL_CHAR);
+            *can_dotrepeat = true;
             return true;
         case 'V':
             vim_handle_visual_mode_key(SEL_LINE);
+            *can_dotrepeat = true;
             return true;
         case 'i':
             if (mode != VI_NORMAL) return false;
@@ -5182,6 +5210,8 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                 }
                 break;
             case 'd':
+                if (world.vim_mode() != VI_NORMAL)
+                    vim_return_to_normal_mode();
                 handle_goto_definition();
                 return true;
             case 'J': {
@@ -5197,7 +5227,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         }
         case 'z': {
             uchar arg = 0;
-            auto &inp2 = cmd->op[1];
+            auto &inp2 = cmd->op->at(1);
             if (inp2.is_key) {
                 // if this happens enough, maybe just turn all non-mod enter
                 // key events into winev_char with ch = '\n'
@@ -5415,6 +5445,17 @@ cur2 Editor::find_matching_brace(uchar ch, cur2 pos) {
     return find_matching_brace_with_text(ch, pos);
 }
 
+void Editor::vim_dotrepeat_commit() {
+    auto &vdr = vim.dotrepeat;
+
+    vdr.mem_finished.reset();
+    {
+        SCOPED_MEM(&vdr.mem_finished);
+        memcpy(&vdr.input_finished, vdr.input_working.copy(), sizeof(Vim_Dotrepeat_Input));
+    }
+    vdr.input_working.filled = false;
+}
+
 bool Editor::vim_handle_input(Vim_Command_Input *input) {
     switch (world.vim_mode()) {
     case VI_VISUAL:
@@ -5435,14 +5476,64 @@ bool Editor::vim_handle_input(Vim_Command_Input *input) {
             break;
         }
 
+        auto old_mode = world.vim_mode();
+        // bool was_normal = world.vim_mode() == VI_NORMAL;
+        // bool was_visual = world.vim_mode() == VI_VISUAL;
+
         bool can_dotrepeat;
         if (vim_exec_command(&cmd, &can_dotrepeat)) {
-            if (can_dotrepeat) {
-                vim.dotrepeat.filled = true;
-                vim_copy_command(&vim.dotrepeat.command, &cmd);
-                if (world.vim_mode() == VI_INSERT || world.vim_mode() == VI_REPLACE) {
-                    vim.dotrepeat.has_input = true;
-                    vim.dotrepeat.input_mode = world.vim_mode();
+            // several kinds of dotrepeatable changes:
+            //
+            //  - normal -> oper
+            //  - normal -> insert/replace -> input
+            //  - normal -> visual -> oper
+            //  - normal -> visual -> insert -> input
+            //
+            //  so commit when we end in normal (that's "oper") and when we leave insert/replace
+
+            auto &vdr = vim.dotrepeat;
+            auto mode = world.vim_mode();
+
+            auto should_save = [&]() {
+                if (can_dotrepeat) return true;
+
+                // if we started in visual and ended in visual, i.e. it was just a movement
+                if (old_mode == VI_VISUAL && mode == VI_VISUAL) return true;
+
+                return false;
+            };
+
+            if (should_save()) {
+                // if we're starting from normal, begin new input
+                if (old_mode == VI_NORMAL) {
+                    vdr.mem_working.reset();
+                    SCOPED_MEM(&vdr.mem_working);
+
+                    ptr0(&vdr.input_working);
+                    vdr.input_working.filled = true;
+                    vdr.input_working.commands = new_list(Vim_Command);
+                    // don't need to initialize input_chars just yet
+                }
+
+                {
+                    SCOPED_MEM(&vdr.mem_working);
+                    auto newcmd = vdr.input_working.commands->append();
+                    newcmd->init();
+                    vim_copy_command(newcmd, &cmd);
+                }
+
+                // if we're *ending* in normal, copy working -> finished
+                if (mode == VI_NORMAL)
+                    vim_dotrepeat_commit();
+            }
+
+            if (can_dotrepeat && (mode == VI_INSERT || mode == VI_REPLACE)) {
+                vdr.input_working.has_input = true;
+                vdr.input_working.input_mode = mode;
+                vdr.input_working.backspaced_graphemes = 0;
+                {
+                    SCOPED_MEM(&vdr.mem_working);
+                    vdr.input_working.input_chars = new_list(uchar);
                 }
             }
         }
