@@ -4235,20 +4235,26 @@ void Editor::vim_return_to_normal_mode(bool from_dotrepeat) {
         do {
             if (from_dotrepeat) break;
 
-            auto &iw = vim.dotrepeat.input_working;
-            if (!iw.filled) break;
-            if (!iw.has_input) break; // ?
-            if (iw.input_mode != mode) break;
+            auto &vdr = vim.dotrepeat;
 
-            iw.backspaced_graphemes = vim.edit_backspaced_graphemes;
-            iw.input_chars->len = 0;
+            auto &iw = vdr.input_working;
+            if (!iw.filled) break;
+
+            Vim_Dotrepeat_Command *out = NULL;
+            {
+                SCOPED_MEM(&vdr.mem_working);
+                out = iw.commands->append();
+                out->type = VDC_INSERT_TEXT;
+                out->insert_text.backspaced_graphemes = vim.edit_backspaced_graphemes;
+                out->insert_text.chars = new_list(uchar);
+            }
 
             auto a = mode == VI_INSERT ? vim.insert_start : vim.replace_start;
             auto b = buf->inc_cur(cur);
             ORDER(a, b);
 
             for (auto it = iter(a); it.pos != b; it.next())
-                iw.input_chars->append(it.peek());
+                out->insert_text.chars->append(it.peek());
 
             vim_dotrepeat_commit();
         } while (0);
@@ -4519,51 +4525,67 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
     } else {
         switch (inp.ch) {
         case '.': {
-            if (world.vim_mode() != VI_NORMAL) return false;
+            if (world.vim_mode() != VI_NORMAL) break;
 
             auto &vdi = vim.dotrepeat.input_finished;
-            if (!vdi.filled) return false;
+            if (!vdi.filled) break;
 
-            bool failed = false, junk;
-            For (vdi.commands) {
-                Vim_Command tmp; tmp.init();
-                vim_copy_command(&tmp, &it);
-                if (cmd->o_count != 0) {
-                    tmp.o_count = cmd->o_count;
-                    tmp.m_count = 0;
+            auto run_commands = [&]() {
+                For (vdi.commands) {
+                    switch (it.type) {
+                    case VDC_COMMAND: {
+                        Vim_Command tmp; tmp.init();
+                        vim_copy_command(&tmp, &it.command);
+                        if (cmd->o_count != 0) {
+                            tmp.o_count = cmd->o_count;
+                            tmp.m_count = 0;
+                        }
+
+                        bool junk;
+                        if (!vim_exec_command(&tmp, &junk))
+                            return false;
+                    }
+
+                    case VDC_VISUAL_MOVE: {
+                        auto newcur = new_cur2(cur.x + it.visual_move_distance.x, cur.y + it.visual_move_distance.y);
+                        if (newcur.y >= lines.len)
+                            newcur.y = lines.len-1;
+                        if (newcur.x >= lines[newcur.y].len)
+                            newcur.x = lines[newcur.y].len-1;
+                        move_cursor(newcur);
+                        break;
+                    }
+
+                    case VDC_INSERT_TEXT: {
+                        auto mode = world.vim_mode();
+                        for (int i = 0; i < it.insert_text.backspaced_graphemes; i++) {
+                            switch (mode) {
+                            case VI_INSERT:
+                                backspace_in_insert_mode();
+                                break;
+                            case VI_REPLACE:
+                                backspace_in_replace_mode();
+                                break;
+                            }
+                        }
+
+                        For (it.insert_text.chars) {
+                            Type_Char_Opts opts; ptr0(&opts);
+                            opts.replace_mode = (mode == VI_REPLACE);
+                            opts.automated = true;
+                            type_char(it, &opts);
+                        }
+
+                        vim_return_to_normal_mode(true); // from_dotrepeat
+                        break;
+                    }
+                    }
                 }
+                return true;
+            };
 
-                if (!vim_exec_command(&tmp, &junk)) {
-                    failed = true;
-                    break; // or continue?
-                }
-            }
-
-            if (failed) break;
-            if (!vdi.has_input) break;
-
-            auto mode = world.vim_mode();
-
-            for (int i = 0; i < vdi.backspaced_graphemes; i++) {
-                switch (mode) {
-                case VI_INSERT:
-                    backspace_in_insert_mode();
-                    break;
-                case VI_REPLACE:
-                    backspace_in_replace_mode();
-                    break;
-                }
-            }
-
-            For (vdi.input_chars) {
-                Type_Char_Opts opts; ptr0(&opts);
-                opts.replace_mode = (mode == VI_REPLACE);
-                opts.automated = true;
-                type_char(it, &opts);
-            }
-
-            vim_return_to_normal_mode(true); // from_dotrepeat
-            break;
+            if (!run_commands()) break;
+            return true;
         }
 
         case ']':
@@ -5453,6 +5475,7 @@ void Editor::vim_dotrepeat_commit() {
         SCOPED_MEM(&vdr.mem_finished);
         memcpy(&vdr.input_finished, vdr.input_working.copy(), sizeof(Vim_Dotrepeat_Input));
     }
+
     vdr.input_working.filled = false;
 }
 
@@ -5480,6 +5503,10 @@ bool Editor::vim_handle_input(Vim_Command_Input *input) {
         // bool was_normal = world.vim_mode() == VI_NORMAL;
         // bool was_visual = world.vim_mode() == VI_VISUAL;
 
+        cur2 visual_select_distance = NULL_CUR;
+        if (old_mode == VI_VISUAL)
+            visual_select_distance = new_cur2(cur.x - vim.visual_start.x, cur.y - vim.visual_start.y);
+
         bool can_dotrepeat;
         if (vim_exec_command(&cmd, &can_dotrepeat)) {
             // several kinds of dotrepeatable changes:
@@ -5495,11 +5522,14 @@ bool Editor::vim_handle_input(Vim_Command_Input *input) {
             auto mode = world.vim_mode();
 
             auto should_save = [&]() {
-                if (can_dotrepeat) return true;
-
-                // if we started in visual and ended in visual, i.e. it was just a movement
-                if (old_mode == VI_VISUAL && mode == VI_VISUAL) return true;
-
+                if (can_dotrepeat) {
+                    // if we started in visual and ended in normal, that's fine
+                    // if we ended in (i.e. entered) visual, that's fine
+                    // if we started and ended in normal, that's fine
+                    // just not start and end in visual
+                    if (old_mode != VI_VISUAL || mode != VI_VISUAL)
+                        return true;
+                }
                 return false;
             };
 
@@ -5508,33 +5538,27 @@ bool Editor::vim_handle_input(Vim_Command_Input *input) {
                 if (old_mode == VI_NORMAL) {
                     vdr.mem_working.reset();
                     SCOPED_MEM(&vdr.mem_working);
-
                     ptr0(&vdr.input_working);
                     vdr.input_working.filled = true;
-                    vdr.input_working.commands = new_list(Vim_Command);
-                    // don't need to initialize input_chars just yet
+                    vdr.input_working.commands = new_list(Vim_Dotrepeat_Command);
+                } else if (old_mode == VI_VISUAL) {
+                    SCOPED_MEM(&vdr.mem_working);
+                    auto out = vdr.input_working.commands->append();
+                    out->type = VDC_VISUAL_MOVE;
+                    out->visual_move_distance = visual_select_distance;
                 }
 
                 {
                     SCOPED_MEM(&vdr.mem_working);
-                    auto newcmd = vdr.input_working.commands->append();
-                    newcmd->init();
-                    vim_copy_command(newcmd, &cmd);
+                    auto out = vdr.input_working.commands->append();
+                    out->type = VDC_COMMAND;
+                    out->command.init();
+                    vim_copy_command(&out->command, &cmd);
                 }
 
                 // if we're *ending* in normal, copy working -> finished
                 if (mode == VI_NORMAL)
                     vim_dotrepeat_commit();
-            }
-
-            if (can_dotrepeat && (mode == VI_INSERT || mode == VI_REPLACE)) {
-                vdr.input_working.has_input = true;
-                vdr.input_working.input_mode = mode;
-                vdr.input_working.backspaced_graphemes = 0;
-                {
-                    SCOPED_MEM(&vdr.mem_working);
-                    vdr.input_working.input_chars = new_list(uchar);
-                }
             }
         }
         return true;

@@ -455,10 +455,22 @@ Work_Trie_Node *Work_Trie_Node::copy() {
 }
 */
 
+Vim_Dotrepeat_Command *Vim_Dotrepeat_Command::copy() {
+    auto ret = clone(this);
+    switch (type) {
+    case VDC_COMMAND:
+        memcpy(&ret->command, command.copy(), sizeof(Vim_Command));
+        break;
+    case VDC_INSERT_TEXT:
+        ret->insert_text.chars = copy_raw_list(insert_text.chars);
+        break;
+    }
+    return ret;
+}
+
 Vim_Dotrepeat_Input *Vim_Dotrepeat_Input::copy() {
     auto ret = clone(this);
     ret->commands = copy_list(commands);
-    ret->input_chars = copy_raw_list(input_chars);
     return ret;
 }
 

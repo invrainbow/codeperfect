@@ -101,13 +101,29 @@ struct Vim_Command {
     Vim_Command *copy();
 };
 
+enum Vim_Dotrepeat_Command_Type {
+    VDC_COMMAND,
+    VDC_VISUAL_MOVE,
+    VDC_INSERT_TEXT,
+};
+
+struct Vim_Dotrepeat_Command {
+    Vim_Dotrepeat_Command_Type type;
+    union {
+        Vim_Command command;
+        cur2 visual_move_distance;
+        struct {
+            List<uchar> *chars;
+            int backspaced_graphemes;
+        } insert_text;
+    };
+
+    Vim_Dotrepeat_Command *copy();
+};
+
 struct Vim_Dotrepeat_Input {
     bool filled;
-    List<Vim_Command> *commands;
-    bool has_input;
-    Vim_Mode input_mode;
-    List<uchar> *input_chars;
-    int backspaced_graphemes;
+    List<Vim_Dotrepeat_Command> *commands;
 
     Vim_Dotrepeat_Input* copy();
 };
