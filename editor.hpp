@@ -183,6 +183,18 @@ struct Type_Char_Opts {
     bool automated;
 };
 
+struct Vim_Macro {
+    bool active;
+    List<Vim_Command_Input> *inputs;
+    Pool mem;
+};
+
+enum Vim_Macro_State {
+    MACRO_IDLE,
+    MACRO_RUNNING,
+    MACRO_RECORDING,
+};
+
 struct Editor {
     u32 id;
     Pool mem;
@@ -305,6 +317,17 @@ struct Editor {
 
         Mark *local_marks[26];
         Mark *global_marks[36]; // A-Z and 0-9
+
+        Vim_Macro macros[26+10+1]; // A-Z0-9"
+        Vim_Macro_State macro_state;
+        struct {
+            char macro;
+            int runs;      // how many runs
+            int run_idx;   // which run we're on
+            int input_idx; // which input we're on current run
+            char last_run;
+        } macro_run;
+        char macro_record;
     } vim;
 
     Client_Parameter_Hint parameter_hint;
@@ -339,7 +362,7 @@ struct Editor {
 
     void apply_edits(List<TSInputEdit> *edits);
     void reload_file(bool because_of_file_watcher = false);
-    bool trigger_escape(cur2 go_here_after = {-1, -1});
+    bool trigger_escape();
     bool optimize_imports();
     void format_on_save(bool fix_imports);
     void handle_save(bool about_to_close = false);
@@ -400,6 +423,11 @@ struct Editor {
     void indent_block(int y1, int y2, int indents);
     void vim_transform_text(uchar command, cur2 a, cur2 b);
     void vim_dotrepeat_commit();
+    Vim_Macro *vim_get_macro(char macro);
+    void vim_execute_macro_little_bit(u64 deadline);
+
+    void handle_type_enter();
+    void handle_type_backspace(int mods);
 };
 
 void vim_copy_command(Vim_Command *dest, Vim_Command *src);

@@ -1252,19 +1252,10 @@ cur2 Editor::handle_alt_move(bool back, bool backspace) {
     return it.pos;
 }
 
-bool Editor::trigger_escape(cur2 go_here_after) {
-    if (go_here_after == NULL_CUR)
-        postfix_stack.len = 0;
+bool Editor::trigger_escape() {
+    postfix_stack.len = 0;
 
     bool handled = false;
-
-    if (world.vim.on && world.vim_mode() != VI_NORMAL) {
-        // NOTE: was `handled` supposed to just refer to whether it affected
-        // autocomplete/parameter? will setting it to true in the vim handler
-        // here break anything?
-        handled = true;
-        vim_return_to_normal_mode_user_input();
-    }
 
     if (autocomplete.ac.results) {
         handled = true;
@@ -1503,6 +1494,11 @@ void Editor::cleanup() {
 
         vim.dotrepeat.mem_finished.cleanup();
         vim.dotrepeat.mem_working.cleanup();
+
+        for (auto &&macro : vim.macros)
+            if (macro.active)
+                macro.mem.cleanup();
+
         vim.mem.cleanup();
     }
     world.history.remove_invalid_marks();
@@ -2715,6 +2711,10 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
         case CP_MOD_NONE:
             switch (it.key) {
             case CP_KEY_TAB:
+            case CP_KEY_UP:
+            case CP_KEY_LEFT:
+            case CP_KEY_RIGHT:
+            case CP_KEY_DOWN:
                 out->op->append(it);
                 skip_motion = true;
                 break;
@@ -2789,6 +2789,45 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             out->op->append(it);
             ptr++;
             break;
+
+        case 'q':
+            if (vim.macro_state == MACRO_RECORDING) {
+                skip_motion = true;
+                out->op->append(it);
+                ptr++;
+            } else {
+                ptr++;
+                if (eof()) return VIM_PARSE_WAIT;
+
+                auto ch = peek_char();
+                if (ch < 127 && (isalnum(ch) && islower(ch)) || ch == '"') {
+                    ptr++;
+                    out->op->append(it);
+                    out->op->append(char_input(ch));
+                    skip_motion = true;
+                    break;
+                }
+
+                ptr--;
+            }
+            break;
+
+        case '@': {
+            ptr++;
+            if (eof()) return VIM_PARSE_WAIT;
+
+            auto ch = peek_char();
+            if (ch < 127 && ((isalnum(ch) && islower(ch)) || ch == '"' || ch == '@')) {
+                ptr++;
+                out->op->append(it);
+                out->op->append(char_input(ch));
+                skip_motion = true;
+                break;
+            }
+
+            ptr--;
+            break;
+        }
 
         case 'm':
         case '`': { // in neovim ` is a motion, but fuck that, it's too hard
@@ -4656,6 +4695,69 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             return true;
         }
 
+        case 'q': {
+            if (vim.macro_state == MACRO_RECORDING) {
+                auto macro = vim_get_macro(vim.macro_record);
+                if (macro && macro->inputs->len) {
+                    auto input = macro->inputs->last();
+                    if (!input->is_key && input->ch == 'q')
+                        macro->inputs->len--;
+                }
+                vim.macro_state = MACRO_IDLE;
+                vim.macro_record = 0;
+                return true;
+            }
+
+            if (vim.macro_state != MACRO_IDLE) break;
+
+            auto arg = get_second_char_arg();
+            if (!arg) break;
+
+            auto macro = vim_get_macro(arg);
+            if (!macro) break;
+
+            if (macro->active)
+                macro->mem.reset();
+            else
+                macro->mem.init();
+            macro->active = true;
+            {
+                SCOPED_MEM(&macro->mem);
+                macro->inputs = new_list(Vim_Command_Input);
+            }
+
+            vim.macro_state = MACRO_RECORDING;
+            vim.macro_record = (char)arg;
+            return true;
+        }
+
+        case '@': {
+            if (vim.macro_state != MACRO_IDLE) break;
+
+            auto arg = get_second_char_arg();
+            if (!arg) break;
+
+            if (arg == '@') {
+                if (!vim.macro_run.last_run)
+                    break;
+                arg = vim.macro_run.last_run;
+            }
+
+            if (!(arg < 127 && (isalnum(arg) && islower(arg)) || arg == '"')) break;
+
+            int idx = isalpha(arg) ? arg-'a' : (isdigit(arg) ? arg-'0' + 26 : 26+10);
+            auto &macro = vim.macros[idx];
+            if (!macro.active) break;
+
+            vim.macro_state = MACRO_RUNNING;
+            vim.macro_run.macro = arg;
+            vim.macro_run.runs = o_count;
+            vim.macro_run.run_idx = 0;
+            vim.macro_run.input_idx = 0;
+            vim.macro_run.last_run = arg; // do we set this before or after the run?
+            return true;
+        }
+
         case 'p':
         case 'P': {
             SCOPED_BATCH_CHANGE(buf);
@@ -5467,6 +5569,15 @@ cur2 Editor::find_matching_brace(uchar ch, cur2 pos) {
     return find_matching_brace_with_text(ch, pos);
 }
 
+Vim_Macro *Editor::vim_get_macro(char arg) {
+    if (arg < 127) {
+        if (isalpha(arg) && islower(arg)) return &vim.macros[arg-'a'];
+        if (isdigit(arg))                 return &vim.macros[arg-'0' + 26];
+        if (arg == '"')                   return &vim.macros[26+10];
+    }
+    return NULL;
+}
+
 void Editor::vim_dotrepeat_commit() {
     auto &vdr = vim.dotrepeat;
 
@@ -5479,8 +5590,117 @@ void Editor::vim_dotrepeat_commit() {
     vdr.input_working.filled = false;
 }
 
+// oh fuck
+// how do macros work with autocomplete?
+
+void Editor::handle_type_enter() {
+    // handle replace mode, it seems to insert a newline
+    // actually i wonder if this will just work as written
+    delete_selection();
+    type_char('\n');
+
+    auto indent_chars = get_autoindent(cur.y);
+    auto start = cur;
+
+    // remove any existing indent, this happens if you have "foo  bar" and
+    // press enter right after "foo", the next line will contain "  bar"
+    buf->remove(start, new_cur2(first_nonspace_cp(start.y), start.y));
+
+    // insert the new indent
+    insert_text_in_insert_mode(indent_chars);
+
+    // if we're at the end of the line, save this indent so it can be
+    // deleted if the user escapes out without further edits
+    if (cur.x == buf->lines[cur.y].len)
+        vim_save_inserted_indent(start, cur);
+}
+
+void Editor::handle_type_backspace(int mods) {
+    if (selecting) {
+        delete_selection();
+    } else {
+        bool is_replace = world.vim.on && world.vim_mode() == VI_REPLACE;
+
+        auto go_back_one_the_right_way = [&]() {
+            if (is_replace)
+                backspace_in_replace_mode();
+            else
+                backspace_in_insert_mode();
+        };
+
+        if (mods & CP_MOD_TEXT) {
+            auto new_cur = handle_alt_move(true, true);
+            while (cur > new_cur)
+                go_back_one_the_right_way();
+        } else {
+            go_back_one_the_right_way();
+        }
+    }
+
+    update_autocomplete(false);
+    update_parameter_hint();
+}
+
 bool Editor::vim_handle_input(Vim_Command_Input *input) {
+    do {
+        if (vim.macro_state != MACRO_RECORDING) break;
+        if (!vim.macro_record) break;
+        auto macro = vim_get_macro(vim.macro_record);
+        if (!macro) break;
+
+        // when user presses q to end recording, the handler for q will erase
+        // it from macro->inputs. not sure if that's the greatest idea
+        macro->inputs->append(input);
+    } while (0);
+
+    if (input->is_key) {
+        if (input->key == CP_KEY_ESCAPE) {
+            trigger_escape();
+            if (world.vim_mode() != VI_NORMAL) {
+                // NOTE: was `handled` supposed to just refer to whether it affected
+                // autocomplete/parameter? will setting it to true in the vim handler
+                // here break anything?
+                vim_return_to_normal_mode_user_input();
+            }
+            vim.command_buffer->len = 0;
+            return true;
+        }
+        switch (input->mods) {
+        case CP_MOD_CTRL:
+            switch (input->key) {
+            case CP_KEY_C:
+                if (world.vim_mode() != VI_NORMAL)
+                    vim_return_to_normal_mode_user_input();
+                vim.command_buffer->len = 0;
+                return true;
+            }
+        }
+    }
+
     switch (world.vim_mode()) {
+    case VI_INSERT: {
+        if (input->is_key) {
+            switch (input->key) {
+            case CP_KEY_ENTER:
+                handle_type_enter();
+                return true;
+            case CP_KEY_BACKSPACE:
+                handle_type_backspace(input->mods);
+                return true;
+            case CP_KEY_TAB:
+                type_char('\t');
+                return true;
+            }
+        } else {
+            if (!is_modifiable()) return false;
+
+            Type_Char_Opts opts; ptr0(&opts);
+            opts.replace_mode = world.vim_mode() == VI_REPLACE;
+            type_char(input->ch, &opts);
+            return true;
+        }
+        break;
+    }
     case VI_VISUAL:
     case VI_NORMAL: {
         vim.command_buffer->append(input);
@@ -5491,7 +5711,7 @@ bool Editor::vim_handle_input(Vim_Command_Input *input) {
         cmd.init();
 
         auto status = vim_parse_command(&cmd);
-        if (status == VIM_PARSE_WAIT) break;
+        if (status == VIM_PARSE_WAIT) return true; // this means it was processed
 
         vim.command_buffer->len = 0;
         if (status == VIM_PARSE_DISCARD) {
@@ -5581,3 +5801,39 @@ bool Editor::vim_handle_key(int key, int mods) {
     input.mods = mods;
     return vim_handle_input(&input);
 }
+
+void Editor::vim_execute_macro_little_bit(u64 deadline) {
+    if (vim.macro_state != MACRO_RUNNING) return;
+
+    auto &mr = vim.macro_run;
+
+    auto macro = vim_get_macro(mr.macro);
+    if (!macro) {
+        vim.macro_state = MACRO_IDLE;
+        return;
+    }
+
+    while (current_time_nano() < deadline) {
+        // within each iteration of this loop, execute one input
+
+        // check if we're at end of current run
+        if (mr.input_idx == macro->inputs->len) {
+            mr.input_idx = 0;
+            mr.run_idx++;
+        }
+
+        // check if we finished runs
+        if (mr.run_idx >= mr.runs) {
+            vim.macro_state = MACRO_IDLE;
+            return;
+        }
+
+        // grab the next input & increment
+        auto input = &macro->inputs->at(mr.input_idx++);
+
+        // if input failed, skip rest of run
+        if (!vim_handle_input(input))
+            mr.input_idx = macro->inputs->len;
+    }
+}
+

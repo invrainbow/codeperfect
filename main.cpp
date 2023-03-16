@@ -255,6 +255,22 @@ ImGuiKey cp_key_to_imgui_key(Key key) {
     }
 }
 
+bool is_vim_macro_running() {
+    if (!world.vim.on) return false;
+
+    // This detects if vim macro is running in any editor. Wait, shouldn't
+    // macros be global? Oh well, we can fix that along with dotrepeat. When a
+    // macro is running for the current editor we should disable all key+mouse
+    // input except ctrl+c (maybe escape?). This should *mostly* prevent the
+    // editor from being defocused, but it's too hard to keep track of all the
+    // places in our app that we might focus another editor. So instead, we
+    // just detect if *any* editor is running, and disable inputs if so.
+    For (get_all_editors())
+        if (it->vim.macro_state == MACRO_RUNNING)
+            return true;
+    return false;
+}
+
 // big handler, pulling out just to reduce indent
 void handle_key_event(Window_Event *it) {
     Timer t; t.init("key callback", &world.trace_next_frame); defer { t.log("done"); };
@@ -263,6 +279,15 @@ void handle_key_event(Window_Event *it) {
     auto keymods = it->key.mods;
     auto press = it->key.press;
     // print("key = %d, mods = %d", key, keymods);
+
+    // disable inputs if macro is running, this supercedes even imgui.
+    if (is_vim_macro_running()) {
+        // There should be only one editor with macro running, but just disable all.
+        if (press && keymods == CP_MOD_CTRL && key == CP_KEY_C)
+            For (get_all_editors())
+                it->vim.macro_state = MACRO_IDLE; // do we need to do anything else?
+        return;
+    }
 
     // imgui shit
     im_update_keymod_states();
@@ -348,33 +373,6 @@ void handle_key_event(Window_Event *it) {
     auto editor = get_current_editor();
     if (!editor) return;
 
-    // send anything to vim that we need to
-    if (world.vim.on && world.vim_mode() != VI_INSERT) {
-        switch (key) {
-        case CP_KEY_ENTER:
-        case CP_KEY_BACKSPACE:
-            if (editor->vim_handle_key(key, 0))
-                return;
-            break;
-        }
-
-        switch (keymods) {
-        case CP_MOD_NONE:
-            switch (key) {
-            case CP_KEY_TAB:
-                if (editor->vim_handle_key(key, 0))
-                    return;
-                break;
-            }
-            break;
-        case CP_MOD_CTRL:
-            if (key != CP_KEY_LEFT_CONTROL && key != CP_KEY_RIGHT_CONTROL)
-                if (editor->vim_handle_key(key, keymods))
-                    return;
-            break;
-        }
-    }
-
     // handle ast navigation
     if (editor->ast_navigation.on) {
         switch (keymods) {
@@ -418,10 +416,10 @@ void handle_key_event(Window_Event *it) {
         }
     }
 
+    // always run before vim
+    // ---------------------
+
     switch (key) {
-    case CP_KEY_ESCAPE:
-        editor->trigger_escape();
-        return;
     case CP_KEY_DOWN:
     case CP_KEY_UP:
         if (move_autocomplete_cursor(editor, key == CP_KEY_DOWN ? 1 : -1))
@@ -436,13 +434,6 @@ void handle_key_event(Window_Event *it) {
         case CP_KEY_SPACE:
             editor->trigger_autocomplete(false, false);
             return;
-        case CP_KEY_C:
-            if (world.vim.on && world.vim_mode() != VI_NORMAL) {
-                editor->vim_return_to_normal_mode_user_input();
-                return;
-            }
-            // pass through
-            break;
         }
         break;
 
@@ -453,6 +444,57 @@ void handle_key_event(Window_Event *it) {
             return;
         }
         break;
+    }
+
+    // send to vim
+    //
+    // always send to vim, even in insert mode, because vim needs to record
+    // inputs. if vim didn't handle, such as in insert mode (which it defers to
+    // us), it'll return false, and then we can manually handle below. vim will
+    // simply ignore keys in insert mode
+    //
+    // the handlers above this run no matter what
+    // the handlers below this don't run if vim intercepts first
+    if (world.vim.on) {
+        switch (key) {
+        case CP_KEY_ENTER:
+        case CP_KEY_BACKSPACE:
+        case CP_KEY_ESCAPE:
+            // wait, should we instead move the vim-specific part of
+            // trigger_escape **into the vim handler**???
+            // wait yeah we have to, if we want macros to work
+            if (editor->vim_handle_key(key, 0))
+                return;
+            break;
+        }
+
+        switch (keymods) {
+        case CP_MOD_NONE:
+            switch (key) {
+            case CP_KEY_TAB:
+            case CP_KEY_UP:
+            case CP_KEY_DOWN:
+            case CP_KEY_LEFT:
+            case CP_KEY_RIGHT:
+                if (editor->vim_handle_key(key, 0))
+                    return;
+                break;
+            }
+            break;
+        case CP_MOD_CTRL:
+            if (key != CP_KEY_LEFT_CONTROL && key != CP_KEY_RIGHT_CONTROL)
+                if (editor->vim_handle_key(key, keymods))
+                    return;
+            break;
+        }
+    }
+
+    // run after vim
+    // -------------
+    switch (key) {
+    case CP_KEY_ESCAPE:
+        editor->trigger_escape();
+        return;
     }
 
     // now handle insert mode shit
@@ -469,57 +511,12 @@ void handle_key_event(Window_Event *it) {
     }
 
     switch (key) {
-    case CP_KEY_ENTER: {
-        // handle replace mode, it seems to insert a newline
-        // actually i wonder if this will just work as written
-        editor->delete_selection();
-        editor->type_char('\n');
-
-        auto indent_chars = editor->get_autoindent(editor->cur.y);
-        auto start = editor->cur;
-
-        // remove any existing indent, this happens if you have "foo  bar" and
-        // press enter right after "foo", the next line will contain "  bar"
-        editor->buf->remove(start, new_cur2(editor->first_nonspace_cp(start.y), start.y));
-
-        // insert the new indent
-        editor->insert_text_in_insert_mode(indent_chars);
-
-        // if we're at the end of the line, save this indent so it can be
-        // deleted if the user escapes out without further edits
-        auto cur = editor->cur;
-        if (cur.x == editor->buf->lines[cur.y].len)
-            editor->vim_save_inserted_indent(start, cur);
-
-        return;
-    }
-    case CP_KEY_BACKSPACE: {
-        // handle replace mode, need to recover the lost character
-        if (editor->selecting) {
-            editor->delete_selection();
-        } else {
-            bool is_replace = world.vim.on && world.vim_mode() == VI_REPLACE;
-
-            auto go_back_one_the_right_way = [&]() {
-                if (is_replace)
-                    editor->backspace_in_replace_mode();
-                else
-                    editor->backspace_in_insert_mode();
-            };
-
-            if (keymods & CP_MOD_TEXT) {
-                auto new_cur = editor->handle_alt_move(true, true);
-                while (editor->cur > new_cur)
-                    go_back_one_the_right_way();
-            } else {
-                go_back_one_the_right_way();
-            }
-        }
-
-        editor->update_autocomplete(false);
-        editor->update_parameter_hint();
-        return;
-    }
+    case CP_KEY_ENTER:
+        editor->handle_type_enter();
+        break;
+    case CP_KEY_BACKSPACE:
+        editor->handle_type_backspace(keymods);
+        break;
     case CP_KEY_TAB:
 #if OS_WINBLOWS
         if (keymods & CP_MOD_ALT) break;
@@ -819,6 +816,8 @@ void handle_window_event(Window_Event *it) {
         auto press = it->mouse.press;
         auto mods = it->mouse.mods;
 
+        if (is_vim_macro_running()) break;
+
         Timer t; t.init("mousebutton callback", &world.trace_next_frame); defer { t.log("done"); };
 
         // Don't set world.ui.mouse_down here. We set it based on
@@ -828,7 +827,7 @@ void handle_window_event(Window_Event *it) {
         im_update_keymod_states();
 
         if (button < 0 || button >= _countof(world.ui.mouse_just_pressed))
-            return;
+            break;
 
         if (press)
             world.ui.mouse_just_pressed[button] = true;
@@ -870,6 +869,8 @@ void handle_window_event(Window_Event *it) {
     case WINEV_CHAR: {
         auto ch = it->character.ch;
 
+        if (is_vim_macro_running()) break;
+
         // print("char = %x", ch);
 
         Timer t; t.init("char callback", &world.trace_next_frame); defer { t.log("done"); };
@@ -884,27 +885,30 @@ void handle_window_event(Window_Event *it) {
         if (world.window->key_states[CP_KEY_LEFT_ALT]) mods |= CP_MOD_ALT;
         if (world.window->key_states[CP_KEY_RIGHT_ALT]) mods |= CP_MOD_ALT;
 
-        if (mods == CP_MOD_CTRL) return;
+        if (mods == CP_MOD_CTRL) break;
 
         ImGuiIO& io = ImGui::GetIO();
         if (ch > 0 && ch < 0x10000)
             io.AddInputCharacter((u16)ch);
 
-        if (world.ui.keyboard_captured_by_imgui) return;
-        if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) return;
-        if (!uni_isprint(ch)) return;
+        if (world.ui.keyboard_captured_by_imgui) break;
+        if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) break;
+        if (!uni_isprint(ch)) break;
 
         auto ed = get_current_editor();
-        if (!ed) return;
+        if (!ed) break;
 
-        if (world.vim.on && world.vim_mode() != VI_INSERT && world.vim_mode() != VI_REPLACE) {
+        // when vim is on, it takes over insert mode completely
+        if (world.vim.on) {
             ed->vim_handle_char(ch);
             break;
         }
 
         if (!ed->is_modifiable()) break;
 
-        ed->delete_selection();
+        if (!world.vim.on)
+            ed->delete_selection();
+
         Type_Char_Opts opts; ptr0(&opts);
         opts.replace_mode = world.vim_mode() == VI_REPLACE;
         ed->type_char(ch, &opts);
@@ -1682,26 +1686,43 @@ int realmain(int argc, char **argv) {
         world.window->swap_buffers();
         fstlog("swap buffers");
 
+        auto get_framecap = [&]() {
+            if (world.jblow_tests.on) return 144;
+
+            switch (options.fps_limit_enum) {
+            case FPS_30: return 30;
+            case FPS_60: return 60;
+            case FPS_120: return 120;
+            }
+            return 60;
+        };
+
+        int framecap = get_framecap();
+
+        auto timeleft = [&]() -> i32 {
+            auto budget = 1000.f / framecap;
+            auto spent = (current_time_nano() - frame_start_time) / 1000000.f;
+            return (i32)((i64)budget - (i64)spent);
+        };
+
+
+        {
+            // run vim macros at the end of the frame, using
+            // our knowledge of how much time we have remaining, to run as much of
+            // the macro as possible.
+
+            // run for a minimum of 3ms every frame even if we're about to run
+            // out
+            u64 deadline = current_time_nano() + (max(timeleft(), 3) * 1000000);
+
+            For (get_all_editors()) {
+                if (current_time_nano() > deadline) break;
+                if (it->vim.macro_state == MACRO_RUNNING)
+                    it->vim_execute_macro_little_bit(deadline);
+            }
+        }
+
         if (!world.turn_off_framerate_cap) {
-            auto get_framecap = [&]() {
-                if (world.jblow_tests.on) return 144;
-
-                switch (options.fps_limit_enum) {
-                case FPS_30: return 30;
-                case FPS_60: return 60;
-                case FPS_120: return 120;
-                }
-                return 60;
-            };
-
-            int framecap = get_framecap();
-
-            auto timeleft = [&]() -> i32 {
-                auto budget = 1000.f / framecap;
-                auto spent = (current_time_nano() - frame_start_time) / 1000000.f;
-                return (i32)((i64)budget - (i64)spent);
-            };
-
             while (true) {
                 auto rem = timeleft();
                 if (rem > 4 + 2) {
