@@ -429,6 +429,7 @@ struct World {
     Go_Indexer indexer;
 
     struct {
+        // is vim enabled
         bool on;
 
         // this variable is going to be marked "private" because we have a
@@ -436,6 +437,29 @@ struct World {
         // set it using the vim_*() methods below and in Editor instead of setting it
         // directly
         Vim_Mode _mode;
+
+        Pool mem;
+
+        struct {
+            Pool mem_finished;
+            Pool mem_working;
+            Vim_Dotrepeat_Input input_finished;
+            Vim_Dotrepeat_Input input_working;
+        } dotrepeat;
+
+        Vim_Macro macros[26+10+1]; // A-Z0-9"
+        Vim_Macro_State macro_state;
+        struct {
+            char macro;
+            int runs;      // how many runs
+            int run_idx;   // which run we're on
+            int input_idx; // which input we're on current run
+            char last_run;
+        } macro_run;
+        char macro_record;
+
+        List<char> yank_register;
+        bool yank_register_filled;
     } vim;
 
     Vim_Mode vim_mode() { return vim._mode; }

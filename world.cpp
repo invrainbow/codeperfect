@@ -475,7 +475,15 @@ void World::init() {
         serde.read_type(&options, SERDE_OPTIONS);
     } while (0);
 
-    world.vim.on = options.enable_vim_mode;
+    vim.on = options.enable_vim_mode;
+
+    if (vim.on) {
+        vim.mem.init();
+        SCOPED_MEM(&vim.mem);
+        vim.yank_register.init();
+        vim.dotrepeat.mem_working.init();
+        vim.dotrepeat.mem_finished.init();
+    }
 
     if (make_testing_headless) {
         if (!jblow_tests.on)
@@ -3963,5 +3971,13 @@ void reset_everything_when_switching_editors(Editor *old_editor) {
         // it calls handle_input(CP_KEY_ESCAPE)
         old_editor->trigger_escape();
         cp_assert(world.vim_mode() == VI_NORMAL);
+    }
+
+    // do this after triggering escape so the escape gets saved
+    if (world.vim.on) {
+        if (world.vim.macro_state != MACRO_IDLE) {
+            world.vim.macro_state = MACRO_IDLE;
+            world.vim.macro_record = 0;
+        }
     }
 }

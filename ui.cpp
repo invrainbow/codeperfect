@@ -7355,8 +7355,8 @@ void UI::draw_everything() {
                     draw_status_piece(LEFT, "READONLY", rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
                 }
 
-                if (editor->vim.macro_state == MACRO_RECORDING)
-                    draw_status_piece(LEFT, cp_sprintf("Recording @%c", editor->vim.macro_record), rgba(rgb_hex("#000000"), 0), rgba(global_colors.foreground, 0.5));
+                if (world.vim.macro_state == MACRO_RECORDING)
+                    draw_status_piece(LEFT, cp_sprintf("Recording @%c", world.vim.macro_record), rgba(rgb_hex("#000000"), 0), rgba(global_colors.foreground, 0.5));
             }
         }
 

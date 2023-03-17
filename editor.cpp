@@ -1351,9 +1351,6 @@ void Editor::init() {
         vim.command_buffer = new_list(Vim_Command_Input);
         vim.insert_command.init();
         vim.replace_old_chars.init();
-        vim.yank_register.init();
-        vim.dotrepeat.mem_working.init();
-        vim.dotrepeat.mem_finished.init();
     }
 
     {
@@ -1490,10 +1487,10 @@ void Editor::cleanup() {
             }
         }
 
-        vim.dotrepeat.mem_finished.cleanup();
-        vim.dotrepeat.mem_working.cleanup();
+        world.vim.dotrepeat.mem_finished.cleanup();
+        world.vim.dotrepeat.mem_working.cleanup();
 
-        for (auto &&macro : vim.macros)
+        for (auto &&macro : world.vim.macros)
             if (macro.active)
                 macro.mem.cleanup();
 
@@ -2789,7 +2786,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             break;
 
         case 'q':
-            if (vim.macro_state == MACRO_RECORDING) {
+            if (world.vim.macro_state == MACRO_RECORDING) {
                 skip_motion = true;
                 out->op->append(it);
                 ptr++;
@@ -4134,21 +4131,22 @@ void Editor::vim_yank_text(ccstr text) {
         return;
     }
 
-    vim.yank_register.len = 0;
+    auto &reg = world.vim.yank_register;
+    reg.len = 0;
     int len = strlen(text);
-    vim.yank_register.ensure_cap(len + 1);
+    reg.ensure_cap(len + 1);
     for (int i = 0; i < len; i++)
-        vim.yank_register.append(text[i]);
-    vim.yank_register.append('\0');
-    vim.yank_register_filled = true;
+        reg.append(text[i]);
+    reg.append('\0');
+    world.vim.yank_register_filled = true;
 }
 
 ccstr Editor::vim_paste_text() {
     if (options.vim_use_clipboard)
         return world.window->get_clipboard_string();
-    if (!vim.yank_register_filled)
+    if (!world.vim.yank_register_filled)
         return NULL;
-    return vim.yank_register.items;
+    return world.vim.yank_register.items;
 }
 
 cur2 Editor::vim_delete_range(cur2 start, cur2 end) {
@@ -4272,7 +4270,7 @@ void Editor::vim_return_to_normal_mode(bool from_dotrepeat) {
         do {
             if (from_dotrepeat) break;
 
-            auto &vdr = vim.dotrepeat;
+            auto &vdr = world.vim.dotrepeat;
 
             auto &iw = vdr.input_working;
             if (!iw.filled) break;
@@ -4564,7 +4562,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         case '.': {
             if (world.vim_mode() != VI_NORMAL) break;
 
-            auto &vdi = vim.dotrepeat.input_finished;
+            auto &vdi = world.vim.dotrepeat.input_finished;
             if (!vdi.filled) break;
 
             auto run_commands = [&]() {
@@ -4694,19 +4692,19 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         }
 
         case 'q': {
-            if (vim.macro_state == MACRO_RECORDING) {
-                auto macro = vim_get_macro(vim.macro_record);
+            if (world.vim.macro_state == MACRO_RECORDING) {
+                auto macro = vim_get_macro(world.vim.macro_record);
                 if (macro && macro->inputs->len) {
                     auto input = macro->inputs->last();
                     if (!input->is_key && input->ch == 'q')
                         macro->inputs->len--;
                 }
-                vim.macro_state = MACRO_IDLE;
-                vim.macro_record = 0;
+                world.vim.macro_state = MACRO_IDLE;
+                world.vim.macro_record = 0;
                 return true;
             }
 
-            if (vim.macro_state != MACRO_IDLE) break;
+            if (world.vim.macro_state != MACRO_IDLE) break;
 
             auto arg = get_second_char_arg();
             if (!arg) break;
@@ -4724,35 +4722,35 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                 macro->inputs = new_list(Vim_Command_Input);
             }
 
-            vim.macro_state = MACRO_RECORDING;
-            vim.macro_record = (char)arg;
+            world.vim.macro_state = MACRO_RECORDING;
+            world.vim.macro_record = (char)arg;
             return true;
         }
 
         case '@': {
-            if (vim.macro_state != MACRO_IDLE) break;
+            if (world.vim.macro_state != MACRO_IDLE) break;
 
             auto arg = get_second_char_arg();
             if (!arg) break;
 
             if (arg == '@') {
-                if (!vim.macro_run.last_run)
+                if (!world.vim.macro_run.last_run)
                     break;
-                arg = vim.macro_run.last_run;
+                arg = world.vim.macro_run.last_run;
             }
 
             if (!(arg < 127 && (isalnum(arg) && islower(arg)) || arg == '"')) break;
 
             int idx = isalpha(arg) ? arg-'a' : (isdigit(arg) ? arg-'0' + 26 : 26+10);
-            auto &macro = vim.macros[idx];
+            auto &macro = world.vim.macros[idx];
             if (!macro.active) break;
 
-            vim.macro_state = MACRO_RUNNING;
-            vim.macro_run.macro = arg;
-            vim.macro_run.runs = o_count;
-            vim.macro_run.run_idx = 0;
-            vim.macro_run.input_idx = 0;
-            vim.macro_run.last_run = arg; // do we set this before or after the run?
+            world.vim.macro_state = MACRO_RUNNING;
+            world.vim.macro_run.macro = arg;
+            world.vim.macro_run.runs = o_count;
+            world.vim.macro_run.run_idx = 0;
+            world.vim.macro_run.input_idx = 0;
+            world.vim.macro_run.last_run = arg; // do we set this before or after the run?
             return true;
         }
 
@@ -5569,15 +5567,15 @@ cur2 Editor::find_matching_brace(uchar ch, cur2 pos) {
 
 Vim_Macro *Editor::vim_get_macro(char arg) {
     if (arg < 127) {
-        if (isalpha(arg) && islower(arg)) return &vim.macros[arg-'a'];
-        if (isdigit(arg))                 return &vim.macros[arg-'0' + 26];
-        if (arg == '"')                   return &vim.macros[26+10];
+        if (isalpha(arg) && islower(arg)) return &world.vim.macros[arg-'a'];
+        if (isdigit(arg))                 return &world.vim.macros[arg-'0' + 26];
+        if (arg == '"')                   return &world.vim.macros[26+10];
     }
     return NULL;
 }
 
 void Editor::vim_dotrepeat_commit() {
-    auto &vdr = vim.dotrepeat;
+    auto &vdr = world.vim.dotrepeat;
 
     vdr.mem_finished.reset();
     {
@@ -5641,9 +5639,9 @@ void Editor::handle_type_backspace(int mods) {
 
 bool Editor::vim_handle_input(Vim_Command_Input *input) {
     do {
-        if (vim.macro_state != MACRO_RECORDING) break;
-        if (!vim.macro_record) break;
-        auto macro = vim_get_macro(vim.macro_record);
+        if (world.vim.macro_state != MACRO_RECORDING) break;
+        if (!world.vim.macro_record) break;
+        auto macro = vim_get_macro(world.vim.macro_record);
         if (!macro) break;
 
         // when user presses q to end recording, the handler for q will erase
@@ -5736,7 +5734,7 @@ bool Editor::vim_handle_input(Vim_Command_Input *input) {
             //
             //  so commit when we end in normal (that's "oper") and when we leave insert/replace
 
-            auto &vdr = vim.dotrepeat;
+            auto &vdr = world.vim.dotrepeat;
             auto mode = world.vim_mode();
 
             auto should_save = [&]() {
@@ -5801,13 +5799,13 @@ bool Editor::vim_handle_key(int key, int mods) {
 }
 
 void Editor::vim_execute_macro_little_bit(u64 deadline) {
-    if (vim.macro_state != MACRO_RUNNING) return;
+    if (world.vim.macro_state != MACRO_RUNNING) return;
 
-    auto &mr = vim.macro_run;
+    auto &mr = world.vim.macro_run;
 
     auto macro = vim_get_macro(mr.macro);
     if (!macro) {
-        vim.macro_state = MACRO_IDLE;
+        world.vim.macro_state = MACRO_IDLE;
         return;
     }
 
@@ -5822,7 +5820,7 @@ void Editor::vim_execute_macro_little_bit(u64 deadline) {
 
         // check if we finished runs
         if (mr.run_idx >= mr.runs) {
-            vim.macro_state = MACRO_IDLE;
+            world.vim.macro_state = MACRO_IDLE;
             return;
         }
 

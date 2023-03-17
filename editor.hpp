@@ -305,29 +305,8 @@ struct Editor {
             cur2 end;
         } inserted_indent;
 
-        List<char> yank_register;
-        bool yank_register_filled;
-
-        struct {
-            Pool mem_finished;
-            Pool mem_working;
-            Vim_Dotrepeat_Input input_finished;
-            Vim_Dotrepeat_Input input_working;
-        } dotrepeat;
-
         Mark *local_marks[26];
         Mark *global_marks[36]; // A-Z and 0-9
-
-        Vim_Macro macros[26+10+1]; // A-Z0-9"
-        Vim_Macro_State macro_state;
-        struct {
-            char macro;
-            int runs;      // how many runs
-            int run_idx;   // which run we're on
-            int input_idx; // which input we're on current run
-            char last_run;
-        } macro_run;
-        char macro_record;
     } vim;
 
     Client_Parameter_Hint parameter_hint;

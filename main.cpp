@@ -256,19 +256,7 @@ ImGuiKey cp_key_to_imgui_key(Key key) {
 }
 
 bool is_vim_macro_running() {
-    if (!world.vim.on) return false;
-
-    // This detects if vim macro is running in any editor. Wait, shouldn't
-    // macros be global? Oh well, we can fix that along with dotrepeat. When a
-    // macro is running for the current editor we should disable all key+mouse
-    // input except ctrl+c (maybe escape?). This should *mostly* prevent the
-    // editor from being defocused, but it's too hard to keep track of all the
-    // places in our app that we might focus another editor. So instead, we
-    // just detect if *any* editor is running, and disable inputs if so.
-    For (get_all_editors())
-        if (it->vim.macro_state == MACRO_RUNNING)
-            return true;
-    return false;
+    return world.vim.on && world.vim.macro_state == MACRO_RUNNING;
 }
 
 // big handler, pulling out just to reduce indent
@@ -284,8 +272,7 @@ void handle_key_event(Window_Event *it) {
     if (is_vim_macro_running()) {
         // There should be only one editor with macro running, but just disable all.
         if (press && keymods == CP_MOD_CTRL && key == CP_KEY_C)
-            For (get_all_editors())
-                it->vim.macro_state = MACRO_IDLE; // do we need to do anything else?
+            world.vim.macro_state = MACRO_IDLE; // do we need to do anything else?
         return;
     }
 
@@ -460,9 +447,6 @@ void handle_key_event(Window_Event *it) {
         case CP_KEY_ENTER:
         case CP_KEY_BACKSPACE:
         case CP_KEY_ESCAPE:
-            // wait, should we instead move the vim-specific part of
-            // trigger_escape **into the vim handler**???
-            // wait yeah we have to, if we want macros to work
             if (editor->vim_handle_key(key, 0))
                 return;
             break;
@@ -1706,19 +1690,18 @@ int realmain(int argc, char **argv) {
         };
 
 
-        {
-            // run vim macros at the end of the frame, using
-            // our knowledge of how much time we have remaining, to run as much of
-            // the macro as possible.
-
-            // run for a minimum of 3ms every frame even if we're about to run
-            // out
-            u64 deadline = current_time_nano() + (max(timeleft(), 3) * 1000000);
-
-            For (get_all_editors()) {
-                if (current_time_nano() > deadline) break;
-                if (it->vim.macro_state == MACRO_RUNNING)
-                    it->vim_execute_macro_little_bit(deadline);
+        // run vim macros at the end of the frame, using
+        // our knowledge of how much time we have remaining, to run as much of
+        // the macro as possible.
+        if (world.vim.macro_state == MACRO_RUNNING) {
+            auto editor = get_current_editor();
+            if (editor) {
+                // run for a minimum of 3ms every frame even if we're about to run
+                // out
+                u64 deadline = current_time_nano() + (max(timeleft(), 3) * 1000000);
+                editor->vim_execute_macro_little_bit(deadline);
+            } else {
+                world.vim.macro_state = MACRO_IDLE;
             }
         }
 
