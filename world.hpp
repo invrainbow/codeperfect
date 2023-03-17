@@ -895,3 +895,4 @@ void recalc_display_size();
 void set_zoom_level(int level);
 
 List<Editor*> *get_all_editors();
+void reset_everything_when_switching_editors(Editor *old_editor);

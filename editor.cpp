@@ -1252,7 +1252,7 @@ cur2 Editor::handle_alt_move(bool back, bool backspace) {
     return it.pos;
 }
 
-bool Editor::trigger_escape() {
+bool Editor::handle_escape() {
     postfix_stack.len = 0;
 
     bool handled = false;
@@ -1301,10 +1301,8 @@ void Pane::set_current_editor(u32 idx) {
 }
 
 Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos, bool pos_in_byte_format) {
-    if (current_editor != idx) {
-        auto e = get_current_editor();
-        if (e) e->trigger_escape();
-    }
+    if (current_editor != idx)
+        reset_everything_when_switching_editors(get_current_editor());
 
     set_current_editor(idx);
 
@@ -5655,7 +5653,7 @@ bool Editor::vim_handle_input(Vim_Command_Input *input) {
 
     if (input->is_key) {
         if (input->key == CP_KEY_ESCAPE) {
-            trigger_escape();
+            handle_escape();
             if (world.vim_mode() != VI_NORMAL) {
                 // NOTE: was `handled` supposed to just refer to whether it affected
                 // autocomplete/parameter? will setting it to true in the vim handler
@@ -5837,3 +5835,9 @@ void Editor::vim_execute_macro_little_bit(u64 deadline) {
     }
 }
 
+void Editor::trigger_escape() {
+    if (world.vim.on)
+        vim_handle_key(CP_KEY_ESCAPE, 0);
+    else
+        handle_escape();
+}

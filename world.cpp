@@ -715,11 +715,8 @@ void activate_pane_by_index(u32 idx) {
         pane->width = new_width;
     }
 
-    if (world.current_pane != idx) {
-        auto e = get_current_editor();
-        if (e) e->trigger_escape();
-        cp_assert(world.vim_mode() == VI_NORMAL);
-    }
+    if (world.current_pane != idx)
+        reset_everything_when_switching_editors(get_current_editor());
 
     world.current_pane = idx;
     world.cmd_unfocus_all_windows = true;
@@ -3958,4 +3955,13 @@ List<Editor*> *get_all_editors() {
         For (&it.editors)
             ret->append(&it);
     return ret;
+}
+
+void reset_everything_when_switching_editors(Editor *old_editor) {
+    if (old_editor) {
+        // this should clear out most vim related things, because in vim mode
+        // it calls handle_input(CP_KEY_ESCAPE)
+        old_editor->trigger_escape();
+        cp_assert(world.vim_mode() == VI_NORMAL);
+    }
 }

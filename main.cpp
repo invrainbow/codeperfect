@@ -493,7 +493,7 @@ void handle_key_event(Window_Event *it) {
     // -------------
     switch (key) {
     case CP_KEY_ESCAPE:
-        editor->trigger_escape();
+        editor->handle_escape();
         return;
     }
 

@@ -352,6 +352,7 @@ struct Editor {
     void trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typing_ident, uchar typed_ident_char = 0);
     void filter_autocomplete_results(Autocomplete* ac);
     void trigger_parameter_hint();
+    void trigger_escape();
 
     void type_char(uchar ch, Type_Char_Opts *opts = NULL);
     void update_autocomplete(bool triggered_by_ident);
@@ -362,7 +363,7 @@ struct Editor {
 
     void apply_edits(List<TSInputEdit> *edits);
     void reload_file(bool because_of_file_watcher = false);
-    bool trigger_escape();
+    bool handle_escape();
     bool optimize_imports();
     void format_on_save(bool fix_imports);
     void handle_save(bool about_to_close = false);
