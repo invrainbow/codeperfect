@@ -6654,7 +6654,7 @@ void UI::draw_everything() {
                 boxf b;
                 b.pos = pos;
 
-                if (world.vim.on && world.vim_mode() != VI_INSERT) {
+                if (world.vim.on && (world.vim_mode() != VI_INSERT || !is_pane_selected)) {
                     b.w = ((float)base_font->width * chars);
                     if (world.vim_mode() == VI_REPLACE) {
                         b.y += base_font->height / 2;
