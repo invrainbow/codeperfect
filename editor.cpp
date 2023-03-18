@@ -4554,6 +4554,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             }
             case CP_KEY_V:
                 vim_handle_visual_mode_key(SEL_BLOCK);
+                *can_dotrepeat = true;
                 return true;
             }
             break;
