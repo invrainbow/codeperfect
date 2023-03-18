@@ -865,13 +865,15 @@ void Buffer::internal_commit_insert_to_history(cur2 start, cur2 end) {
         if (start == c->new_end || hist_batch_mode)
             change = c;
 
-        if (c->new_text.len + internal_distance_between(start, end) < CHUNKMAX) {
-            c->new_end = end;
+        if (start == c->new_end) {
+            if (c->new_text.len + internal_distance_between(start, end) < CHUNKMAX) {
+                c->new_end = end;
 
-            auto it = iter(start);
-            while (it.pos != end)
-                change->new_text.append(it.next());
-            return;
+                auto it = iter(start);
+                while (it.pos != end)
+                    change->new_text.append(it.next());
+                return;
+            }
         }
     }
 
