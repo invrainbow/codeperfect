@@ -286,6 +286,7 @@ struct Editor {
 
         cur2 insert_start;
         Vim_Command insert_command;
+        List<cur2> insert_visual_block_other_starts;
 
         cur2 visual_start;
         Selection_Type visual_type;

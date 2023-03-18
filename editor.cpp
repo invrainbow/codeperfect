@@ -1350,6 +1350,7 @@ void Editor::init() {
         // TODO: set a limit on command len?
         vim.command_buffer = new_list(Vim_Command_Input);
         vim.insert_command.init();
+        vim.insert_visual_block_other_starts.init();
         vim.replace_old_chars.init();
     }
 
@@ -4212,11 +4213,36 @@ void vim_copy_command(Vim_Command *dest, Vim_Command *src) {
 void Editor::vim_enter_insert_mode(Vim_Command *cmd, fn<void()> prep) {
     buf->hist_batch_start(); // end in vim_return_to_normal_mode()
 
+    // honestly it feels pretty ugly/brittle to handle this here
+    Selection *visual_block_sel = NULL;
+    do {
+        if (world.vim_mode() != VI_VISUAL) break;
+        if (vim.visual_type != SEL_BLOCK) break;
+
+        auto sel = get_selection();
+        if (sel->type != SEL_BLOCK) break;
+
+        visual_block_sel = sel;
+    } while (0);
+
     prep(); // call this after starting history batch
 
     vim.insert_start = cur;
     vim.edit_backspaced_graphemes = 0;
     vim_copy_command(&vim.insert_command, cmd); // why are we doing this?
+    vim.insert_visual_block_other_starts.len = 0;
+
+    if (visual_block_sel) {
+        For (visual_block_sel->ranges) {
+            auto pos = it.start;
+
+            if (pos.y == cur.y) continue;
+            if (pos.y >= buf->lines.len) continue;
+            if (pos.x > buf->lines[pos.y].len) continue;
+
+            vim.insert_visual_block_other_starts.append(pos);
+        }
+    }
 
     world.vim_set_mode(VI_INSERT);
 }
@@ -4266,6 +4292,21 @@ void Editor::vim_return_to_normal_mode(bool from_dotrepeat) {
             }
         }
 
+        auto inserted_text = new_list(uchar);
+        {
+            auto a = mode == VI_INSERT ? vim.insert_start : vim.replace_start;
+            auto b = buf->inc_cur(cur);
+            ORDER(a, b);
+
+            for (auto it = iter(a); it.pos != b; it.next())
+                inserted_text->append(it.peek());
+        }
+
+        if (vim.insert_visual_block_other_starts.len)
+            if (vim.insert_start.y == cur.y)
+                For (&vim.insert_visual_block_other_starts)
+                    buf->insert(it, inserted_text->items, inserted_text->len);
+
         buf->hist_batch_end(); // started when entering vi_insert and vi_replace
 
         do {
@@ -4283,14 +4324,8 @@ void Editor::vim_return_to_normal_mode(bool from_dotrepeat) {
                 out->type = VDC_INSERT_TEXT;
                 out->insert_text.backspaced_graphemes = vim.edit_backspaced_graphemes;
                 out->insert_text.chars = new_list(uchar);
+                out->insert_text.chars->concat(inserted_text);
             }
-
-            auto a = mode == VI_INSERT ? vim.insert_start : vim.replace_start;
-            auto b = buf->inc_cur(cur);
-            ORDER(a, b);
-
-            for (auto it = iter(a); it.pos != b; it.next())
-                out->insert_text.chars->append(it.peek());
 
             vim_dotrepeat_commit();
         } while (0);
