@@ -5613,6 +5613,19 @@ void Editor::handle_type_enter() {
         vim_save_inserted_indent(start, cur);
 }
 
+void Editor::handle_type_tab(int mods) {
+    if (mods == CP_MOD_NONE) {
+        auto& ac = autocomplete;
+        if (ac.ac.results && ac.filtered_results->len) {
+            auto idx = ac.filtered_results->at(ac.selection);
+            auto& result = ac.ac.results->at(idx);
+            perform_autocomplete(&result);
+            return;
+        }
+    }
+    type_char('\t');
+}
+
 void Editor::handle_type_backspace(int mods) {
     if (selecting) {
         delete_selection();
@@ -5686,7 +5699,7 @@ bool Editor::vim_handle_input(Vim_Command_Input *input) {
                 handle_type_backspace(input->mods);
                 return true;
             case CP_KEY_TAB:
-                type_char('\t');
+                handle_type_tab(input->mods);
                 return true;
             }
         } else {

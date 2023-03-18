@@ -407,6 +407,7 @@ struct Editor {
     void vim_execute_macro_little_bit(u64 deadline);
 
     void handle_type_enter();
+    void handle_type_tab(int mods);
     void handle_type_backspace(int mods);
 };
 

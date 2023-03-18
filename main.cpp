@@ -505,16 +505,7 @@ void handle_key_event(Window_Event *it) {
 #if OS_WINBLOWS
         if (keymods & CP_MOD_ALT) break;
 #endif
-        if (keymods == CP_MOD_NONE) {
-            auto& ac = editor->autocomplete;
-            if (ac.ac.results && ac.filtered_results->len) {
-                auto idx = ac.filtered_results->at(ac.selection);
-                auto& result = ac.ac.results->at(idx);
-                editor->perform_autocomplete(&result);
-                return;
-            }
-        }
-        editor->type_char('\t');
+        editor->handle_type_tab(keymods);
         return;
     }
 
