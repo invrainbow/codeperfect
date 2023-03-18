@@ -7344,8 +7344,8 @@ void UI::draw_everything() {
                     case VI_VISUAL:
                         switch (editor->vim.visual_type) {
                         case SEL_CHAR: mode_str = "VISUAL"; break;
-                        case SEL_LINE: mode_str = "VISUAL_LINE"; break;
-                        case SEL_BLOCK: mode_str = "VISUAL_BLOCK"; break;
+                        case SEL_LINE: mode_str = "VISUAL LINE"; break;
+                        case SEL_BLOCK: mode_str = "VISUAL BLOCK"; break;
                         }
                         break;
                     default: mode_str = "UNKNOWN"; break;
@@ -7357,6 +7357,8 @@ void UI::draw_everything() {
 
                 if (world.vim.macro_state == MACRO_RECORDING)
                     draw_status_piece(LEFT, cp_sprintf("Recording @%c", world.vim.macro_record), rgba(rgb_hex("#000000"), 0), rgba(global_colors.foreground, 0.5));
+                else if (world.vim.macro_state == MACRO_RUNNING)
+                    draw_status_piece(LEFT, cp_sprintf("Running @%c (Ctrl+C to stop)", world.vim.macro_run.macro), rgba(rgb_hex("#000000"), 0), rgba(global_colors.foreground, 0.5));
             }
         }
 
