@@ -2157,6 +2157,94 @@ void do_find_implementations() {
     }
 }
 
+void trigger_file_search(int limit_start, int limit_end) {
+    auto &wnd = world.wnd_current_file_search;
+    if (!wnd.query[0]) return;
+
+    auto editors = get_all_editors();
+    if (isempty(editors)) return; // can't actually happen right?
+
+    Search_Session sess; ptr0(&sess);
+    sess.case_sensitive = wnd.case_sensitive;
+    sess.literal = !wnd.use_regex;
+    sess.query = wnd.query;
+    sess.qlen = strlen(wnd.query);
+    if (!sess.init()) return;
+
+    wnd.current_idx = -1;
+
+    /*
+    if (wnd.search_in_selection) {
+        wnd.sess.limit_to_range = true;
+
+        auto a = ed->select_start;
+        auto b = ed->cur;
+        ORDER(a, b);
+
+        wnd.sess.limit_start = ed->cur_to_offset(a);
+        wnd.sess.limit_end = ed->cur_to_offset(b);
+    }
+    */
+
+    For (editors) {
+        auto editor = it;
+        auto &fs = editor->file_search;
+
+        fs.mem.reset();
+        {
+            SCOPED_MEM(&fs.mem);
+            fs.results.init();
+        }
+
+        auto chars = new_list(char);
+        char buf[4];
+
+        // this is so stupid, why doesn't pcre take a custom iterator?
+        For (&it->buf->lines) {
+            For (&it) {
+                int k = uchar_to_cstr(it, buf);
+                chars->concat(buf, k);
+            }
+            chars->append('\n');
+        }
+
+        auto tmp = new_list(Search_Match);
+
+        // TODO: make max # results customizable?
+        sess.search(chars->items, chars->len, tmp, 1000);
+
+        // is o(n*m) gonna fuck us? (n = number lines, m = number matches)
+        // n is at most 65k
+        // m is... i guess a lot :joy:
+        /// TODO: this offset_to_cur seems horribly inefficient too...
+        For (tmp) {
+            File_Search_Match match; ptr0(&match);
+            match.start = editor->offset_to_cur(it.start);
+            match.end = editor->offset_to_cur(it.end);
+
+            if (it.group_starts) {
+                {
+                    SCOPED_MEM(&fs.mem);
+                    match.group_starts = new_list(cur2);
+                }
+                For (it.group_starts)
+                    match.group_starts->append(editor->offset_to_cur(it));
+            }
+
+            if (it.group_ends) {
+                {
+                    SCOPED_MEM(&fs.mem);
+                    match.group_ends = new_list(cur2);
+                }
+                For (it.group_ends)
+                    match.group_ends->append(editor->offset_to_cur(it));
+            }
+
+            editor->file_search.results.append(&match);
+        }
+    }
+}
+
 void handle_command(Command cmd, bool from_menu) {
     // make this a precondition (actually, I think it might already be)
     if (!is_command_enabled(cmd)) return;
@@ -2339,20 +2427,19 @@ void handle_command(Command cmd, bool from_menu) {
         auto &wnd = world.wnd_current_file_search;
         wnd.replace = (cmd == CMD_REPLACE);
 
-        if (wnd.show) {
+        if (wnd.show)
             wnd.cmd_focus = true;
-            break;
-        }
-        wnd.sess.cleanup();
-        wnd.mem.cleanup();
+        else
+            wnd.show = true;
 
-        wnd.mem.init();
-        {
-            SCOPED_MEM(&wnd.mem);
-            wnd.matches.init();
-        }
-        wnd.query[0] = '\0';
-        wnd.replace_str[0] = '\0';
+        cp_strcpy_fixed(wnd.query, wnd.permanent_query);
+        if (wnd.query[0])
+            trigger_file_search();
+
+        // don't clear this stuff out on save
+        // wnd.query[0] = '\0';
+        // wnd.replace_str[0] = '\0';
+
         wnd.show = true;
         break;
     }

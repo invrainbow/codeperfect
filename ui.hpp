@@ -392,8 +392,6 @@ extern Global_Colors global_colors;
 void init_global_colors();
 ccstr format_key(int mods, ccstr key, bool icon = false);
 
-void trigger_file_search(int limit_start = -1, int limit_end = -1);
-
 vec3f merge_colors(vec3f a, vec3f b, float perc);
 
 ccstr get_import_path_label(ccstr import_path, Go_Workspace *workspace);

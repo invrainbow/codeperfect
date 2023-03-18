@@ -195,6 +195,13 @@ enum Vim_Macro_State {
     MACRO_RECORDING,
 };
 
+struct File_Search_Match {
+    cur2 start;
+    cur2 end;
+    List<cur2> *group_starts;
+    List<cur2> *group_ends;
+};
+
 struct Editor {
     u32 id;
     Pool mem;
@@ -249,6 +256,12 @@ struct Editor {
 
     bool ui_rect_set;
     boxf ui_rect;
+
+    struct {
+        Pool mem;
+        List<File_Search_Match> results;
+        // ????? anything else?
+    } file_search;
 
     struct Insert_Change {
         cur2 start; // line

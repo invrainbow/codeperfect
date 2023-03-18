@@ -34,7 +34,7 @@ struct Search_Session {
     union {
         struct {
             s32 *find_skip;
-            s32 *alpha_skip;
+            s32 alpha_skip[256];
         };
         struct {
             pcre *re;
@@ -42,7 +42,8 @@ struct Search_Session {
         };
     };
 
-    bool start();
+    bool init() { return precompute(); }
+    bool precompute();
     void cleanup();
     void search(char *buf, u32 buflen, List<Search_Match> *out, int limit);
 
@@ -68,9 +69,9 @@ struct Search_Session {
                 break;
         return i;
     }
-
-    List<Replace_Part> *parse_replacement(ccstr replace_text);
 };
+
+List<Replace_Part> *parse_search_replacement(ccstr replace_text);
 
 struct Searcher_Opts {
     bool case_sensitive;

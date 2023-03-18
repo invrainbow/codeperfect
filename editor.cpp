@@ -1361,6 +1361,7 @@ void Editor::init() {
     }
 
     ast_navigation.mem.init("ast_navigation mem");
+    file_search.mem.init("file_search mem");
 }
 
 void Editor::update_selected_ast_node(Ast_Node *node) {

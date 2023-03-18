@@ -2180,84 +2180,6 @@ void UI::focus_keyboard_here(Wnd *wnd, int cond) {
     }
 }
 
-void trigger_file_search(int limit_start, int limit_end) {
-    auto &wnd = world.wnd_current_file_search;
-
-    auto ed = get_current_editor();
-    if (!ed) return;
-
-    wnd.sess.cleanup();
-
-    ptr0(&wnd.sess);
-    wnd.sess.case_sensitive = wnd.case_sensitive;
-    wnd.sess.literal = !wnd.use_regex;
-    wnd.sess.query = wnd.query;
-    wnd.sess.qlen = strlen(wnd.query);
-
-    wnd.current_idx = -1;
-    wnd.matches.len = 0;
-
-    if (!wnd.query[0]) return;
-
-    /*
-    if (wnd.search_in_selection) {
-        wnd.sess.limit_to_range = true;
-
-        auto a = ed->select_start;
-        auto b = ed->cur;
-        ORDER(a, b);
-
-        wnd.sess.limit_start = ed->cur_to_offset(a);
-        wnd.sess.limit_end = ed->cur_to_offset(b);
-    }
-    */
-
-    if (!wnd.sess.start()) return;
-
-    auto chars = new_list(char);
-    char buf[4];
-
-    For (&ed->buf->lines) {
-        For (&it) {
-            int k = uchar_to_cstr(it, buf);
-            chars->concat(buf, k);
-        }
-        chars->append('\n');
-    }
-
-    auto tmp = new_list(Search_Match);
-    wnd.sess.search(chars->items, chars->len, tmp, 1000);
-
-    // is o(n*m) gonna fuck us? (n = number lines, m = number matches)
-    // n is at most 65k
-    // m is... i guess a lot :joy:
-    For (tmp) {
-        File_Search_Match match; ptr0(&match);
-        match.start = ed->offset_to_cur(it.start);
-        match.end = ed->offset_to_cur(it.end);
-
-        if (it.group_starts) {
-            {
-                SCOPED_MEM(&wnd.mem);
-                match.group_starts = new_list(cur2);
-            }
-            For (it.group_starts)
-                match.group_starts->append(ed->offset_to_cur(it));
-        }
-
-        if (it.group_ends) {
-            {
-                SCOPED_MEM(&wnd.mem);
-                match.group_ends = new_list(cur2);
-            }
-            For (it.group_ends)
-                match.group_ends->append(ed->offset_to_cur(it));
-        }
-
-        wnd.matches.append(&match);
-    }
-}
-
 void UI::draw_everything() {
     verts.len = 0;
 
@@ -4864,25 +4786,40 @@ void UI::draw_everything() {
 
         begin_window("Search", &wnd, flags, true, false);
 
-        defer {
-            // on close
-            if (!wnd.show) {
-                wnd.mem.cleanup();
-                wnd.sess.cleanup();
-            }
-        };
-
         focus_keyboard_here(&wnd);
 
         bool search_again = false;
 
+        auto &matches = ed->file_search.results;
+
         ccstr label = NULL;
-        if (!wnd.matches.len)
+        if (!matches.len)
             label = "No results";
         else if (wnd.current_idx == -1)
-            label = cp_sprintf("%d result%s", wnd.matches.len, wnd.matches.len == 1 ? "" : "s");
+            label = cp_sprintf("%d result%s", matches.len, matches.len == 1 ? "" : "s");
         else
-            label = cp_sprintf("%d of %d", wnd.current_idx + 1, wnd.matches.len);
+            label = cp_sprintf("%d of %d", wnd.current_idx + 1, matches.len);
+
+        auto find_current_or_next_match = [&](cur2 pos, bool *in_match) {
+            int lo = 0, hi = matches.len-1;
+
+            while (lo <= hi) {
+                int mid = (lo+hi)/2;
+                auto &it = matches[mid];
+                if (it.start <= pos && pos < it.end) {
+                    *in_match = true;
+                    return mid;
+                }
+
+                if (pos < it.start)
+                    hi = mid-1;
+                else
+                    lo = mid+1;
+            }
+
+            *in_match = false;
+            return lo;
+        };
 
         bool enter_pressed = im_input_text_full(cp_sprintf("Search (%s)", label), "current_file_search_search", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue);
 
@@ -4891,50 +4828,39 @@ void UI::draw_everything() {
 
             im::SetKeyboardFocusHere(-1);
 
-            if (!wnd.matches.len) break;
+            if (!matches.len) break;
 
-            auto curr = ed->cur;
-            int idx = -1;
-            {
-                int lo = 0, hi = wnd.matches.len-1;
+            // so this thing always returns the next result?
+            // if we're between two results, second of the two
+            // if we're on a result, next result after current result
 
-                while (lo < hi) {
-                    int mid = (lo+hi)/2;
-                    auto &it = wnd.matches[mid];
-                    if (it.start <= curr && curr < it.end) {
-                        idx = mid + 1;
-                        break;
-                    }
+            auto c = ed->cur;
+            bool in_match = false;
+            int idx = find_current_or_next_match(c, &in_match);
 
-                    if (curr < it.start)
-                        hi = mid-1;
-                    else
-                        lo = mid+1;
-                }
-
-                if (idx == -1) idx = hi;
-            }
-
-            auto dec = [&]() { if ((--idx) < 0)                idx = wnd.matches.len-1; };
-            auto inc = [&]() { if ((++idx) >= wnd.matches.len) idx = 0; };
-
-            if (wnd.matches[idx].start > curr) dec();
+            auto dec = [&]() { if ((--idx) < 0)                idx = matches.len-1; };
+            auto inc = [&]() { if ((++idx) >= matches.len) idx = 0; };
 
             if (im_get_keymods() & CP_MOD_SHIFT) {
-                if (wnd.matches[idx].start == curr)
-                    dec();
+                // going backwards
+                // regardless of whether we're in match or not, dec() is the
+                // right action (go through the logic if unclear)
+                dec();
             } else {
-                inc();
+                // if we're in between two matches, `idx` is already on the next match
+                if (in_match) inc();
             }
 
-            cp_assert(idx >= 0);
-            cp_assert(idx < wnd.matches.len);
-
+            cp_assert(0 <= idx && idx < matches.len);
             wnd.current_idx = idx;
-            ed->move_cursor(wnd.matches[wnd.current_idx].start);
+            ed->move_cursor(matches[idx].start);
         } while (0);
 
-        if (im::IsItemEdited()) search_again = true;
+        if (im::IsItemEdited()) {
+            search_again = true;
+            if (wnd.show)
+                cp_strcpy_fixed(wnd.permanent_query, wnd.query);
+        }
 
         if (im::Checkbox("Case-sensitive", &wnd.case_sensitive))
             search_again = true;
@@ -4947,8 +4873,8 @@ void UI::draw_everything() {
             im_small_newline();
 
             if (im_input_text_full("Replace:", wnd.replace_str, _countof(wnd.replace_str), ImGuiInputTextFlags_EnterReturnsTrue)) {
-                auto repl_parts = wnd.sess.parse_replacement(wnd.replace_str);
-                For (&wnd.matches) {
+                auto repl_parts = parse_search_replacement(wnd.replace_str);
+                For (&matches) {
                     auto chars = new_list(char);
                     auto &m = it;
 
@@ -4991,7 +4917,19 @@ void UI::draw_everything() {
             search_again = true;
         */
 
-        if (search_again) trigger_file_search();
+        if (search_again && wnd.show) {
+            trigger_file_search();
+
+            bool in_match = false;
+            auto idx = find_current_or_next_match(ed->cur, &in_match);
+
+            // if we're in match and it's first char, just stay there
+            // otherwise, go to next one
+            if (!(in_match && matches[idx].start == ed->cur)) {
+                idx = (idx+1) % matches.len;
+                ed->move_cursor(matches[idx].start);
+            }
+        }
 
         im::End();
         fstlog("wnd_current_file_search");
@@ -6703,12 +6641,9 @@ void UI::draw_everything() {
             int next_hl = (highlights.len ? 0 : -1);
 
             int next_search_match = -1;
-            {
-                auto &wnd = world.wnd_current_file_search;
-                if (wnd.show)
-                    if (wnd.matches.len)
-                        next_search_match = 0;
-            }
+            if (world.wnd_current_file_search.show)
+                if (editor->file_search.results.len)
+                    next_search_match = 0;
 
             auto goroutines_hit = new_list(Dlv_Goroutine*);
             u32 current_goroutine_id = 0;
@@ -7004,13 +6939,14 @@ void UI::draw_everything() {
                     if (next_search_match != -1) {
                         auto curr = new_cur2(curr_byte_idx, y);
                         auto &wnd = world.wnd_current_file_search;
+                        auto &matches = editor->file_search.results;
 
-                        while (next_search_match != -1 && curr >= wnd.matches[next_search_match].end)
-                            if (++next_search_match >= wnd.matches.len)
+                        while (next_search_match != -1 && curr >= matches[next_search_match].end)
+                            if (++next_search_match >= matches.len)
                                 next_search_match = -1;
 
                         if (next_search_match != -1) {
-                            auto& match = wnd.matches[next_search_match];
+                            auto& match = matches[next_search_match];
                             if (match.start <= curr && curr < match.end) {
                                 if (next_search_match == wnd.current_idx) {
                                     draw_highlight(rgba("#ffffdd", 0.4), glyph_width);

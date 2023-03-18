@@ -241,7 +241,7 @@ bool Searcher::start_search(ccstr _query, Searcher_Opts *_opts) {
     sess.case_sensitive = opts.case_sensitive;
     sess.literal = opts.literal;
     // sess.match_limit = 1000;
-    if (!sess.start()) return false;
+    if (!sess.init()) return false;
 
     if (world.file_tree_busy) {
         tell_user_error("The file list is currently being generated.");
@@ -317,7 +317,7 @@ bool Searcher::start_replace(ccstr _replace_with) {
     return thread != NULL;
 }
 
-List<Replace_Part> *Search_Session::parse_replacement(ccstr replace_text) {
+List<Replace_Part> *parse_search_replacement(ccstr replace_text) {
     int k = 0, rlen = strlen(replace_text);
     auto ret = new_list(Replace_Part);
 
@@ -356,7 +356,7 @@ ccstr Searcher::get_replacement_text(Searcher_Result_Match *sr, ccstr replace_te
     if (!sr->groups) return replace_text;
 
     auto chars = new_list(char);
-    auto parts = sess.parse_replacement(replace_text);
+    auto parts = parse_search_replacement(replace_text);
 
     For (parts) {
         ccstr newstr = NULL;
@@ -485,10 +485,9 @@ void Search_Session::cleanup() {
     }
 }
 
-bool Search_Session::start() {
+bool Search_Session::precompute() {
     if (literal) {
         find_skip = new_array(s32, qlen);
-        alpha_skip = new_array(s32, 256);
 
         // generate find skip
         for (int last_prefix = qlen, i = qlen; i > 0; i--) {

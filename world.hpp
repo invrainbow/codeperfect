@@ -317,13 +317,6 @@ struct Auth_Extras {
     // ???
 };
 
-struct File_Search_Match {
-    cur2 start;
-    cur2 end;
-    List<cur2> *group_starts;
-    List<cur2> *group_ends;
-};
-
 struct Drawn_Quad {
     boxf b;
     vec4f color;
@@ -529,18 +522,15 @@ struct World {
     Command last_manually_run_command;
 
     struct Wnd_Current_File_Search : Wnd {
-        Pool mem;
+        char permanent_query[256];
+
+        // Pool mem;
         char query[256];
         char replace_str[256];
-
-        Search_Session sess;
-        List<File_Search_Match> matches;
-
         bool replace;
         bool case_sensitive;
         bool use_regex;
         // bool search_in_selection;
-
         int current_idx;
     } wnd_current_file_search;
 
@@ -920,3 +910,5 @@ void set_zoom_level(int level);
 
 List<Editor*> *get_all_editors();
 void reset_everything_when_switching_editors(Editor *old_editor);
+
+void trigger_file_search(int limit_start = -1, int limit_end = -1);
