@@ -3385,18 +3385,18 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
 
         case '{':
         case '}': {
-            auto isempty = [&](int y) { return !lines[y].len; };
+            auto isblank = [&](int y) { return !lines[y].len; };
             auto isok = [&](int y) { return 0 <= y && y < lines.len; };
 
             cur2 pos = c;
 
             for (int i = 0; i < count; i++) {
                 int y = pos.y;
-                if (isempty(y))
-                    while (isok(y) && isempty(y))
+                if (isblank(y))
+                    while (isok(y) && isblank(y))
                         y += (inp.ch == '{' ? -1 : 1);
 
-                while (isok(y) && !isempty(y))
+                while (isok(y) && !isblank(y))
                     y += (inp.ch == '{' ? -1 : 1);
 
                 if (y == -1) {
