@@ -2035,6 +2035,7 @@ void Editor::type_char(uchar ch, Type_Char_Opts *opts) {
     }
 
     if (opts->replace_mode || opts->automated) return;
+    if (world.vim.macro_state == MACRO_RUNNING) return;
 
     switch (ch) {
     case '.':
