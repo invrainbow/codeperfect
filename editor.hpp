@@ -260,7 +260,7 @@ struct Editor {
     struct {
         Pool mem;
         List<File_Search_Match> results;
-        // ????? anything else?
+        int current_idx;
     } file_search;
 
     struct Insert_Change {
@@ -423,6 +423,10 @@ struct Editor {
     void handle_type_enter();
     void handle_type_tab(int mods);
     void handle_type_backspace(int mods);
+
+    void trigger_file_search(int limit_start = -1, int limit_end = -1);
+    int move_file_search_result(bool forward, int count);
+    int find_current_or_next_match(cur2 pos, bool *in_match);
 };
 
 void vim_copy_command(Vim_Command *dest, Vim_Command *src);

@@ -2365,6 +2365,11 @@ void UI::draw_everything() {
             menu_command(CMD_FIND_REFERENCES);
             menu_command(CMD_FIND_IMPLEMENTATIONS);
             menu_command(CMD_FIND_INTERFACES);
+            im::Separator();
+            menu_command(CMD_GO_TO_NEXT_FILE_SEARCH_RESULT);
+            menu_command(CMD_GO_TO_PREVIOUS_FILE_SEARCH_RESULT);
+            menu_command(CMD_GO_TO_NEXT_SEARCH_RESULT);
+            menu_command(CMD_GO_TO_PREVIOUS_SEARCH_RESULT);
             im::EndMenu();
         }
 
@@ -4790,71 +4795,26 @@ void UI::draw_everything() {
 
         bool search_again = false;
 
-        auto &matches = ed->file_search.results;
+        auto &fs = ed->file_search;
+        auto &matches = fs.results;
 
         ccstr label = NULL;
         if (!matches.len)
             label = "No results";
-        else if (wnd.current_idx == -1)
+        else if (fs.current_idx == -1)
             label = cp_sprintf("%d result%s", matches.len, matches.len == 1 ? "" : "s");
         else
-            label = cp_sprintf("%d of %d", wnd.current_idx + 1, matches.len);
+            label = cp_sprintf("%d of %d", fs.current_idx + 1, matches.len);
 
-        auto find_current_or_next_match = [&](cur2 pos, bool *in_match) {
-            int lo = 0, hi = matches.len-1;
-
-            while (lo <= hi) {
-                int mid = (lo+hi)/2;
-                auto &it = matches[mid];
-                if (it.start <= pos && pos < it.end) {
-                    *in_match = true;
-                    return mid;
-                }
-
-                if (pos < it.start)
-                    hi = mid-1;
-                else
-                    lo = mid+1;
-            }
-
-            *in_match = false;
-            return lo;
-        };
-
-        bool enter_pressed = im_input_text_full(cp_sprintf("Search (%s)", label), "current_file_search_search", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue);
-
-        do {
-            if (!enter_pressed) break;
-
+        if (im_input_text_full(cp_sprintf("Search (%s)", label), "current_file_search_search", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
             im::SetKeyboardFocusHere(-1);
 
-            if (!matches.len) break;
-
-            // so this thing always returns the next result?
-            // if we're between two results, second of the two
-            // if we're on a result, next result after current result
-
-            auto c = ed->cur;
-            bool in_match = false;
-            int idx = find_current_or_next_match(c, &in_match);
-
-            auto dec = [&]() { if ((--idx) < 0)                idx = matches.len-1; };
-            auto inc = [&]() { if ((++idx) >= matches.len) idx = 0; };
-
-            if (im_get_keymods() & CP_MOD_SHIFT) {
-                // going backwards
-                // regardless of whether we're in match or not, dec() is the
-                // right action (go through the logic if unclear)
-                dec();
-            } else {
-                // if we're in between two matches, `idx` is already on the next match
-                if (in_match) inc();
+            auto idx = ed->move_file_search_result(!(im_get_keymods() & CP_MOD_SHIFT), 1);
+            if (idx != -1) {
+                fs.current_idx = idx;
+                ed->move_cursor(matches[idx].start);
             }
-
-            cp_assert(0 <= idx && idx < matches.len);
-            wnd.current_idx = idx;
-            ed->move_cursor(matches[idx].start);
-        } while (0);
+        }
 
         if (im::IsItemEdited()) {
             search_again = true;
@@ -4918,16 +4878,24 @@ void UI::draw_everything() {
         */
 
         if (search_again && wnd.show) {
-            trigger_file_search();
+            ed->trigger_file_search();
+            if (matches.len) {
+                bool in_match = false;
+                auto idx = ed->find_current_or_next_match(ed->cur, &in_match);
 
-            bool in_match = false;
-            auto idx = find_current_or_next_match(ed->cur, &in_match);
-
-            // if we're in match and it's first char, just stay there
-            // otherwise, go to next one
-            if (!(in_match && matches[idx].start == ed->cur)) {
-                idx = (idx+1) % matches.len;
-                ed->move_cursor(matches[idx].start);
+                // if we're in match and it's first char, just stay there
+                // otherwise, go to next one
+                if (in_match) {
+                    if (matches[idx].start == ed->cur) {
+                        idx = (idx+1) % matches.len;
+                        ed->move_cursor(matches[idx].start);
+                    } else {
+                        // do nothing
+                    }
+                } else {
+                    // idx already points to the next result
+                    ed->move_cursor(matches[idx].start);
+                }
             }
         }
 
@@ -6948,7 +6916,7 @@ void UI::draw_everything() {
                         if (next_search_match != -1) {
                             auto& match = matches[next_search_match];
                             if (match.start <= curr && curr < match.end) {
-                                if (next_search_match == wnd.current_idx) {
+                                if (next_search_match == editor->file_search.current_idx) {
                                     draw_highlight(rgba("#ffffdd", 0.4), glyph_width);
                                     text_color = rgba("#ffffdd", 1.0);
                                 } else {

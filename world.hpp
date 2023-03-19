@@ -172,6 +172,10 @@ enum Command {
     CMD_GO_TO_NEXT_ERROR,
     CMD_GO_TO_PREVIOUS_ERROR,
     CMD_GO_TO_DEFINITION,
+    CMD_GO_TO_NEXT_FILE_SEARCH_RESULT,
+    CMD_GO_TO_PREVIOUS_FILE_SEARCH_RESULT,
+    CMD_GO_TO_NEXT_SEARCH_RESULT,
+    CMD_GO_TO_PREVIOUS_SEARCH_RESULT,
     CMD_FIND_REFERENCES,
     CMD_FORMAT_FILE,
     CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS,
@@ -522,16 +526,13 @@ struct World {
     Command last_manually_run_command;
 
     struct Wnd_Current_File_Search : Wnd {
-        char permanent_query[256];
-
-        // Pool mem;
         char query[256];
+        char permanent_query[256];
         char replace_str[256];
         bool replace;
         bool case_sensitive;
         bool use_regex;
         // bool search_in_selection;
-        int current_idx;
     } wnd_current_file_search;
 
     struct Wnd_Enter_License : Wnd {
@@ -911,4 +912,4 @@ void set_zoom_level(int level);
 List<Editor*> *get_all_editors();
 void reset_everything_when_switching_editors(Editor *old_editor);
 
-void trigger_file_search(int limit_start = -1, int limit_end = -1);
+void open_current_file_search(bool replace);

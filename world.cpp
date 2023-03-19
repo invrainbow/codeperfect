@@ -1597,6 +1597,19 @@ Command_Info command_info_table[_CMD_COUNT_];
 
 bool is_command_enabled(Command cmd) {
     switch (cmd) {
+    case CMD_GO_TO_NEXT_FILE_SEARCH_RESULT:
+    case CMD_GO_TO_PREVIOUS_FILE_SEARCH_RESULT: {
+        auto editor = get_current_editor();
+        return editor && editor->file_search.results.len;
+    }
+
+    case CMD_GO_TO_NEXT_SEARCH_RESULT:
+    case CMD_GO_TO_PREVIOUS_SEARCH_RESULT:
+        if (world.searcher.state == SEARCH_SEARCH_DONE)
+            if (world.searcher.search_results.len)
+                return true;
+        return false;
+
     case CMD_ZOOM_ORIGINAL:
         return options.zoom_level != 100;
 
@@ -1927,6 +1940,12 @@ void init_command_info_table() {
     command_info_table[CMD_GO_TO_NEXT_ERROR] = k(CP_MOD_ALT, CP_KEY_RIGHT_BRACKET, "Go To Next Error");
     command_info_table[CMD_GO_TO_PREVIOUS_ERROR] = k(CP_MOD_ALT, CP_KEY_LEFT_BRACKET, "Go To Previous Error");
     command_info_table[CMD_GO_TO_DEFINITION] = k(CP_MOD_PRIMARY, CP_KEY_G, "Go To Definition");
+
+    command_info_table[CMD_GO_TO_NEXT_FILE_SEARCH_RESULT] = k(0, CP_KEY_F3, "Find Next");
+    command_info_table[CMD_GO_TO_PREVIOUS_FILE_SEARCH_RESULT] = k(CP_MOD_SHIFT, CP_KEY_F3, "Find Previous");
+    command_info_table[CMD_GO_TO_NEXT_SEARCH_RESULT] = k(0, CP_KEY_F4, "Go To Next Search Result");
+    command_info_table[CMD_GO_TO_PREVIOUS_SEARCH_RESULT] = k(CP_MOD_SHIFT, CP_KEY_F4, "Go To Previous Search Result");
+
     command_info_table[CMD_FIND_REFERENCES] = k(CP_MOD_PRIMARY | CP_MOD_ALT, CP_KEY_R, "Find References");
     command_info_table[CMD_FORMAT_FILE] = k(CP_MOD_ALT | CP_MOD_SHIFT, CP_KEY_F, "Format File");
     command_info_table[CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS] = k(CP_MOD_ALT | CP_MOD_SHIFT, CP_KEY_O, "Format File and Organize Imports");
@@ -2157,94 +2176,6 @@ void do_find_implementations() {
     }
 }
 
-void trigger_file_search(int limit_start, int limit_end) {
-    auto &wnd = world.wnd_current_file_search;
-    if (!wnd.query[0]) return;
-
-    auto editors = get_all_editors();
-    if (isempty(editors)) return; // can't actually happen right?
-
-    Search_Session sess; ptr0(&sess);
-    sess.case_sensitive = wnd.case_sensitive;
-    sess.literal = !wnd.use_regex;
-    sess.query = wnd.query;
-    sess.qlen = strlen(wnd.query);
-    if (!sess.init()) return;
-
-    wnd.current_idx = -1;
-
-    /*
-    if (wnd.search_in_selection) {
-        wnd.sess.limit_to_range = true;
-
-        auto a = ed->select_start;
-        auto b = ed->cur;
-        ORDER(a, b);
-
-        wnd.sess.limit_start = ed->cur_to_offset(a);
-        wnd.sess.limit_end = ed->cur_to_offset(b);
-    }
-    */
-
-    For (editors) {
-        auto editor = it;
-        auto &fs = editor->file_search;
-
-        fs.mem.reset();
-        {
-            SCOPED_MEM(&fs.mem);
-            fs.results.init();
-        }
-
-        auto chars = new_list(char);
-        char buf[4];
-
-        // this is so stupid, why doesn't pcre take a custom iterator?
-        For (&it->buf->lines) {
-            For (&it) {
-                int k = uchar_to_cstr(it, buf);
-                chars->concat(buf, k);
-            }
-            chars->append('\n');
-        }
-
-        auto tmp = new_list(Search_Match);
-
-        // TODO: make max # results customizable?
-        sess.search(chars->items, chars->len, tmp, 1000);
-
-        // is o(n*m) gonna fuck us? (n = number lines, m = number matches)
-        // n is at most 65k
-        // m is... i guess a lot :joy:
-        /// TODO: this offset_to_cur seems horribly inefficient too...
-        For (tmp) {
-            File_Search_Match match; ptr0(&match);
-            match.start = editor->offset_to_cur(it.start);
-            match.end = editor->offset_to_cur(it.end);
-
-            if (it.group_starts) {
-                {
-                    SCOPED_MEM(&fs.mem);
-                    match.group_starts = new_list(cur2);
-                }
-                For (it.group_starts)
-                    match.group_starts->append(editor->offset_to_cur(it));
-            }
-
-            if (it.group_ends) {
-                {
-                    SCOPED_MEM(&fs.mem);
-                    match.group_ends = new_list(cur2);
-                }
-                For (it.group_ends)
-                    match.group_ends->append(editor->offset_to_cur(it));
-            }
-
-            editor->file_search.results.append(&match);
-        }
-    }
-}
-
 void handle_command(Command cmd, bool from_menu) {
     // make this a precondition (actually, I think it might already be)
     if (!is_command_enabled(cmd)) return;
@@ -2423,26 +2354,9 @@ void handle_command(Command cmd, bool from_menu) {
     }
 
     case CMD_REPLACE:
-    case CMD_FIND: {
-        auto &wnd = world.wnd_current_file_search;
-        wnd.replace = (cmd == CMD_REPLACE);
-
-        if (wnd.show)
-            wnd.cmd_focus = true;
-        else
-            wnd.show = true;
-
-        cp_strcpy_fixed(wnd.query, wnd.permanent_query);
-        if (wnd.query[0])
-            trigger_file_search();
-
-        // don't clear this stuff out on save
-        // wnd.query[0] = '\0';
-        // wnd.replace_str[0] = '\0';
-
-        wnd.show = true;
+    case CMD_FIND:
+        open_current_file_search(cmd == CMD_REPLACE);
         break;
-    }
 
     case CMD_BUY_LICENSE:
         GHOpenURLInBrowser("https://codeperfect95.com/buy");
@@ -2697,6 +2611,25 @@ void handle_command(Command cmd, bool from_menu) {
 
     case CMD_GO_TO_DEFINITION:
         handle_goto_definition();
+        break;
+
+    case CMD_GO_TO_NEXT_FILE_SEARCH_RESULT:
+    case CMD_GO_TO_PREVIOUS_FILE_SEARCH_RESULT: {
+        auto editor = get_current_editor();
+        if (!editor) break;
+        if (!editor->file_search.results.len) break;
+
+        auto idx = editor->move_file_search_result(cmd == CMD_GO_TO_NEXT_FILE_SEARCH_RESULT, 1);
+        if (idx == -1) break;
+
+        editor->file_search.current_idx = idx;
+        editor->move_cursor(editor->file_search.results[idx].start);
+        break;
+    }
+
+    case CMD_GO_TO_NEXT_SEARCH_RESULT:
+    case CMD_GO_TO_PREVIOUS_SEARCH_RESULT:
+        // ...
         break;
 
     case CMD_FIND_REFERENCES: {
@@ -4065,6 +3998,23 @@ void reset_everything_when_switching_editors(Editor *old_editor) {
         if (world.vim.macro_state != MACRO_IDLE) {
             world.vim.macro_state = MACRO_IDLE;
             world.vim.macro_record = 0;
+        }
+    }
+}
+
+void open_current_file_search(bool replace) {
+    auto &wnd = world.wnd_current_file_search;
+    wnd.replace = replace;
+
+    if (wnd.show) {
+        wnd.cmd_focus = true;
+    } else {
+        wnd.show = true;
+        cp_strcpy_fixed(wnd.query, wnd.permanent_query);
+        if (wnd.query[0]) {
+            auto editor = get_current_editor();
+            if (editor)
+                editor->trigger_file_search();
         }
     }
 }

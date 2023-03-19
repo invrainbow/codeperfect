@@ -2766,6 +2766,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             ptr++;
             break;
 
+        case '/':
         case 'u':
         case '~':
         case 'J':
@@ -3043,6 +3044,8 @@ done:
     case 'G':
     case '}':
     case '{':
+    case 'n':
+    case 'N':
         ptr++;
         out->motion->append(it);
         return VIM_PARSE_DONE;
@@ -3914,6 +3917,20 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                 ret->type = MOTION_CHAR_EXCL;
                 return ret;
             }
+        }
+
+        case 'n':
+        case 'N': {
+            auto idx = move_file_search_result(inp.ch == 'n', count);
+            if (idx == -1) break;
+
+            // is this the right place to set this? should
+            // this really be stateful?
+            file_search.current_idx = idx;
+
+            ret->dest = file_search.results[idx].start;
+            ret->type = MOTION_CHAR_EXCL;
+            return ret;
         }
 
         case 'j':
@@ -5053,6 +5070,10 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                 }
             }
 
+        case '/':
+            open_current_file_search(false);
+            break;
+
         case '~':
             switch (mode) {
             case VI_NORMAL: {
@@ -5889,4 +5910,131 @@ void Editor::trigger_escape() {
         vim_handle_key(CP_KEY_ESCAPE, 0);
     else
         handle_escape();
+}
+
+void Editor::trigger_file_search(int limit_start, int limit_end) {
+    auto &wnd = world.wnd_current_file_search;
+    if (!wnd.query[0]) return;
+
+    auto editors = get_all_editors();
+    if (isempty(editors)) return; // can't actually happen right?
+
+    Search_Session sess; ptr0(&sess);
+    sess.case_sensitive = wnd.case_sensitive;
+    sess.literal = !wnd.use_regex;
+    sess.query = wnd.query;
+    sess.qlen = strlen(wnd.query);
+    if (!sess.init()) return;
+
+    file_search.current_idx = -1;
+
+    /*
+    if (wnd.search_in_selection) {
+        wnd.sess.limit_to_range = true;
+
+        auto a = ed->select_start;
+        auto b = ed->cur;
+        ORDER(a, b);
+
+        wnd.sess.limit_start = ed->cur_to_offset(a);
+        wnd.sess.limit_end = ed->cur_to_offset(b);
+    }
+    */
+
+    For (editors) {
+        auto editor = it;
+        auto &fs = editor->file_search;
+
+        fs.mem.reset();
+        {
+            SCOPED_MEM(&fs.mem);
+            fs.results.init();
+        }
+
+        auto chars = new_list(char);
+        char buf[4];
+
+        // this is so stupid, why doesn't pcre take a custom iterator?
+        For (&it->buf->lines) {
+            For (&it) {
+                int k = uchar_to_cstr(it, buf);
+                chars->concat(buf, k);
+            }
+            chars->append('\n');
+        }
+
+        auto tmp = new_list(Search_Match);
+
+        // TODO: make max # results customizable?
+        sess.search(chars->items, chars->len, tmp, 1000);
+
+        // is o(n*m) gonna fuck us? (n = number lines, m = number matches)
+        // n is at most 65k
+        // m is... i guess a lot :joy:
+        /// TODO: this offset_to_cur seems horribly inefficient too...
+        For (tmp) {
+            File_Search_Match match; ptr0(&match);
+            match.start = editor->offset_to_cur(it.start);
+            match.end = editor->offset_to_cur(it.end);
+
+            if (it.group_starts) {
+                {
+                    SCOPED_MEM(&fs.mem);
+                    match.group_starts = new_list(cur2);
+                }
+                For (it.group_starts)
+                    match.group_starts->append(editor->offset_to_cur(it));
+            }
+
+            if (it.group_ends) {
+                {
+                    SCOPED_MEM(&fs.mem);
+                    match.group_ends = new_list(cur2);
+                }
+                For (it.group_ends)
+                    match.group_ends->append(editor->offset_to_cur(it));
+            }
+
+            editor->file_search.results.append(&match);
+        }
+    }
+}
+
+int Editor::move_file_search_result(bool forward, int count) {
+    auto &matches = file_search.results;
+    if (!matches.len) return -1;
+
+    bool in_match = false;
+    auto idx = find_current_or_next_match(cur, &in_match);
+
+    if (forward) {
+        if (!in_match) count--;
+        idx += count;
+    } else {
+        idx += matches.len - (count % matches.len);
+    }
+    return idx % matches.len;
+    // ed->move_cursor(matches[idx].start);
+}
+
+int Editor::find_current_or_next_match(cur2 pos, bool *in_match) {
+    auto &matches = file_search.results;
+
+    int lo = 0, hi = matches.len-1;
+    while (lo <= hi) {
+        int mid = (lo+hi)/2;
+        auto &it = matches[mid];
+        if (it.start <= pos && pos < it.end) {
+            *in_match = true;
+            return mid;
+        }
+
+        if (pos < it.start)
+            hi = mid-1;
+        else
+            lo = mid+1;
+    }
+
+    *in_match = false;
+    return lo % matches.len;
 }
