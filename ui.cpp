@@ -4886,7 +4886,7 @@ void UI::draw_everything() {
                 // if we're in match and it's first char, just stay there
                 // otherwise, go to next one
                 if (in_match) {
-                    if (matches[idx].start == ed->cur) {
+                    if (matches[idx].start != ed->cur) {
                         idx = (idx+1) % matches.len;
                         ed->move_cursor(matches[idx].start);
                     } else {
