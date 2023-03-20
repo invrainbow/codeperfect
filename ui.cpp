@@ -4833,6 +4833,10 @@ void UI::draw_everything() {
             im_small_newline();
 
             if (im_input_text_full("Replace:", wnd.replace_str, _countof(wnd.replace_str), ImGuiInputTextFlags_EnterReturnsTrue)) {
+                SCOPED_BATCH_CHANGE(ed->buf);
+                ed->buf->tree_batch_start();
+                defer { ed->buf->tree_batch_end(); };
+
                 auto repl_parts = parse_search_replacement(wnd.replace_str);
                 For (&matches) {
                     auto chars = new_list(char);

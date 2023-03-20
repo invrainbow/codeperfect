@@ -188,6 +188,22 @@ struct Buffer {
     List<uchar> edit_buffer_new;
     bool editable_from_main_thread_only;
 
+    bool tree_batch_mode;
+    int tree_batch_refs;
+
+    void tree_batch_start() {
+        tree_batch_mode = true;
+        tree_batch_refs++;
+    }
+
+    void tree_batch_end() {
+        tree_batch_refs--;
+        if (tree_batch_refs == 0) {
+            tree_batch_mode = false;
+            update_tree();
+        }
+    }
+
     // TODO: if we have any more ring buffers, consider refactor
 
     // honestly, should we just pull this out into a Buffer_History class

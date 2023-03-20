@@ -259,6 +259,9 @@ void Buffer::hist_apply_change(Change *change, bool undo) {
 cur2 Buffer::hist_undo() {
     if (hist_curr == hist_start) return NULL_CUR;
 
+    tree_batch_start();
+    defer { tree_batch_end(); };
+
     hist_curr = hist_dec(hist_curr);
 
     auto arr = new_list(Change*);
@@ -279,6 +282,9 @@ cur2 Buffer::hist_undo() {
 
 cur2 Buffer::hist_redo() {
     if (hist_curr == hist_top) return NULL_CUR;
+
+    tree_batch_start();
+    defer { tree_batch_end(); };
 
     auto ret = NULL_CUR;
 
@@ -728,7 +734,8 @@ void Buffer::internal_finish_edit(cur2 new_end) {
 
     if (lang != LANG_NONE) {
         ts_tree_edit(tree, &tsedit);
-        update_tree();
+        if (!tree_batch_mode)
+            update_tree();
     }
 
     // set this here or in .remove() and .insert()?
