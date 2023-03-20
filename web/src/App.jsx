@@ -55,7 +55,7 @@ posthog.init("phc_kIt8VSMD8I2ScNhnjWDU2NmrK9kLIL3cHWpkgCX3Blw", {
 
 const SUPPORT_EMAIL = "support@codeperfect95.com";
 const CURRENT_BUILD = process.env.REACT_APP_BUILD_VERSION;
-const CURRENT_BUILD_RELEASE_DATE = "February 12, 2023";
+const CURRENT_BUILD_RELEASE_DATE = "March 20, 2023";
 
 const isDev = process.env.REACT_APP_CPENV === "development";
 const isStaging = process.env.REACT_APP_CPENV === "staging";
