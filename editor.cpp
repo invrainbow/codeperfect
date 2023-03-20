@@ -3048,6 +3048,8 @@ done:
     case '{':
     case 'n':
     case 'N':
+    case '*':
+    case '#':
         ptr++;
         out->motion->append(it);
         return VIM_PARSE_DONE;
@@ -3925,15 +3927,56 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             }
         }
 
+        case '*':
+        case '#':
         case 'n':
         case 'N': {
-            auto idx = move_file_search_result(inp.ch == 'n', count);
+            if (inp.ch == '*' || inp.ch == '#') {
+                auto it = iter();
+                while (!it.eof() && !gr_isident(it.gr_peek()))
+                    it.gr_next();
+
+                if (it.eof()) break;
+
+                while (!it.bof()) {
+                    auto old = it.pos;
+                    auto gr = it.gr_prev();
+                    if (!gr_isident(gr)) {
+                        it.pos = old;
+                        break;
+                    }
+                }
+
+                auto chars = new_list(char);
+                while (!it.eof()) {
+                    auto gr = it.gr_next();
+                    if (!gr_isident(gr)) break;
+                    For (gr) {
+                        char buf[4];
+                        auto count = uchar_to_cstr(it, buf);
+                        for (int i = 0; i < count; i++)
+                            chars->append(buf[i]);
+                    }
+                }
+
+                auto &wnd = world.wnd_current_file_search;
+
+                if (chars->len + 2 > _countof(wnd.query)) break;
+                auto query = cp_sprintf("\\b%.*s\\b", chars->len, chars->items);
+
+                cp_strcpy_fixed(wnd.permanent_query, query);
+                cp_strcpy_fixed(wnd.query, query);
+                wnd.replace = false;
+                wnd.case_sensitive = false;
+                wnd.use_regex = true;
+
+                trigger_file_search();
+            }
+
+            auto idx = move_file_search_result(inp.ch == 'n' || inp.ch == '*', count);
             if (idx == -1) break;
 
-            // is this the right place to set this? should
-            // this really be stateful?
             file_search.current_idx = idx;
-
             ret->dest = file_search.results[idx].start;
             ret->type = MOTION_CHAR_EXCL;
             return ret;
