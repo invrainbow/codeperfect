@@ -2853,6 +2853,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             auto ch = peek_char();
             switch (ch) {
             case 'p':
+            case 'q':
                 ptr++;
                 out->op->append(it);
                 out->op->append(char_input(ch));
@@ -2871,6 +2872,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             auto ch = peek_char();
             switch (ch) {
             case 'p':
+            case 'q':
                 ptr++;
                 out->op->append(it);
                 out->op->append(char_input(ch));
@@ -3425,66 +3427,70 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
         case '[':
         case ']': {
             auto arg = get_second_char_arg();
-            if (arg != '[' && arg != ']') break;
+            switch (arg) {
+            case '[':
+            case ']': {
+                bool forward = (inp.ch == ']');
+                bool find_close = (arg != inp.ch);
 
-            bool forward = (inp.ch == ']');
-            bool find_close = (arg != inp.ch);
+                auto try_using_ast = [&]() -> bool {
+                    if (lang != LANG_GO) return false;;
+                    auto root = new_ast_node(ts_tree_root_node(buf->tree), NULL);
+                    if (root->type() != TS_SOURCE_FILE) return false;
 
-            auto try_using_ast = [&]() -> bool {
-                if (lang != LANG_GO) return false;;
-                auto root = new_ast_node(ts_tree_root_node(buf->tree), NULL);
-                if (root->type() != TS_SOURCE_FILE) return false;
+                    Ast_Node *target = NULL;
 
-                Ast_Node *target = NULL;
-
-                int i = 0;
-                FOR_NODE_CHILDREN (root) {
-                    if (it->end() >= c) {
-                        target = it;
-                        break;
-                    }
-                    i++;
-                }
-
-                cur2 dest = c;
-                for (i = 0; i < count; i++) {
-                    if (forward) {
-                        if (!find_close || buf->inc_gr(dest) >= target->end()) {
-                            target = target->next();
-                            if (!target) break;
+                    int i = 0;
+                    FOR_NODE_CHILDREN (root) {
+                        if (it->end() >= c) {
+                            target = it;
+                            break;
                         }
-                    } else {
-                        if (find_close || dest == target->start()) {
-                            target = target->prev();
-                            if (!target) break;
+                        i++;
+                    }
+
+                    cur2 dest = c;
+                    for (i = 0; i < count; i++) {
+                        if (forward) {
+                            if (!find_close || buf->inc_gr(dest) >= target->end()) {
+                                target = target->next();
+                                if (!target) break;
+                            }
+                        } else {
+                            if (find_close || dest == target->start()) {
+                                target = target->prev();
+                                if (!target) break;
+                            }
+                        }
+                        dest = (find_close ? buf->dec_gr(target->end()) : target->start());
+                    }
+                    ret->dest = dest;
+                    return true;
+                };
+
+                if (!try_using_ast()) {
+                    int y = cur.y;
+
+                    for (int i = 0; i < count; i++) {
+                        uchar target = (find_close ? '}' : '{');
+                        if (forward) {
+                            for (; y < lines.len-1; y++)
+                                if (lines[y].len && lines[y][0] == target)
+                                    break;
+                        } else {
+                            for (; y > 0; y--)
+                                if (lines[y].len && lines[y][0] == target)
+                                    break;
                         }
                     }
-                    dest = (find_close ? buf->dec_gr(target->end()) : target->start());
+                    ret->dest = new_cur2(0, y);
                 }
-                ret->dest = dest;
-                return true;
-            };
 
-            if (!try_using_ast()) {
-                int y = cur.y;
-
-                for (int i = 0; i < count; i++) {
-                    uchar target = (find_close ? '}' : '{');
-                    if (forward) {
-                        for (; y < lines.len-1; y++)
-                            if (lines[y].len && lines[y][0] == target)
-                                break;
-                    } else {
-                        for (; y > 0; y--)
-                            if (lines[y].len && lines[y][0] == target)
-                                break;
-                    }
-                }
-                ret->dest = new_cur2(0, y);
+                ret->type = MOTION_CHAR_EXCL;
+                return ret;
             }
-
-            ret->type = MOTION_CHAR_EXCL;
-            return ret;
+            }
+            break;
         }
 
         case 'f':
@@ -4680,7 +4686,12 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
 
         case ']':
         case '[': {
-            // TODO: ]p [p etc
+            auto arg = get_second_char_arg();
+            switch (arg) {
+            case 'q':
+                move_search_result(inp.ch == ']', o_count);
+                return true;
+            }
             break;
         }
 

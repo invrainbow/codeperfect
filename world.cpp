@@ -2629,7 +2629,9 @@ void handle_command(Command cmd, bool from_menu) {
 
     case CMD_GO_TO_NEXT_SEARCH_RESULT:
     case CMD_GO_TO_PREVIOUS_SEARCH_RESULT:
-        // ...
+        if (world.searcher.state == SEARCH_SEARCH_DONE)
+            if (world.searcher.search_results.len)
+                move_search_result(cmd == CMD_GO_TO_NEXT_SEARCH_RESULT, 1);
         break;
 
     case CMD_FIND_REFERENCES: {
@@ -4016,5 +4018,89 @@ void open_current_file_search(bool replace) {
             if (editor)
                 editor->trigger_file_search();
         }
+    }
+}
+
+void move_search_result(bool forward, int count) {
+    /*
+     * cases:
+     *  - nothing selected
+     *  - file selected
+     *  - result selected
+     */
+
+    auto &wnd = world.wnd_search_and_replace;
+    auto &results = world.searcher.search_results;
+
+    if (!results.len) return;
+
+    // at the end after all the calculations:
+    // - scroll to the selected file/result
+    // - jump to its position
+    defer {
+        wnd.scroll_file = wnd.sel_file;
+        wnd.scroll_result = wnd.sel_result;
+
+        auto &file = results[wnd.sel_file];
+        auto result = file.results->at(wnd.sel_result);
+        goto_file_and_pos(file.filepath, result.match_start, true);
+    };
+
+    if (wnd.sel_file == -1 && wnd.sel_result == -1) {
+        if (forward) {
+            wnd.sel_file = 0;
+            wnd.sel_result = 0;
+        } else {
+            wnd.sel_file = results.len-1;
+            wnd.sel_result = results[wnd.sel_file].results->len-1;
+        }
+        if (--count == 0) return;
+    }
+
+    // at this point, count is still positive, and we're have at
+    // least a file selected
+
+    if (wnd.sel_result == -1) {
+        if (forward) {
+            wnd.sel_result = 0;
+        } else {
+            if (wnd.sel_file == 0)
+                wnd.sel_file = results.len-1;
+            else
+                wnd.sel_file--;
+            wnd.sel_result = results[wnd.sel_file].results->len-1;
+        }
+        if (--count == 0) return;
+    }
+
+    // at this point, count is still positive, and we're guaranteed to have
+    // both file and result selected
+
+    // express position as index of all search results & do the math on that
+
+    int total = 0;
+    For (&results)
+        total += it.results->len;
+
+    int index = 0;
+    for (int i = 0; i < wnd.sel_file; i++)
+        index += results[i].results->len;
+    index += wnd.sel_result;
+
+    if (forward)
+        index += count;
+    else
+        index += total - (count % total);
+    index %= total;
+
+    // now convert back to file+result
+
+    Fori (&results) {
+        if (index < it.results->len) {
+            wnd.sel_file = i;
+            wnd.sel_result = index;
+            break;
+        }
+        index -= it.results->len;
     }
 }
