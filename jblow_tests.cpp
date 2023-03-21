@@ -49,7 +49,7 @@ void Jblow_Tests::catchup() {
 void Jblow_Tests::skip_frame() {
     auto start = world.frame_index;
     while (world.frame_index < start + 3)
-        sleep_milliseconds(10);
+        sleep_milliseconds(5);
 }
 
 bool is_editor_selected(ccstr relative_filepath) {
@@ -110,6 +110,7 @@ Editor* Jblow_Tests::open_editor(ccstr relative_filepath) {
 
     // open main.go
     type_string(relative_filepath);
+    skip_frame();
     press_key(CP_KEY_ENTER);
 
     // wait for editor
@@ -169,7 +170,6 @@ T& random_choice(List<T> *arr) {
     cp_assert(arr->len);
     return arr->at(mt_lrand() % arr->len);
 }
-
 
 void Jblow_Tests::move_cursor(cur2 cur) {
     auto editor = get_current_editor();
@@ -259,122 +259,62 @@ void Jblow_Tests::run() {
     }
 
     else if (streq(test_name, "vim_fuzzer")) {
-        ccstr chars = (
-            "KKKKKKKKKKKKKK"                // does nothing in normal mode
-            "aioaioaioaio"                  // enter insert mode
-            "jkjkjkjkjkjkjkkjkjkjk"         // vertical movement
-            "\x01\x01\x01\x01\x01\x01\x01"  // escape
-            "\x02\x02\x02\x02\x02\x02\x02"  // backspace
-            "\x03\x03\x03\x03\x03"          // delete lines
-            "\n\n\n\n\n\n"                  // new line
-        );
+        Random_Input_Gen gen; gen.init();
 
-        int chars_len = strlen(chars);
+        for (char x = 'a'; x <= 'z'; x++) gen.add(x, 1);
+        for (char x = 'A'; x <= 'Z'; x++) gen.add(x, 1);
+        for (char x = '0'; x <= '9'; x++) gen.add(x, 1);
+        for (int x = CP_KEY_A; x <= CP_KEY_Z; x++) gen.add(x, CP_MOD_CTRL, 1);
+        gen.add(CP_KEY_BACKSPACE, 0, 5);
+        gen.add(CP_KEY_ESCAPE, 0, 5);
+        gen.add(CP_KEY_ENTER, 0, 5);
 
-        for (int seed = 0; seed < 16; seed++) {
-            // wait for editor
-            auto editor = open_editor("main.go");
+        mt_seed32(0); // try multiple seeds?
 
-            for (int i = 0; i < 5000; i++) {
-                auto it = chars[mt_lrand() % chars_len];
+        // wait for editor
+        auto editor = open_editor("main.go");
 
-                if (it == 0x01)
-                    press_key(CP_KEY_ESCAPE);
-                else if (it == 0x02)
-                    press_key(CP_KEY_BACKSPACE);
-                else if (it == '\n')
-                    press_key(CP_KEY_ENTER);
-                else if (it == 0x03) {
-                    press_key(CP_KEY_ESCAPE);
-                    type_string(cp_sprintf("d%dd", 3 + mt_lrand() % 5));
-                } else
-                    type_char(it);
-
-                if (i % 10 == 0) sleep_milliseconds(25);
-            }
-
-            // ensure we leave insert mode with some time before & after
-            press_key(CP_KEY_ESCAPE);
-            sleep_milliseconds(200);
-
-            // close editor
-            press_key(CP_KEY_W, CP_MOD_PRIMARY);
-            WAIT { return get_current_editor() == NULL; };
-
-            // wait for imgui input queue to finish
-            WAIT_FOREVER { return !ImGui::GetCurrentContext()->InputEventsQueue.Size; };
+        for (int i = 0; i < 10000; i++) {
+            inject_jblow_input(gen.pick());
+            if (i % 10 == 0) sleep_milliseconds(25);
         }
     }
 
     else if (streq(test_name, "non_vim_fuzzer")) {
-        struct Input {
-            bool ischar;
-            union {
-                char ch; // ischar
-                struct {
-                    int mods; // !ischar
-                    int key; // !ischar
-                };
-            };
-        };
+        Random_Input_Gen gen; gen.init();
 
-        auto generate_inputs = [&](int seed, int n) {
-            mt_seed32(seed);
-            auto ret = new_list(Input);
+        for (char ch = 'a'; ch <= 'z'; ch++) gen.add(ch, 10);
+        for (char ch = 'A'; ch <= 'Z'; ch++) gen.add(ch, 10);
+        for (char ch = '0'; ch <= '9'; ch++) gen.add(ch, 10);
+        gen.add(CP_KEY_BACKSPACE, 0, 100);
+        gen.add(CP_KEY_ENTER, 0, 100);
+        gen.add(CP_KEY_UP, 0, 30);
+        gen.add(CP_KEY_LEFT, 0, 30);
+        gen.add(CP_KEY_RIGHT, 0, 30);
+        gen.add(CP_KEY_DOWN, 0, 30);
 
-            auto add_char = [&](char c) {
-                Input it; ptr0(&it);
-                it.ischar = true;
-                it.ch = c;
-                ret->append(&it);
-            };
+        gen.add(CP_KEY_E, CP_MOD_CTRL, 5);
+        gen.add(CP_KEY_A, CP_MOD_CTRL, 5);
+        gen.add(CP_KEY_N, CP_MOD_CTRL, 5);
+        gen.add(CP_KEY_P, CP_MOD_CTRL, 5);
+        gen.add(CP_KEY_SPACE, CP_MOD_CTRL, 5);
 
-            auto add_key = [&](char key, int mods) {
-                Input it; ptr0(&it);
-                it.ischar = false;
-                it.key = key;
-                it.mods = mods;
-                ret->append(&it);
-            };
-
-            for (int i = 0; i < n; i++) {
-                int n = mt_lrand() % 100;
-                if (n < 10) {
-                    add_char('a' + (mt_lrand() % ('z' - 'a')));
-                } else if (n < 20) {
-                    add_char('A' + (mt_lrand() % ('Z' - 'A')));
-                } else if (n < 30) {
-                    add_char('0' + (mt_lrand() % ('9' - '0')));
-                } else if (n < 45) {
-                    int keys[] = {CP_KEY_BACKSPACE, CP_KEY_ENTER};
-                    add_key(keys[mt_lrand() % _countof(keys)], 0);
-                } else if (n < 70) {
-                    int keys[] = {CP_KEY_UP, CP_KEY_LEFT, CP_KEY_RIGHT, CP_KEY_DOWN};
-                    int flags = 0;
-                    if (mt_lrand() % 2 == 0) flags |= CP_MOD_SHIFT;
-                    if (mt_lrand() % 2 == 0) flags |= CP_MOD_TEXT;
-                    add_key(keys[mt_lrand() % _countof(keys)], flags);
-                } else {
-                    int keys[] = {CP_KEY_E, CP_KEY_A, CP_KEY_N, CP_KEY_P, CP_KEY_SPACE};
-                    int flags = CP_MOD_CTRL;
-                    if (mt_lrand() % 2 == 0) flags |= CP_MOD_SHIFT;
-                    add_key(keys[mt_lrand() % _countof(keys)], flags);
-                }
-            }
-            return ret;
-        };
+        gen.add(CP_KEY_E, CP_MOD_CTRL | CP_MOD_SHIFT, 5);
+        gen.add(CP_KEY_A, CP_MOD_CTRL | CP_MOD_SHIFT, 5);
+        gen.add(CP_KEY_N, CP_MOD_CTRL | CP_MOD_SHIFT, 5);
+        gen.add(CP_KEY_P, CP_MOD_CTRL | CP_MOD_SHIFT, 5);
+        gen.add(CP_KEY_SPACE, CP_MOD_CTRL | CP_MOD_SHIFT, 5);
 
         for (int seed = 0; seed < 16; seed++) {
+            mt_seed32(seed);
+
             // wait for editor
             auto editor = open_editor("main.go");
 
-            auto inputs = generate_inputs(seed, 500);
-            Fori (inputs) {
-                if (it.ischar)
-                    type_char(it.ch);
-                else
-                    press_key(it.key, it.mods);
-                if (i % 10 == 0) sleep_milliseconds(25);
+            for (int i = 0; i < 500; i++) {
+                inject_jblow_input(gen.pick());
+                if (i % 10 == 0)
+                    sleep_milliseconds(25);
             }
 
             // close editor
@@ -666,4 +606,39 @@ void Jblow_Tests::run() {
         msg->type = MTM_EXIT;
         msg->exit_code = 0;
     });
+}
+
+void Random_Input_Gen::init() {
+    ptr0(this);
+    items = new_list(Weighted_Item);
+    total = 0;
+}
+
+void Random_Input_Gen::add(int key, int mods, int weight) {
+    Weighted_Item out; ptr0(&out);
+    out.input.is_key = true;
+    out.input.key = key;
+    out.input.mods = mods;
+    out.weight = weight;
+    items->append(out);
+    total += weight;
+}
+
+void Random_Input_Gen::add(char ch, int weight) {
+    Weighted_Item out; ptr0(&out);
+    out.input.is_key = false;
+    out.input.ch = ch;
+    out.weight = weight;
+    items->append(out);
+    total += weight;
+}
+
+Jblow_Input Random_Input_Gen::pick() {
+    int k = mt_lrand() % total;
+    For (items) {
+        if (k < it.weight)
+            return it.input;
+        k -= it.weight;
+    }
+    cp_panic("this shouldn't happen");
 }

@@ -5,6 +5,32 @@ struct Jblow_Test_Event {
     Window_Event event;
 };
 
+struct Jblow_Input {
+    bool is_key;
+    union {
+        uchar ch;
+        struct {
+            int key;
+            int mods;
+        };
+    };
+};
+
+struct Random_Input_Gen {
+    struct Weighted_Item {
+        Jblow_Input input;
+        int weight;
+    };
+
+    List<Weighted_Item> *items;
+    int total;
+
+    void init();
+    void add(int key, int mods, int weight);
+    void add(char ch, int weight);
+    Jblow_Input pick();
+};
+
 struct Jblow_Tests {
     bool on;
     Lock lock;
@@ -45,8 +71,16 @@ struct Jblow_Tests {
         });
     }
 
+    void inject_jblow_input(Jblow_Input input) {
+        if (input.is_key)
+            press_key(input.key, input.mods);
+        else
+            type_char(input.ch);
+    }
+
     void press_key(int key, int mods = 0) {
         inject_key(key, mods, true);
+        skip_frame();
         inject_key(key, mods, false);
     }
 
