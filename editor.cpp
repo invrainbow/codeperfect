@@ -78,11 +78,12 @@ Selection *Editor::get_selection(Selection_Type sel_type) {
 
             for (int y = ay; y <= by; y++) {
                 int len = buf->lines[y].len;
+                if (!len) continue;
 
                 auto ax = buf->idx_vcp_to_cp(y, avx);
                 if (ax > len) continue;
 
-                auto bx = min(buf->idx_vcp_to_cp(y, bvx), len);
+                auto bx = min(buf->idx_vcp_to_cp(y, bvx), len-1);
                 add_range(new_cur2(ax, y), buf->inc_gr(new_cur2(bx, y)));
             }
             return ret;
@@ -1940,8 +1941,7 @@ void Editor::type_char(uchar ch, Type_Char_Opts *opts) {
         bool replacing = (cur.x < buf->lines[cur.y].len);
         if (replacing) {
             auto it = iter();
-            auto gr = it.gr_peek();
-            it.gr_next();
+            auto gr = it.gr_next();
 
             vim.replace_old_chars.append((uchar)0);
             vim.replace_old_chars.concat(gr);
@@ -4869,6 +4869,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
 
             auto raw_text = vim_paste_text();
             if (!raw_text) return false;
+            if (!raw_text[0]) return false;
 
             auto text = cstr_to_ustr(raw_text);
             bool as_line = (*text->last() == '\n');
@@ -5077,7 +5078,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             switch (world.vim_mode()) {
             case VI_NORMAL: {
                 auto start = cur;
-                int y = cur.y + o_count - 1;
+                int y = min(lines.len-1, cur.y + o_count - 1);
                 auto end = new_cur2(lines[y].len, y);
 
                 if (inp.ch == 'D') {
@@ -5800,6 +5801,7 @@ bool Editor::vim_handle_input(Vim_Command_Input *input) {
     }
 
     switch (world.vim_mode()) {
+    case VI_REPLACE:
     case VI_INSERT: {
         if (input->is_key) {
             switch (input->key) {
