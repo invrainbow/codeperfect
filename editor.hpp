@@ -409,7 +409,6 @@ struct Editor {
     void vim_return_to_normal_mode(bool from_dotrepeat = false);
     void vim_return_to_normal_mode_user_input();
     void vim_yank_text(ccstr text);
-    void vim_handle_visual_S(Vim_Command *cmd);
     cur2 vim_handle_J(Vim_Command *cmd, bool add_spaces);
     ccstr vim_paste_text();
     cur2 vim_handle_text_transform_command(char command, Motion_Result *motion_result);
@@ -419,6 +418,7 @@ struct Editor {
     void vim_dotrepeat_commit();
     Vim_Macro *vim_get_macro(char macro);
     void vim_execute_macro_little_bit(u64 deadline);
+    void vim_delete_selection_and_enter_insert_mode(Selection *selection);
 
     void handle_type_enter();
     void handle_type_tab(int mods);

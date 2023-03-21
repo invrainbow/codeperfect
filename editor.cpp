@@ -2561,16 +2561,6 @@ int Editor::first_nonspace_cp(int y) {
     return it.pos.x;
 }
 
-void Editor::vim_handle_visual_S(Vim_Command *cmd) {
-    vim_enter_insert_mode(cmd, [&]() {
-        auto selection = get_selection(SEL_LINE);
-        auto range = selection->ranges->at(0);
-        vim_delete_lines(range.start.y, range.end.y);
-        auto start = open_newline(range.start.y);
-        move_cursor(start);
-    });
-}
-
 cur2 Editor::vim_handle_J(Vim_Command *cmd, bool add_spaces) {
     int y, count;
 
@@ -4259,7 +4249,10 @@ cur2 Editor::delete_selection(Selection *sel) {
 cur2 Editor::vim_delete_selection(Selection *sel) {
     auto text = get_selection_text(sel);
     vim_yank_text(text);
-    return delete_selection(sel);
+    auto ret = delete_selection(sel);
+    if (ret.y >= buf->lines.len)
+        ret = new_cur2(0, buf->lines.len-1);
+    return ret;
 }
 
 // copies *into* dest inline, instead of making a complete copy
@@ -4549,6 +4542,25 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
 
     auto enter_insert_mode = [&](auto f) {
         vim_enter_insert_mode(cmd, f);
+    };
+
+    auto delete_selection_enter_insert_mode = [&](Selection *selection) {
+        cp_assert(selection);
+
+        enter_insert_mode([&]() {
+            if (selection->type == SEL_LINE) {
+                vim_delete_selection(selection);
+                // can't use the return value from
+                // vim_delete_selection, because if it's at the end
+                // it'll return the line above, and we want to open the
+                // newline at the line the deletion was made
+                auto range = selection->ranges->at(0);
+                move_cursor(open_newline(range.start.y));
+            } else {
+                auto start = vim_delete_selection(selection);
+                move_cursor(start);
+            }
+        });
     };
 
     auto op = cmd->op;
@@ -4915,8 +4927,8 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                     switch (sel->type) {
                     case SEL_CHAR:
                     case SEL_LINE: {
-                        vim_delete_selection(sel);
-                        paste_and_move_cursor(sel->ranges->at(0).start);
+                        auto start = vim_delete_selection(sel);
+                        paste_and_move_cursor(start);
                         break;
                     }
                     case SEL_BLOCK:
@@ -4985,10 +4997,11 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                 vim_enter_replace_mode();
                 *can_dotrepeat = true;
                 return true;
-            case VI_VISUAL:
-                vim_handle_visual_S(cmd);
+            case VI_VISUAL: {
+                delete_selection_enter_insert_mode(get_selection(SEL_LINE));
                 *can_dotrepeat = true;
                 return true;
+            }
             }
         }
         case 'I': {
@@ -5029,11 +5042,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                 *can_dotrepeat = true;
                 return true;
             case VI_VISUAL: {
-                enter_insert_mode([&]() {
-                    auto selection = get_selection();
-                    auto start = vim_delete_selection(selection);
-                    move_cursor(start);
-                });
+                delete_selection_enter_insert_mode(get_selection());
                 *can_dotrepeat = true;
                 return true;
             }
@@ -5052,7 +5061,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                 *can_dotrepeat = true;
                 return true;
             case VI_VISUAL: {
-                vim_handle_visual_S(cmd);
+                delete_selection_enter_insert_mode(get_selection(SEL_LINE));
                 *can_dotrepeat = true;
                 return true;
             }
@@ -5095,19 +5104,13 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             }
             case VI_VISUAL: {
                 auto selection = get_selection(SEL_LINE);
-                auto range = selection->ranges->at(0);
 
                 if (inp.ch == 'D') {
-                    vim_delete_lines(range.start.y, range.end.y);
+                    auto start = vim_delete_selection(selection);
                     vim_return_to_normal_mode();
-                    auto x = first_nonspace_cp(range.start.y);
-                    move_cursor_normal(new_cur2(x, range.start.y));
+                    move_cursor_normal(new_cur2(first_nonspace_cp(start.y), start.y));
                 } else {
-                    enter_insert_mode([&]() {
-                        vim_delete_lines(range.start.y, range.end.y);
-                        auto newcur = open_newline(range.start.y);
-                        move_cursor(newcur);
-                    });
+                    delete_selection_enter_insert_mode(selection);
                 }
                 *can_dotrepeat = true;
                 return true;
@@ -5251,10 +5254,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             SCOPED_BATCH_CHANGE(buf);
             switch (mode) {
             case VI_VISUAL: {
-                auto sel = get_selection();
-                enter_insert_mode([&]() {
-                    move_cursor(vim_delete_selection(sel));
-                });
+                delete_selection_enter_insert_mode(get_selection());
                 *can_dotrepeat = true;
                 return true;
             }
@@ -5355,6 +5355,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                         start = range.start;
                         end = range.end;
                     }
+                    if (start == end) continue;
                     cp_assert(start < end);
 
                     for (int y = start.y; y <= end.y; y++) {
