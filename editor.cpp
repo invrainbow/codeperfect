@@ -5830,7 +5830,9 @@ bool Editor::vim_handle_input(Vim_Command_Input *input) {
     case VI_NORMAL: {
         vim.command_buffer->append(input);
 
-        print("%s", render_command_buffer(vim.command_buffer));
+#ifdef DEBUG_BUILD
+        print("[%s | %zu] %s", cur.str(), buf->lines.len, render_command_buffer(vim.command_buffer));
+#endif
 
         Vim_Command cmd;
         cmd.init();
