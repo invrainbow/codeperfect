@@ -5421,11 +5421,11 @@ void UI::draw_everything() {
                             auto s = cp_sprintf("%d:%d ", pos.y+1, pos.x+1);
 
                             Draw_Opts opts; ptr0(&opts);
-                            opts.color = rgba(rgb_hex("#c8b2b2"));
+                            opts.color = rgba("#c8b2b2");
                             draw_text(s, strlen(s), &opts);
                         }
 
-                        auto default_text_color = rgba(rgb_hex("#b2b2b2"));
+                        auto default_text_color = rgba("#b2b2b2");
 
                         Draw_Opts opts; ptr0(&opts);
                         opts.color = default_text_color;
@@ -5434,20 +5434,20 @@ void UI::draw_everything() {
                         if (wnd.replace) {
                             // draw old
                             Draw_Opts opts; ptr0(&opts);
-                            opts.color = rgba(rgb_hex("#ffb4b4"));
+                            opts.color = rgba("#ffb4b4");
                             opts.strike = true;
                             draw_text(it.match, it.match_len, &opts);
 
                             // draw new
                             auto newtext = world.searcher.get_replacement_text(&it, wnd.replace_str);
                             ptr0(&opts);
-                            opts.color = rgba(rgb_hex("b4ffb4"));
+                            opts.color = rgba("b4ffb4");
                             draw_text(newtext, strlen(newtext), &opts);
                         } else {
                             Draw_Opts opts; ptr0(&opts);
-                            opts.color = rgba(rgb_hex("#ffffff"));
+                            opts.color = rgba("#ffffff");
                             opts.bg = true;
-                            opts.bgcolor = rgba(rgb_hex("#ffffff"), 0.2);
+                            opts.bgcolor = rgba("#ffffff", 0.2);
                             draw_text(it.match, it.match_len, &opts);
                         }
 
@@ -7514,9 +7514,9 @@ void UI::draw_everything() {
                 }
 
                 if (world.vim.macro_state == MACRO_RECORDING)
-                    draw_status_piece(LEFT, cp_sprintf("Recording @%c", world.vim.macro_record), rgba(rgb_hex("#000000"), 0), rgba(global_colors.foreground, 0.5));
+                    draw_status_piece(LEFT, cp_sprintf("Recording @%c", world.vim.macro_record), rgba("#000000", 0), rgba(global_colors.foreground, 0.5));
                 else if (world.vim.macro_state == MACRO_RUNNING)
-                    draw_status_piece(LEFT, cp_sprintf("Running @%c (Ctrl+C to stop)", world.vim.macro_run.macro), rgba(rgb_hex("#000000"), 0), rgba(global_colors.foreground, 0.5));
+                    draw_status_piece(LEFT, cp_sprintf("Running @%c (Ctrl+C to stop)", world.vim.macro_run.macro), rgba("#000000", 0), rgba(global_colors.foreground, 0.5));
             }
         }
 
@@ -7527,20 +7527,6 @@ void UI::draw_everything() {
 
             draw_status_piece(RIGHT, s, bg, fg);
         }
-
-        /*
-        switch (world.dbg.state_flag) {
-        case DLV_STATE_PAUSED:
-            draw_status_piece(LEFT, "PAUSED", rgba(global_colors.status_debugger_paused_background), rgba(global_colors.white));
-            break;
-        case DLV_STATE_STARTING:
-            draw_status_piece(LEFT, "STARTING", rgba(global_colors.status_debugger_starting_background), rgba(global_colors.white));
-            break;
-        case DLV_STATE_RUNNING:
-            draw_status_piece(LEFT, "RUNNING", rgba(global_colors.status_debugger_running_background), rgba(global_colors.white));
-            break;
-        }
-        */
 
         int index_mouse_flags = 0;
         switch (world.indexer.status) {
@@ -7690,7 +7676,7 @@ void UI::draw_everything() {
             newpos.x -= get_text_width(s) * base_font->width;
 
             auto opacity = 1.0 - (0.7 * (now - it.timestamp) / 2000.f);
-            auto color = rgba(rgb_hex("#ff0000"), opacity);
+            auto color = rgba("#ff0000", opacity);
             draw_string(newpos, s, color);
 
             pos.y -= base_font->height;
