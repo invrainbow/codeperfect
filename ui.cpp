@@ -5934,6 +5934,18 @@ void UI::draw_everything() {
 
     fstlog("blah blah");
 
+    enum Close_Action {
+        CLOSE_TAB,
+        CLOSE_OTHERS_TO_LEFT,
+        CLOSE_OTHERS_TO_RIGHT,
+        CLOSE_OTHERS_IN_PANE,
+        CLOSE_OTHERS_IN_WINDOW,
+        CLOSE_ALL,
+    };
+
+    int tab_to_close = -1;
+    Close_Action tab_close_action;
+
     // Draw panes.
     draw_rect(panes_area, rgba(global_colors.background));
     for (u32 current_pane = 0; current_pane < world.panes.len; current_pane++) {
@@ -6195,7 +6207,6 @@ void UI::draw_everything() {
         tab.pos = tabs_area.pos + new_vec2(2, tabs_area.h - tab_padding.y * 2 - base_font->height);
         tab.x -= pane.tabs_offset;
 
-        i32 tab_to_remove = -1;
         boxf current_tab;
 
         start_clip(tabs_area); // will become problem once we have popups on tabs
@@ -6360,8 +6371,63 @@ void UI::draw_everything() {
                 activate_pane(&pane);
                 pane.focus_editor_by_index(tab_id);
             }
-            if (mouse_flags & MOUSE_MCLICKED)
-                tab_to_remove = tab_id;
+            if (mouse_flags & MOUSE_MCLICKED) {
+                tab_to_close = editor.id;
+                tab_close_action = CLOSE_TAB;
+            }
+
+            if (begin_popup_rect(cp_sprintf("tab_editor_%d", editor_index), tab)) {
+                if (im::Selectable("Close")) {
+                    tab_to_close = editor.id;
+                    tab_close_action = CLOSE_TAB;
+                }
+
+                im_with_disabled(tab_id == 0, [&]() {
+                    if (im::Selectable("Close Others to Left")) {
+                        tab_to_close = editor.id;
+                        tab_close_action = CLOSE_OTHERS_TO_LEFT;
+                    }
+                });
+
+                im_with_disabled(tab_id == pane.editors.len-1, [&]() {
+                    if (im::Selectable("Close Others to Right")) {
+                        tab_to_close = editor.id;
+                        tab_close_action = CLOSE_OTHERS_TO_RIGHT;
+                    }
+                });
+
+                im_with_disabled(pane.editors.len == 1, [&]() {
+                    if (im::Selectable("Close Others in Pane")) {
+                        tab_to_close = editor.id;
+                        tab_close_action = CLOSE_OTHERS_IN_PANE;
+                    }
+                });
+
+                im_with_disabled(world.panes.len == 1 && pane.editors.len == 1, [&]() {
+                    if (im::Selectable("Close Others in Window")) {
+                        tab_to_close = editor.id;
+                        tab_close_action = CLOSE_OTHERS_IN_WINDOW;
+                    }
+                });
+
+                if (im::Selectable("Close All")) {
+                    tab_to_close = editor.id;
+                    tab_close_action = CLOSE_ALL;
+                }
+
+                im::Separator();
+
+                if (im::Selectable("Copy Path")) {
+                    world.window->set_clipboard_string(editor.filepath);
+                }
+
+                if (im::Selectable("Copy Relative Path")) {
+                    auto relative_path = get_path_relative_to(editor.filepath, world.current_path);
+                    world.window->set_clipboard_string(relative_path);
+                }
+
+                im::EndPopup();
+            }
 
             tab.pos.x += tab.w + 5;
             tab_id++;
@@ -6383,27 +6449,6 @@ void UI::draw_everything() {
             );
             */
             pane.tabs_offset -= space_avail;
-        }
-
-        if (tab_to_remove != -1) {
-            auto &editor = pane.editors[tab_to_remove];
-            if (editor.ask_user_about_unsaved_changes()) {
-                // duplicate of code in main.cpp under CP_KEY_W handler, refactor
-                // if we copy this a few more times
-                pane.editors[tab_to_remove].cleanup();
-                pane.editors.remove(tab_to_remove);
-
-                if (!pane.editors.len)
-                    pane.set_current_editor(-1);
-                else if (pane.current_editor == tab_to_remove) {
-                    auto new_idx = pane.current_editor;
-                    if (new_idx >= pane.editors.len)
-                        new_idx = pane.editors.len - 1;
-                    pane.focus_editor_by_index(new_idx);
-                } else if (pane.current_editor > tab_to_remove) {
-                    pane.set_current_editor(pane.current_editor - 1);
-                }
-            }
         }
 
         // draw scrollbar
@@ -7148,6 +7193,87 @@ void UI::draw_everything() {
         pane_area.x += pane_area.w;
     }
 
+    if (tab_to_close != -1) {
+        Pane *pane = NULL;
+        int editor_index = -1;
+
+        auto find_pane_and_editor = [&]() {
+            For (&world.panes) {
+                auto &p = it;
+                Fori (&p.editors) {
+                    if (it.id == tab_to_close) {
+                        pane = &p;
+                        editor_index = i;
+                        return;
+                    }
+                }
+            }
+        };
+
+        find_pane_and_editor();
+
+        auto &panes = world.panes;
+
+        auto do_shit = [&]() {
+            switch (tab_close_action) {
+            case CLOSE_TAB:
+                if (!pane) return;
+                close_editor(pane, editor_index);
+                break;
+            case CLOSE_OTHERS_TO_LEFT:
+                if (!pane) return;
+                for (int i = 0; i < editor_index; i++)
+                    if (!close_editor(pane, 0))
+                        return;
+                break;
+            case CLOSE_OTHERS_TO_RIGHT:
+                for (int i = editor_index + 1; i < pane->editors.len;)
+                    if (!close_editor(pane, i))
+                        return;
+                break;
+            case CLOSE_OTHERS_IN_PANE: {
+                for (int i = 0; i < pane->editors.len;) {
+                    if (pane->editors[i].id == tab_to_close) {
+                        i++;
+                        continue;
+                    }
+                    if (!close_editor(pane, i)) return;
+                }
+                break;
+            }
+            case CLOSE_OTHERS_IN_WINDOW:
+                for (int pane_idx = 0; pane_idx < panes.len;) {
+                    auto &pane = panes[pane_idx];
+                    for (int i = 0; i < pane.editors.len;) {
+                        if (pane.editors[i].id == tab_to_close) {
+                            i++;
+                            continue;
+                        }
+                        if (!close_editor(&pane, i)) return;
+                    }
+                    if (!pane.editors.len) {
+                        close_pane(pane_idx);
+                        continue;
+                    }
+                    pane_idx++;
+                }
+                break;
+            case CLOSE_ALL:
+                while (true) {
+                    auto pane = panes.last();
+                    while (pane->editors.len)
+                        if (!close_editor(pane, pane->editors.len-1))
+                            return;
+                    if (panes.len == 1) break;
+                    close_pane(panes.len-1);
+                }
+                break;
+            }
+        };
+
+        do_shit();
+    }
+
     fstlog("draw panes");
 
     {
@@ -7471,6 +7597,12 @@ ccstr get_import_path_label(ccstr import_path, Go_Workspace *workspace) {
     if (streq(import_path, ""))
         return mod_short;
     return cp_sprintf("%s/%s", mod_short, import_path);
+}
+
+bool UI::begin_popup_rect(ccstr str_id, boxf rect) {
+    if (get_mouse_flags(rect) & MOUSE_RCLICKED)
+        im::OpenPopup(str_id);
+    return im::BeginPopup(str_id);
 }
 
 Keyboard_Nav UI::get_keyboard_nav(Wnd *wnd, int flags) {

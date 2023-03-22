@@ -2499,11 +2499,7 @@ void handle_command(Command cmd, bool from_menu) {
             }
 
             if (panes.len == 1) break;
-
-            pane->cleanup();
-            panes.len--;
-            if (world.current_pane >= panes.len)
-                activate_pane_by_index(panes.len - 1);
+            close_pane(panes.len-1);
         }
     getout:
         break;
@@ -2514,31 +2510,10 @@ void handle_command(Command cmd, bool from_menu) {
         if (!pane) break;
 
         auto editor = pane->get_current_editor();
-        if (!editor) {
-            // can't close the last pane
-            if (world.panes.len <= 1) break;
-
-            pane->cleanup();
-            world.panes.remove(world.current_pane);
-            if (world.current_pane >= world.panes.len)
-                activate_pane_by_index(world.panes.len - 1);
-        } else {
-            if (!world.dont_prompt_on_close_unsaved_tab)
-                if (!editor->ask_user_about_unsaved_changes())
-                    break;
-
-            editor->cleanup();
-
-            pane->editors.remove(pane->current_editor);
-            if (!pane->editors.len)
-                pane->current_editor = -1;
-            else {
-                auto new_idx = pane->current_editor;
-                if (new_idx >= pane->editors.len)
-                    new_idx = pane->editors.len - 1;
-                pane->focus_editor_by_index(new_idx);
-            }
-        }
+        if (!editor)
+            close_pane(world.current_pane);
+        else
+            close_editor(pane, pane->current_editor);
         break;
     }
 
@@ -4103,4 +4078,40 @@ void move_search_result(bool forward, int count) {
         }
         index -= it.results->len;
     }
+}
+
+bool close_pane(int idx) {
+    auto &panes = world.panes;
+
+    if (idx >= panes.len) return false;
+    if (panes.len == 1) return false;
+
+    panes[idx].cleanup();
+    panes.remove(idx);
+    if (world.current_pane >= panes.len)
+        activate_pane_by_index(panes.len - 1);
+    return true;
+}
+
+bool close_editor(Pane *pane, int editor_index) {
+    auto &editor = pane->editors[editor_index];
+
+    if (!world.dont_prompt_on_close_unsaved_tab)
+        if (!editor.ask_user_about_unsaved_changes())
+            return false;
+
+    editor.cleanup();
+    pane->editors.remove(editor_index);
+
+    if (!pane->editors.len) {
+        pane->set_current_editor(-1);
+    } else if (pane->current_editor == editor_index) {
+        auto new_idx = pane->current_editor;
+        if (new_idx >= pane->editors.len)
+            new_idx = pane->editors.len - 1;
+        pane->focus_editor_by_index(new_idx);
+    } else if (pane->current_editor > editor_index) {
+        pane->set_current_editor(pane->current_editor - 1);
+    }
+    return true;
 }

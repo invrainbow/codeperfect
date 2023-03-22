@@ -914,3 +914,6 @@ void reset_everything_when_switching_editors(Editor *old_editor);
 
 void open_current_file_search(bool replace);
 void move_search_result(bool forward, int count);
+
+bool close_editor(Pane *pane, int editor_index);
+bool close_pane(int idx);
