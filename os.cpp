@@ -60,18 +60,18 @@ Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title, ccstr yeslabel, 
 
 Ask_User_Result ask_user_yes_no(ccstr text, ccstr title, ccstr yeslabel, ccstr nolabel, bool cancel) {
     auto ret = os_ask_user_yes_no(text, title, yeslabel, nolabel, cancel);
-    clear_key_states();
+    handle_window_focus(true);
     return ret;
 }
 
 void tell_user(ccstr text, ccstr title) {
     os_tell_user(text, title);
-    clear_key_states();
+    handle_window_focus(true);
 }
 
 bool let_user_select_file(Select_File_Opts* opts) {
     auto ret = os_let_user_select_file(opts);
-    clear_key_states();
+    handle_window_focus(true);
     return ret;
 }
 

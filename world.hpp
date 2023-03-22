@@ -899,7 +899,7 @@ void read_auth();
 void write_auth();
 
 bool write_project_settings();
-void clear_key_states();
+void handle_window_focus(bool focus);
 
 void fstlog(ccstr fmt, ...);
 void write_stacktrace_to_file(ccstr stacktrace);

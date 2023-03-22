@@ -709,21 +709,13 @@ void handle_key_event(Window_Event *it) {
 
 void handle_window_event(Window_Event *it) {
     switch (it->type) {
-    case WINEV_FOCUS: {
-        clear_key_states();
-
-        ImGuiIO& io = ImGui::GetIO();
-        io.AddFocusEvent(true);
+    case WINEV_FOCUS:
+        handle_window_focus(true);
         break;
-    }
 
-    case WINEV_BLUR: {
-        clear_key_states();
-
-        ImGuiIO& io = ImGui::GetIO();
-        io.AddFocusEvent(false);
+    case WINEV_BLUR:
+        handle_window_focus(false);
         break;
-    }
 
     case WINEV_WINDOW_SIZE: {
         auto w = it->window_size.w;

@@ -3866,19 +3866,16 @@ bool write_project_settings() {
     return serde.ok;
 }
 
-void clear_key_states() {
+void handle_window_focus(bool focus) {
     if (GImGui) {
         auto &io = ImGui::GetIO();
-        // TODO: under the new imgui AddKeyInput model, do we need to
-        // iterate thru all keys and just add events for all?
-        //
-        // previous:
-        // ptr0(&io.KeysDown);
+        io.AddFocusEvent(focus);
 
-        io.AddKeyEvent(ImGuiMod_Ctrl, false);
-        io.AddKeyEvent(ImGuiMod_Shift, false);
-        io.AddKeyEvent(ImGuiMod_Alt,  false);
-        io.AddKeyEvent(ImGuiMod_Super, false);
+        // do we need this stuff?
+        // io.AddKeyEvent(ImGuiMod_Ctrl, false);
+        // io.AddKeyEvent(ImGuiMod_Shift, false);
+        // io.AddKeyEvent(ImGuiMod_Alt,  false);
+        // io.AddKeyEvent(ImGuiMod_Super, false);
     }
 
     mem0(world.ui.mouse_down, sizeof(world.ui.mouse_down));
