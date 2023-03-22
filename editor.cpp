@@ -4142,6 +4142,12 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
     return NULL;
 }
 
+void Editor::vim_enter_visual_mode(Selection_Type type) {
+    world.vim_set_mode(VI_VISUAL);
+    vim.visual_start = cur;
+    vim.visual_type = type;
+}
+
 void Editor::vim_handle_visual_mode_key(Selection_Type type) {
     if (world.vim_mode() == VI_VISUAL) {
         if (vim.visual_type == type)
@@ -4149,9 +4155,7 @@ void Editor::vim_handle_visual_mode_key(Selection_Type type) {
         else
             vim.visual_type = type;
     } else {
-        world.vim_set_mode(VI_VISUAL);
-        vim.visual_start = cur;
-        vim.visual_type = type;
+        vim_enter_visual_mode(type);
     }
 }
 

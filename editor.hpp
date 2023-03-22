@@ -419,6 +419,7 @@ struct Editor {
     Vim_Macro *vim_get_macro(char macro);
     void vim_execute_macro_little_bit(u64 deadline);
     void vim_delete_selection_and_enter_insert_mode(Selection *selection);
+    void vim_enter_visual_mode(Selection_Type type);
 
     void handle_type_enter();
     void handle_type_tab(int mods);

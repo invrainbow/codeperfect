@@ -6113,6 +6113,13 @@ void UI::draw_everything() {
                             auto opts = default_move_cursor_opts();
                             opts->is_user_movement = true;
                             editor->move_cursor(pos, opts);
+
+                            if (world.vim.on) {
+                                // we have to do it this way so it registers in dotcomplete etc
+                                if (world.vim_mode() != VI_NORMAL)
+                                    editor->vim_handle_key(CP_KEY_ESCAPE, 0);
+                                editor->vim_handle_char('v');
+                            }
                         }
                         break;
                     }
