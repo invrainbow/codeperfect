@@ -7561,6 +7561,34 @@ void UI::draw_everything() {
             auto s = cp_sprintf("%d,%d", cur.y+1, cur.x+1);
 
             draw_status_piece(RIGHT, s, rgba(global_colors.white, 0.0), rgba("#aaaaaa"));
+
+            do {
+                if (!world.vim.on) break;
+
+                auto buf = curr_editor->vim.command_buffer;
+                if (!buf->len) break;
+
+                Text_Renderer r; r.init();
+                For (buf) {
+                    if (it.is_key) {
+                        r.write("<");
+
+                        if (it.mods & CP_MOD_CTRL) r.write("C-");
+                        if (it.mods & CP_MOD_ALT) r.write("M-");
+                        if (it.mods & CP_MOD_SHIFT) r.write("S-");
+
+                        auto key_name = get_key_name(it.key);
+                        if (!key_name) key_name = "?";
+
+                        r.write("%s>", key_name);
+                    } else {
+                        r.write("%c", it.ch);
+                    }
+                }
+
+                status_area_right -= 5;
+                draw_status_piece(RIGHT, r.finish(), rgba(global_colors.white, 0.0), rgba("#aaaaaa"));
+            } while (0);
         }
     }
 
