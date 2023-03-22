@@ -4812,12 +4812,16 @@ void UI::draw_everything() {
             label = cp_sprintf("%d of %d", fs.current_idx + 1, matches.len);
 
         if (im_input_text_full(cp_sprintf("Search (%s)", label), "current_file_search_search", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
-            im::SetKeyboardFocusHere(-1);
-
-            auto idx = ed->move_file_search_result(!(im_get_keymods() & CP_MOD_SHIFT), 1);
-            if (idx != -1) {
-                fs.current_idx = idx;
-                ed->move_cursor(matches[idx].start);
+            if (wnd.opened_from_vim) {
+                wnd.show = false;
+                im::SetWindowFocus(NULL);
+            } else {
+                im::SetKeyboardFocusHere(-1);
+                auto idx = ed->move_file_search_result(!(im_get_keymods() & CP_MOD_SHIFT), 1);
+                if (idx != -1) {
+                    fs.current_idx = idx;
+                    ed->move_cursor(matches[idx].start);
+                }
             }
         }
 

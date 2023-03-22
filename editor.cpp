@@ -5121,7 +5121,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             }
 
         case '/':
-            open_current_file_search(false);
+            open_current_file_search(false, true);
             break;
 
         case '~':

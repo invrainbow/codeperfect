@@ -2443,7 +2443,7 @@ void handle_command(Command cmd, bool from_menu) {
 
     case CMD_REPLACE:
     case CMD_FIND:
-        open_current_file_search(cmd == CMD_REPLACE);
+        open_current_file_search(cmd == CMD_REPLACE, false);
         break;
 
     case CMD_BUY_LICENSE:
@@ -3980,9 +3980,10 @@ void reset_everything_when_switching_editors(Editor *old_editor) {
     }
 }
 
-void open_current_file_search(bool replace) {
+void open_current_file_search(bool replace, bool from_vim) {
     auto &wnd = world.wnd_current_file_search;
     wnd.replace = replace;
+    wnd.opened_from_vim = from_vim;
 
     if (wnd.show) {
         wnd.cmd_focus = true;

@@ -540,6 +540,7 @@ struct World {
         bool case_sensitive;
         bool use_regex;
         // bool search_in_selection;
+        bool opened_from_vim;
     } wnd_current_file_search;
 
     struct Wnd_Enter_License : Wnd {
@@ -919,7 +920,7 @@ void set_zoom_level(int level);
 List<Editor*> *get_all_editors();
 void reset_everything_when_switching_editors(Editor *old_editor);
 
-void open_current_file_search(bool replace);
+void open_current_file_search(bool replace, bool from_vim);
 void move_search_result(bool forward, int count);
 
 bool close_editor(Pane *pane, int editor_index);
