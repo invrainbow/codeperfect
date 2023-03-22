@@ -9,7 +9,7 @@
 // it should be called "constants"
 struct Settings {
     int status_padding_x = 6;
-    int status_padding_y = 3;
+    int status_padding_y = 2;
     int line_number_margin_left = 4;
     int line_number_margin_right = 10;
     int autocomplete_menu_padding = 4;
