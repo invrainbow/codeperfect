@@ -5375,63 +5375,85 @@ void UI::draw_everything() {
                             wnd.scroll_result = -1;
                         }
 
-                        auto draw_text = [&](ccstr s, int len, bool strikethrough = false) {
+                        // may need to compress...
+                        struct Draw_Opts {
+                            vec4f color;
+                            bool bg;
+                            vec4f bgcolor;
+                            bool strike;
+                        };
+
+                        auto draw_text = [&](ccstr s, int len, Draw_Opts *opts) {
                             auto text = cp_sprintf("%.*s", len, s);
                             auto size = im::CalcTextSize(text);
 
                             auto drawlist = im::GetWindowDrawList();
-                            drawlist->AddText(drawpos, im::GetColorU32(ImGuiCol_Text), text);
+                            if (opts->bg) {
+                                auto bgcolor = im::GetColorU32(to_imcolor(opts->bgcolor));
+                                drawlist->AddRectFilled(drawpos, drawpos+size, bgcolor);
+                            }
 
-                            if (strikethrough) {
+                            auto imcolor = im::GetColorU32(to_imcolor(opts->color));
+                            drawlist->AddText(drawpos, imcolor, text);
+
+                            if (opts->strike) {
                                 ImVec2 a = drawpos, b = drawpos;
                                 b.y += size.y/2;
                                 a.y += size.y/2;
                                 b.x += size.x;
                                 // im::GetFontSize() / 2
-                                drawlist->AddLine(a, b, im::GetColorU32(ImGuiCol_Text), 1.0f);
+                                drawlist->AddLine(a, b, imcolor, 1.0f);
                             }
 
-                            drawpos.x += im::CalcTextSize(text).x;
+                            drawpos.x += size.x;
                         };
 
-                        im::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(200, 178, 178)));
+                        // draw match position
                         {
                             auto pos = it.match_start;
                             if (is_mark_valid(it.mark_start))
                                 pos = it.mark_start->pos();
 
                             auto s = cp_sprintf("%d:%d ", pos.y+1, pos.x+1);
-                            draw_text(s, strlen(s));
+
+                            Draw_Opts opts; ptr0(&opts);
+                            opts.color = rgba(rgb_hex("#c8b2b2"));
+                            draw_text(s, strlen(s), &opts);
                         }
-                        im::PopStyleColor();
 
-                        im::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(178, 178, 178)));
+                        auto default_text_color = rgba(rgb_hex("#b2b2b2"));
 
-                        draw_text(it.preview, it.match_offset_in_preview);
+                        Draw_Opts opts; ptr0(&opts);
+                        opts.color = default_text_color;
+                        draw_text(it.preview, it.match_offset_in_preview, &opts);
 
                         if (wnd.replace) {
                             // draw old
-                            im::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(255, 180, 180)));
-                            draw_text(it.match, it.match_len, true);
-                            im::PopStyleColor();
+                            Draw_Opts opts; ptr0(&opts);
+                            opts.color = rgba(rgb_hex("#ffb4b4"));
+                            opts.strike = true;
+                            draw_text(it.match, it.match_len, &opts);
 
                             // draw new
                             auto newtext = world.searcher.get_replacement_text(&it, wnd.replace_str);
-                            im::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(180, 255, 180)));
-                            draw_text(newtext, strlen(newtext));
-                            im::PopStyleColor();
+                            ptr0(&opts);
+                            opts.color = rgba(rgb_hex("b4ffb4"));
+                            draw_text(newtext, strlen(newtext), &opts);
                         } else {
-                            im::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(255, 255, 255)));
-                            draw_text(it.match, it.match_len);
-                            im::PopStyleColor();
+                            Draw_Opts opts; ptr0(&opts);
+                            opts.color = rgba(rgb_hex("#ffffff"));
+                            opts.bg = true;
+                            opts.bgcolor = rgba(rgb_hex("#ffffff"), 0.2);
+                            draw_text(it.match, it.match_len, &opts);
                         }
 
+                        ptr0(&opts);
+                        opts.color = default_text_color;
                         draw_text(
                             &it.preview[it.match_offset_in_preview + it.match_len],
-                            it.preview_len - it.match_offset_in_preview - it.match_len
+                            it.preview_len - it.match_offset_in_preview - it.match_len,
+                            &opts
                         );
-
-                        im::PopStyleColor();
 
                         if (clicked) {
                             if (im::IsMouseDoubleClicked(0)) {
