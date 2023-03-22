@@ -312,7 +312,8 @@ struct UI {
     void draw_tutorial(boxf rect);
 
     Keyboard_Nav get_keyboard_nav(Wnd *wnd, int flags);
-    bool begin_popup_rect(ccstr str_id, boxf rect);
+    bool im_begin_popup_rect(ccstr str_id, boxf rect);
+    bool im_begin_popup(ccstr str_id);
 };
 
 extern UI ui;

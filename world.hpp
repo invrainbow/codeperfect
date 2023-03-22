@@ -525,6 +525,13 @@ struct World {
     // i ptr0 the whole wnd, and i also don't want to have to worry about not doing that
     Command last_manually_run_command;
 
+    struct {
+        cur2 pos;
+        cur2 token_start;
+        cur2 token_end;
+        ccstr token;
+    } editor_context_menu;
+
     struct Wnd_Current_File_Search : Wnd {
         char query[256];
         char permanent_query[256];
@@ -917,3 +924,6 @@ void move_search_result(bool forward, int count);
 
 bool close_editor(Pane *pane, int editor_index);
 bool close_pane(int idx);
+
+bool initiate_rename_identifier(cur2 pos);
+void initiate_find_references(cur2 pos);

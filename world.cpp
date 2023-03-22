@@ -959,7 +959,7 @@ Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_
         result = world.indexer.jump_to_definition(editor->filepath, new_cur2(off, -1));
     }
 
-    if (!result)
+    if (!result || !result->decl)
         return show_error("Couldn't find anything under your cursor.");
 
     if (filepath)
@@ -2176,6 +2176,94 @@ void do_find_implementations() {
     }
 }
 
+bool initiate_rename_identifier(cur2 pos) {
+    // TODO: this should be a "blocking" modal, like it disables activity in rest of IDE
+    auto result = get_current_definition(NULL, true, pos);
+    if (!result || !result->decl) return false;
+    if (result->decl->decl->type == GODECL_IMPORT) {
+        tell_user_error("Sorry, we're currently not yet able to rename imports.");
+        return false;
+    }
+
+    world.rename_identifier_mem.reset();
+    SCOPED_MEM(&world.rename_identifier_mem);
+
+    auto &wnd = world.wnd_rename_identifier;
+    wnd.rename_to[0] = '\0';
+    wnd.show = true;
+    wnd.cmd_focus = true;
+    wnd.running = false;
+    wnd.declres = result->decl->copy_decl();
+    return true;
+}
+
+void initiate_find_references(cur2 pos) {
+    auto &wnd = world.wnd_find_references;
+
+    auto result = get_current_definition(NULL, true, pos);
+    if (!result) return;
+    if (!result->decl) return;
+
+    world.find_references_mem.reset();
+    {
+        SCOPED_MEM(&world.find_references_mem);
+        wnd.declres = result->decl->copy_decl();
+    }
+
+    auto &ind = world.indexer;
+    if (!ind.acquire_lock(IND_READING)) {
+        tell_user_error("The indexer is currently busy.");
+        return;
+    }
+
+    auto thread_proc = [](void *param) {
+        auto &wnd = world.wnd_find_references;
+        wnd.thread_mem.cleanup();
+        wnd.thread_mem.init();
+        SCOPED_MEM(&wnd.thread_mem);
+
+        // kinda confusing that cancel_find_references is responsible for wnd.done = true
+        defer { cancel_find_references(); };
+
+        auto files = world.indexer.find_references(wnd.declres, false);
+        if (isempty(files)) return;
+
+        wnd.current_file = 0;
+        wnd.current_result = 0;
+
+        {
+            SCOPED_MEM(&world.find_references_mem);
+
+            auto newfiles = new_list(Find_References_File, files->len);
+            For (files) newfiles->append(it.copy());
+
+            wnd.results = newfiles;
+            wnd.workspace = world.indexer.index.workspace->copy();
+        }
+
+        // close the thread handle first so it doesn't try to kill the thread
+        if (wnd.thread) {
+            close_thread_handle(wnd.thread);
+            wnd.thread = NULL;
+        }
+    };
+
+    if (wnd.show)
+        wnd.cmd_focus = true;
+    else
+        wnd.show = true;
+    wnd.done = false;
+    wnd.results = NULL;
+    wnd.thread = create_thread(thread_proc, NULL);
+    wnd.current_file = -1;
+    wnd.current_result = -1;
+    wnd.scroll_to_file = -1;
+    wnd.scroll_to_result = -1;
+
+    if (!wnd.thread)
+        tell_user_error("Unable to kick off Find References.");
+}
+
 void handle_command(Command cmd, bool from_menu) {
     // make this a precondition (actually, I think it might already be)
     if (!is_command_enabled(cmd)) return;
@@ -2609,74 +2697,9 @@ void handle_command(Command cmd, bool from_menu) {
                 move_search_result(cmd == CMD_GO_TO_NEXT_SEARCH_RESULT, 1);
         break;
 
-    case CMD_FIND_REFERENCES: {
-        auto &wnd = world.wnd_find_references;
-
-        auto result = get_current_definition(NULL, true);
-        if (!result) break;
-        if (!result->decl) break;
-
-        world.find_references_mem.reset();
-        {
-            SCOPED_MEM(&world.find_references_mem);
-            wnd.declres = result->decl->copy_decl();
-        }
-
-        auto &ind = world.indexer;
-        if (!ind.acquire_lock(IND_READING)) {
-            tell_user_error("The indexer is currently busy.");
-            break;
-        }
-
-        auto thread_proc = [](void *param) {
-            auto &wnd = world.wnd_find_references;
-            wnd.thread_mem.cleanup();
-            wnd.thread_mem.init();
-            SCOPED_MEM(&wnd.thread_mem);
-
-            // kinda confusing that cancel_find_references is responsible for wnd.done = true
-            defer { cancel_find_references(); };
-
-            auto files = world.indexer.find_references(wnd.declres, false);
-            if (isempty(files)) return;
-
-            wnd.current_file = 0;
-            wnd.current_result = 0;
-
-            {
-                SCOPED_MEM(&world.find_references_mem);
-
-                auto newfiles = new_list(Find_References_File, files->len);
-                For (files) newfiles->append(it.copy());
-
-                wnd.results = newfiles;
-                wnd.workspace = world.indexer.index.workspace->copy();
-            }
-
-            // close the thread handle first so it doesn't try to kill the thread
-            if (wnd.thread) {
-                close_thread_handle(wnd.thread);
-                wnd.thread = NULL;
-            }
-        };
-
-        if (wnd.show)
-            wnd.cmd_focus = true;
-        else
-            wnd.show = true;
-        wnd.done = false;
-        wnd.results = NULL;
-        wnd.thread = create_thread(thread_proc, NULL);
-        wnd.current_file = -1;
-        wnd.current_result = -1;
-        wnd.scroll_to_file = -1;
-        wnd.scroll_to_result = -1;
-        if (!wnd.thread) {
-            tell_user_error("Unable to kick off Find References.");
-            break;
-        }
+    case CMD_FIND_REFERENCES:
+        initiate_find_references(NULL_CUR);
         break;
-    }
 
     case CMD_FORMAT_FILE: {
         auto editor = get_current_editor();
@@ -2704,28 +2727,9 @@ void handle_command(Command cmd, bool from_menu) {
         // how do we even get the visual selection?
         break;
 
-    case CMD_RENAME: {
-        ccstr filepath = NULL;
-
-        // TODO: this should be a "blocking" modal, like it disables activity in rest of IDE
-        auto result = get_current_definition(&filepath, true);
-        if (!result || !result->decl) return;
-        if (result->decl->decl->type == GODECL_IMPORT) {
-            tell_user_error("Sorry, we're currently not yet able to rename imports.");
-            return;
-        }
-
-        world.rename_identifier_mem.reset();
-        SCOPED_MEM(&world.rename_identifier_mem);
-
-        auto &wnd = world.wnd_rename_identifier;
-        wnd.rename_to[0] = '\0';
-        wnd.show = true;
-        wnd.cmd_focus = true;
-        wnd.running = false;
-        wnd.declres = result->decl->copy_decl();
+    case CMD_RENAME:
+        initiate_rename_identifier(NULL_CUR);
         break;
-    }
 
     case CMD_ADD_NEW_FILE:
         open_add_file_or_folder(false);

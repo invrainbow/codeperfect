@@ -3242,13 +3242,6 @@ ccstr Editor::get_selection_text(Selection *selection) {
     cp_panic("invalid selection type");
 }
 
-enum Gr_Type {
-    GR_SPACE,
-    GR_IDENT,
-    GR_OTHER,
-    GR_NULL,
-};
-
 Gr_Type gr_type(Grapheme gr) {
     if (!gr) return GR_NULL;
     if (gr_isspace(gr)) return GR_SPACE;

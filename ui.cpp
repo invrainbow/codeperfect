@@ -6011,7 +6011,15 @@ void UI::draw_everything() {
                 if (pos.x >= area.x + area.w) return new_cur2(buf->lines[y].len, y);
 
                 auto vx = (int)((pos.x - area.x) / ui.base_font->width);
-                return new_cur2(buf->idx_vcp_to_cp(y, vx), y);
+
+                auto ret = new_cur2(buf->idx_vcp_to_cp(y, vx), y);
+
+                // in normal mode, don't allow to go past end of line
+                if (world.vim.on && world.vim_mode() == VI_NORMAL)
+                    if (ret.x == buf->lines[ret.y].len && ret.x > 0)
+                        ret = buf->dec_gr(ret);
+
+                return ret;
             };
 
             auto calculate_pos_from_mouse = [&]() -> cur2 {
@@ -6082,12 +6090,18 @@ void UI::draw_everything() {
             }
 
             auto is_hovered = test_hover(editor_area_considering_pane_resizers, HOVERID_EDITORS + current_pane, ImGuiMouseCursor_TextInput);
+            auto &pressed = world.ui.mouse_just_pressed;
 
-            if (world.ui.mouse_just_pressed[0]) {
-                if (is_hovered) {
+            if (pressed[0] || pressed[1] || pressed[2]) {
+                do {
+                    if (!is_hovered) break;
+
                     focus_editor_by_id(editor->id, NULL_CUR);
+
                     auto pos = calculate_pos_from_mouse();
-                    if (pos.x != -1 && pos.y != -1) {
+                    if (pos == NULL_CUR) break;
+
+                    if (pressed[0]) {
                         auto &io = im::GetIO();
                         if (OS_MAC ? io.KeySuper : io.KeyCtrl) {
                             handle_goto_definition(pos);
@@ -6100,8 +6114,48 @@ void UI::draw_everything() {
                             opts->is_user_movement = true;
                             editor->move_cursor(pos, opts);
                         }
+                        break;
                     }
-                }
+
+                    if (pressed[1]) {
+                        auto it = editor->iter(pos);
+                        if (gr_isident(it.gr_peek())) {
+                            auto &menu = world.editor_context_menu;
+                            menu.pos = pos;
+
+                            while (!it.bol()) {
+                                auto old = it.pos;
+                                if (!gr_isident(it.gr_prev())) {
+                                    it.pos = old;
+                                    break;
+                                }
+                            }
+
+                            menu.token_start = it.pos;
+
+                            it.pos = pos;
+                            while (!it.eol()) {
+                                it.gr_next();
+                                if (!gr_isident(it.gr_peek()))
+                                    break;
+                            }
+
+                            menu.token_end = it.pos;
+
+                            cp_assert(menu.token_start.y == menu.token_end.y);
+                            cp_assert(menu.token_start < menu.token_end);
+
+                            menu.token = editor->buf->get_text(menu.token_start, menu.token_end);
+                            im::OpenPopup("editor_context_menu");
+                        }
+                        break;
+                    }
+
+                    if (pressed[2]) {
+                        handle_goto_definition(pos);
+                        break;
+                    }
+                } while (0);
             } else if (editor->mouse_selecting) {
                 if (world.ui.mouse_down[0]) {
                     if (!editor->double_clicked_selection) {
@@ -6112,6 +6166,38 @@ void UI::draw_everything() {
                 } else {
                     editor->mouse_selecting = false;
                 }
+            }
+
+            if (im_begin_popup("editor_context_menu")) {
+                auto &menu = world.editor_context_menu;
+
+                if (im::Selectable("Go To Definition")) {
+                    handle_goto_definition(menu.pos);
+                }
+
+                if (im::Selectable("Find References")) {
+                    initiate_find_references(menu.pos);
+                }
+
+                if (im::Selectable("Rename")) {
+                    initiate_rename_identifier(menu.pos);
+                }
+
+                /*
+                im::Separator();
+
+                if (im::Selectable("Cut")) {
+                }
+
+                if (im::Selectable("Copy")) {
+                }
+
+                if (im::Selectable("Paste")) {
+
+                }
+                */
+
+                im::EndPopup();
             }
 
             // handle double click
@@ -6381,7 +6467,7 @@ void UI::draw_everything() {
                 tab_close_action = CLOSE_TAB;
             }
 
-            if (begin_popup_rect(cp_sprintf("tab_editor_%d", editor_index), tab)) {
+            if (im_begin_popup_rect(cp_sprintf("tab_editor_%d", editor_index), tab)) {
                 if (im::Selectable("Close")) {
                     tab_to_close = editor.id;
                     tab_close_action = CLOSE_TAB;
@@ -7580,7 +7666,8 @@ void UI::draw_everything() {
 
     if (world.cmd_unfocus_all_windows) {
         world.cmd_unfocus_all_windows = false;
-        im::SetWindowFocus(NULL);
+        if (!im::IsPopupOpen((char*)NULL, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
+            im::SetWindowFocus(NULL);
     }
 }
 
@@ -7604,10 +7691,18 @@ ccstr get_import_path_label(ccstr import_path, Go_Workspace *workspace) {
     return cp_sprintf("%s/%s", mod_short, import_path);
 }
 
-bool UI::begin_popup_rect(ccstr str_id, boxf rect) {
+bool UI::im_begin_popup(ccstr str_id) {
+    auto ret = im::BeginPopup(str_id);
+    if (ret)
+        if (im_special_key_pressed(ImGuiKey_Escape))
+            im::CloseCurrentPopup();
+    return ret;
+}
+
+bool UI::im_begin_popup_rect(ccstr str_id, boxf rect) {
     if (get_mouse_flags(rect) & MOUSE_RCLICKED)
         im::OpenPopup(str_id);
-    return im::BeginPopup(str_id);
+    return im_begin_popup(str_id);
 }
 
 Keyboard_Nav UI::get_keyboard_nav(Wnd *wnd, int flags) {

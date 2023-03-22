@@ -459,3 +459,14 @@ struct Pane {
 bool check_file_dimensions(ccstr path);
 
 bool is_goident_empty(ccstr name);
+
+enum Gr_Type {
+    GR_SPACE,
+    GR_IDENT,
+    GR_OTHER,
+    GR_NULL,
+};
+
+bool gr_isident(Grapheme gr);
+bool gr_isspace(Grapheme gr);
+Gr_Type gr_type(Grapheme gr);
