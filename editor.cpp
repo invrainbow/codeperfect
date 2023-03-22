@@ -3262,16 +3262,6 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
 
     auto op = cmd->op;
 
-    auto is_op = [&](ccstr s) {
-        int len = strlen(s);
-        if (len != op->len) return false;
-
-        for (int i = 0; i < len; i++)
-            if (op->at(i).is_key || op->at(i).ch != s[i])
-                return false;
-        return true;
-    };
-
     auto c = cur;
     auto &lines = buf->lines;
     auto ret = new_object(Motion_Result);
@@ -3872,7 +3862,10 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
         case '<':
         case '>':
         case 'd': {
-            if (!is_op(cp_sprintf("%c", (char)inp.ch))) break;
+            if (op->len != 1) break;
+
+            auto it = op->at(0);
+            if (it.is_key || it.ch != inp.ch) break;
 
             int y = min(c.y + count-1, lines.len-1);
             ret->dest = new_cur2(0, y);
