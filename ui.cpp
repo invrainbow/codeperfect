@@ -90,6 +90,11 @@ void keep_item_inside_scroll() {
         im::SetScrollY(im::GetScrollY() - (lo - pos));
 }
 
+// These two functions are copy pasted from imgui with one small change:
+// passing ImGuiWindowFlags_NoMove to BeginPopupEx. This is because imgui
+// refuses to just enable this obvious behavior by default, and also does not
+// let us pass flags to BeginPopupEx, resulting in the need for this
+// stupidity. Third-party libraries are the devil.
 namespace ImGui {
     bool OurBeginPopupContextItem(const char* str_id = NULL, ImGuiPopupFlags popup_flags = 1) {
         ImGuiWindow* window = GImGui->CurrentWindow;
@@ -2704,10 +2709,10 @@ void UI::draw_everything() {
                         Fps_Limit opts[] = { FPS_30, FPS_60, FPS_120 };
                         For (&opts) {
                             const bool selected = (tmp.fps_limit_enum == it);
-                            if (ImGui::Selectable(fps_limit_str(it), selected))
+                            if (im::Selectable(fps_limit_str(it), selected))
                                 tmp.fps_limit_enum = it;
                             if (selected)
-                                ImGui::SetItemDefaultFocus();
+                                im::SetItemDefaultFocus();
                         }
                         im::EndCombo();
                     }
