@@ -4441,7 +4441,7 @@ Motion_Range* Editor::vim_process_motion(Motion_Result *motion_result) {
 
         ret->start = start;
         ret->end = end;
-        ret->is_line = false;
+        ret->is_line = true;
         ret->at_end = at_end;
         ret->y1 = y1;
         ret->y2 = y2;
