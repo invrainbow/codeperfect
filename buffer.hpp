@@ -304,8 +304,10 @@ struct Scoped_Batch_Change {
     Scoped_Batch_Change(Buffer *_buf) {
         buf = _buf;
         buf->hist_batch_start();
+        buf->tree_batch_start();
     }
     ~Scoped_Batch_Change() {
+        buf->tree_batch_end();
         buf->hist_batch_end();
     }
 };
