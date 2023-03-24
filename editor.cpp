@@ -4529,10 +4529,19 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         if (pos.x >= len)
             pos.x = len ? len-1 : 0;
 
+        bool update_hidden_vx = false;
+
         // man this is getting too "magical" and complicated
         if (motion_result)
             if (motion_result->type == MOTION_CHAR_INCL || motion_result->type == MOTION_CHAR_EXCL)
-                vim.hidden_vx = buf->idx_cp_to_vcp(pos.y, pos.x);
+                update_hidden_vx = true;
+
+        // is is part of "moving" back to normal mode
+        if (mode != VI_NORMAL && world.vim_mode() == VI_NORMAL)
+            update_hidden_vx = true;
+
+        if (update_hidden_vx)
+            vim.hidden_vx = buf->idx_cp_to_vcp(pos.y, pos.x);
 
         move_cursor(pos);
     };
