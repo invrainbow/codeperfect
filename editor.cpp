@@ -3955,6 +3955,7 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                     break;
                 }
 
+                // don't need to clamp, any input 1-100 is valid
                 int y = min(lines.len * count / 100, lines.len-1);
                 ret->dest = new_cur2(first_nonspace_cp(y), y);
                 ret->type = MOTION_CHAR_EXCL;
@@ -4248,6 +4249,9 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
 
         }
     }
+
+#undef CLAMP_UPPER
+#undef CLAMP_LINE_Y
 
     return NULL;
 }
@@ -4631,6 +4635,9 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
     auto &c = cur;
     auto &lines = buf->lines;
 
+#define CLAMP_UPPER(val, hi) do { if (val > hi) { val = hi; vim.last_command_interrupted = true; } } while (0)
+#define CLAMP_LINE_Y(val) CLAMP_UPPER(val, lines.len-1)
+
     if (mode == VI_NORMAL)
         buf->hist_force_push_next_change = true;
 
@@ -4716,9 +4723,8 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         case CP_MOD_NONE:
             switch (inp.key) {
             case CP_KEY_TAB: {
-                for (int i = 0; i < o_count; i++)
-                    if (!world.history.go_forward())
-                        break;
+                if (!world.history.go_forward(o_count))
+                    vim.last_command_interrupted = true;
                 return true;
             }
             }
@@ -4727,11 +4733,19 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             switch (inp.key) {
             case CP_KEY_E:
             case CP_KEY_Y: {
+                int y = 0;
+                if (inp.key == CP_KEY_E) {
+                    y = view.y + o_count;
+                    CLAMP_LINE_Y(y);
+                } else {
+                    y = view.y - o_count;
+                    if (y < 0) {
+                        y = 0;
+                        vim.last_command_interrupted = true;
+                    }
+                }
                 int old = view.y;
-                if (inp.key == CP_KEY_E)
-                    view.y = min(lines.len-1, view.y + o_count);
-                else
-                    view.y = relu_sub(view.y, o_count);
+                view.y = y;
                 if (old != view.y) ensure_cursor_on_screen();
                 return true;
             }
@@ -4773,18 +4787,14 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                 return true;
             }
             case CP_KEY_TAB:
-            case CP_KEY_I: {
-                for (int i = 0; i < o_count; i++)
-                    if (!world.history.go_forward())
-                        break;
+            case CP_KEY_I:
+                if (!world.history.go_forward(o_count))
+                    vim.last_command_interrupted = true;
                 return true;
-            }
-            case CP_KEY_O: {
-                for (int i = 0; i < o_count; i++)
-                    if (!world.history.go_backward())
-                        break;
+            case CP_KEY_O:
+                if (!world.history.go_backward(o_count))
+                    vim.last_command_interrupted = true;
                 return true;
-            }
             case CP_KEY_V:
                 vim_handle_visual_mode_key(SEL_BLOCK);
                 *can_dotrepeat = true;
@@ -5176,7 +5186,9 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             switch (world.vim_mode()) {
             case VI_NORMAL:
                 enter_insert_mode([&]() {
-                    vim_delete_lines(c.y, c.y + o_count - 1);
+                    int y2 = c.y + o_count - 1;
+                    CLAMP_LINE_Y(y2);
+                    vim_delete_lines(c.y, y2);
                     move_cursor(open_newline(c.y));
                 });
                 *can_dotrepeat = true;
@@ -5192,13 +5204,15 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         case 'Y': {
             switch (world.vim_mode()) {
             case VI_NORMAL: {
-                int yend = min(lines.len-1, c.y + o_count - 1);
+                int yend = c.y + o_count - 1;
+                CLAMP_LINE_Y(yend);
                 auto end = new_cur2(lines[yend].len, yend);
                 vim_yank_text(buf->get_text(c, end));
                 return true;
             }
             case VI_VISUAL:
-                return true;
+                // TODO
+                break;
             }
             break;
         }
@@ -5208,7 +5222,8 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             switch (world.vim_mode()) {
             case VI_NORMAL: {
                 auto start = cur;
-                int y = min(lines.len-1, cur.y + o_count - 1);
+                int y = cur.y + o_count - 1;
+                CLAMP_LINE_Y(y);
                 auto end = new_cur2(lines[y].len, y);
 
                 if (inp.ch == 'D') {
@@ -5281,12 +5296,17 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         case 'u': {
             switch (mode) {
             case VI_NORMAL: {
-                cur2 pos;
+                cur2 pos = NULL_CUR;
                 for (int i = 0; i < o_count; i++) {
-                    pos = buf->hist_undo();
-                    if (pos == NULL_CUR) return true;
+                    auto nextpos = buf->hist_undo();
+                    if (nextpos == NULL_CUR) {
+                        vim.last_command_interrupted = true;
+                        break;
+                    }
+                    pos = nextpos;
                 }
-                move_cursor_normal(pos);
+                if (pos != NULL_CUR)
+                    move_cursor_normal(pos);
                 return true;
             }
             case VI_VISUAL: {
@@ -5407,7 +5427,8 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                 auto res = vim_process_motion(motion_result);
                 if (res->is_line) {
                     vim_delete_range(res->start, res->end);
-                    int y = min(res->y1, lines.len-1);
+                    int y = res->y1;
+                    CLAMP_LINE_Y(y);
                     move_cursor_normal(new_cur2(first_nonspace_cp(y), y));
                 } else {
                     vim_delete_range(res->start, res->end);
@@ -5634,6 +5655,10 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         }
         }
     }
+
+#undef CLAMP_UPPER
+#undef CLAMP_LINE_Y
+
     return false;
 }
 
