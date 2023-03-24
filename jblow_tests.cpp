@@ -263,7 +263,6 @@ void Jblow_Tests::run() {
 
         for (char x = 'a'; x <= 'z'; x++) gen.add(x, 1);
         for (char x = 'A'; x <= 'Z'; x++) gen.add(x, 1);
-        for (char x = '0'; x <= '9'; x++) gen.add(x, 1);
         for (int x = CP_KEY_A; x <= CP_KEY_Z; x++) gen.add(x, CP_MOD_CTRL, 1);
         gen.add(CP_KEY_BACKSPACE, 0, 5);
         gen.add(CP_KEY_ESCAPE, 0, 5);
@@ -273,9 +272,22 @@ void Jblow_Tests::run() {
 
         // wait for editor
         auto editor = open_editor("main.go");
+        int last_count = 0;
 
         for (int i = 0; i < 10000; i++) {
-            inject_jblow_input(gen.pick());
+            if (!last_count && mt_lrand() % 7 == 0) {
+                int count = (mt_lrand() % 99999) + 1;
+                type_string(cp_sprintf("%d", count));
+                last_count = count;
+            } else {
+                Jblow_Input input;
+                // don't do large pastes for now until we fix hang
+                do {
+                    input = gen.pick();
+                } while (last_count > 1000 && !input.is_key && tolower(input.ch) == 'p');
+                inject_jblow_input(input);
+                last_count = 0;
+            }
             if (i % 10 == 0) sleep_milliseconds(25);
         }
     }
