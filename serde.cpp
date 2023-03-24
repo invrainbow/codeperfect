@@ -200,6 +200,7 @@ void Serde::write_type(void* val, int type) {
         WRITE(11, fps_limit_enum, SERDE_INT);
         WRITE(12, open_last_folder, SERDE_BOOL);
         WRITE(13, vim_use_clipboard, SERDE_BOOL);
+        WRITE(14, format_with_gofumpt, SERDE_BOOL);
         write_int(0);
         break;
     }
@@ -284,6 +285,7 @@ bool Serde::read_type_field(void* out, int type, int field_id) {
         FIELD(11, fps_limit_enum, SERDE_INT);
         FIELD(12, open_last_folder, SERDE_BOOL);
         FIELD(13, vim_use_clipboard, SERDE_BOOL);
+        FIELD(14, format_with_gofumpt, SERDE_BOOL);
         }
         break;
     }

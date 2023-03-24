@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"go/build"
+	"go/format"
 	"log"
 	"net"
 	"os"
@@ -24,7 +25,7 @@ import (
 	"github.com/fatih/structtag"
 	"github.com/pkg/browser"
 	"github.com/reviewdog/errorformat"
-	"golang.org/x/tools/imports"
+	gofumpt "mvdan.cc/gofumpt/format"
 )
 
 /*
@@ -208,7 +209,7 @@ func GHFmtAddLine(line *C.char) {
 }
 
 //export GHFmtFinish
-func GHFmtFinish(organizeImports bool) *C.char {
+func GHFmtFinish(useGofumpt bool) *C.char {
 	buflen := len(autofmtBuffer)
 	if buflen > 0 {
 		autofmtBuffer = autofmtBuffer[:buflen-1]
@@ -217,13 +218,11 @@ func GHFmtFinish(organizeImports bool) *C.char {
 	var newSource []byte
 	var err error
 
-	newSource, err = imports.Process("<standard input>", autofmtBuffer, &imports.Options{
-		TabWidth:   8,
-		TabIndent:  true,
-		Comments:   true,
-		Fragment:   true,
-		FormatOnly: !organizeImports,
-	})
+	if useGofumpt {
+		newSource, err = gofumpt.Source(autofmtBuffer, gofumpt.Options{})
+	} else {
+		newSource, err = format.Source(autofmtBuffer)
+	}
 
 	if err != nil {
 		LastError = fmt.Errorf("unable to format")

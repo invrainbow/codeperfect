@@ -2746,17 +2746,28 @@ void UI::draw_everything() {
 
                     im_small_newline();
 
-                    im::Checkbox("Automatically format on save", &tmp.format_on_save);
-
+                    im::Text("Formatting");
                     im_small_newline();
+
                     im::Indent();
                     {
-                        im_with_disabled(!tmp.format_on_save, [&]() {
-                            im::Checkbox("Fix imports after formatting", &tmp.organize_imports_on_save);
+                        im::Checkbox("Format on save", &tmp.format_on_save);
+                        im_small_newline();
 
-                            im::SameLine();
-                            help_marker("This adds missing imports and removes unused ones.");
-                        });
+                        im::Indent();
+                        {
+                            im_with_disabled(!tmp.format_on_save, [&]() {
+                                im::Checkbox("Fix imports after formatting", &tmp.organize_imports_on_save);
+
+                                im::SameLine();
+                                help_marker("This adds missing imports and removes unused ones.");
+                            });
+                        }
+                        im::Unindent();
+
+                        im_small_newline();
+
+                        im::Checkbox("Format using gofumpt", &tmp.format_with_gofumpt);
                     }
                     im::Unindent();
 

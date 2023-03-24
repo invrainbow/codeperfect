@@ -358,7 +358,7 @@ struct Editor {
     void reload_file(bool because_of_file_watcher = false);
     bool handle_escape();
     bool optimize_imports();
-    void format_on_save(bool fix_imports);
+    void format_on_save();
     void handle_save(bool about_to_close = false);
     bool is_current_editor();
     void backspace_in_insert_mode();
@@ -471,3 +471,5 @@ enum Gr_Type {
 bool gr_isident(Grapheme gr);
 bool gr_isspace(Grapheme gr);
 Gr_Type gr_type(Grapheme gr);
+
+char* gh_fmt_finish();

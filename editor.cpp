@@ -762,7 +762,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 GHFmtAddLine(rend.finish());
                 GHFmtAddLine("");
 
-                auto new_contents = GHFmtFinish(false);
+                auto new_contents = gh_fmt_finish();
                 if (!new_contents) break;
                 defer { GHFree(new_contents); };
 
@@ -2231,7 +2231,7 @@ bool Editor::optimize_imports() {
         GHFmtAddLine(rend.finish());
         GHFmtAddLine("");
 
-        auto new_contents = GHFmtFinish(false);
+        auto new_contents = gh_fmt_finish();
         if (!new_contents) break;
         defer { GHFree(new_contents); };
 
@@ -2282,7 +2282,7 @@ bool Editor::optimize_imports() {
     return true;
 }
 
-void Editor::format_on_save(bool fix_imports) {
+void Editor::format_on_save() {
     if (lang != LANG_GO) return; // any more checks needed?
 
     auto old_cur = cur;
@@ -2309,7 +2309,7 @@ void Editor::format_on_save(bool fix_imports) {
         GHFmtAddLine(line.items);
     }
 
-    auto new_contents = GHFmtFinish(fix_imports);
+    auto new_contents = gh_fmt_finish();
     if (!new_contents) {
         saving = false;
         return;
@@ -2366,11 +2366,9 @@ void Editor::handle_save(bool about_to_close) {
     }
 
     if (options.format_on_save && !file_was_deleted) {
-        bool use_goimports_autoimport = false;
         if (options.organize_imports_on_save)
-            if (!optimize_imports())
-                use_goimports_autoimport = true;
-        format_on_save(use_goimports_autoimport);
+            optimize_imports();
+        format_on_save();
     }
 
     // save to disk
@@ -6095,4 +6093,8 @@ int Editor::find_current_or_next_match(cur2 pos, bool *in_match) {
 
     *in_match = false;
     return lo % matches.len;
+}
+
+char* gh_fmt_finish() {
+    return GHFmtFinish(options.format_with_gofumpt);
 }
