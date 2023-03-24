@@ -433,6 +433,38 @@ void handle_key_event(Window_Event *it) {
         break;
     }
 
+    if (keymods == CP_MOD_PRIMARY) {
+        switch (key) {
+        case '[':
+        case ']': {
+            if (world.vim.on) {
+                auto mode = world.vim_mode();
+                if (mode == VI_INSERT || mode == VI_REPLACE)
+                    break;
+            }
+
+            List<Selection_Range> *ranges = NULL;
+
+            auto selection = editor->get_selection();
+            if (!selection) {
+                Selection_Range range; ptr0(&range);
+                range.start = editor->cur;
+                range.end = editor->buf->inc_gr(editor->cur);
+
+                selection = new_object(Selection);
+                selection->type = SEL_CHAR;
+                selection->ranges = new_list(Selection_Range);
+                selection->ranges->append(&range);
+            }
+
+            int y1 = selection->ranges->at(0).start.y;
+            int y2 = selection->ranges->last()->end.y;
+            editor->indent_block(y1, y2, key == '[' ? -1 : 1);
+            return;
+        }
+        }
+    }
+
     // send to vim
     //
     // always send to vim, even in insert mode, because vim needs to record
