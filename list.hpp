@@ -31,9 +31,7 @@ struct List {
     List_Mode mode;
     void *pool;  // for LIST_POOL. can't include Pool because it depends on List
 
-    void init() {
-        init(LIST_POOL, 16);
-    }
+    void init() { init(LIST_POOL, 16); }
 
     void init(List_Mode _mode, s32 _cap, T* _items = NULL) {
         ptr0(this);
