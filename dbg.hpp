@@ -94,7 +94,6 @@ enum Dlv_Call_Type {
     DLVC_STEP_OVER,
     DLVC_STEP_OUT,
     DLVC_RUN_UNTIL,
-    DLVC_CHANGE_VARIABLE,
     DLVC_EVAL_WATCHES,
     DLVC_EVAL_SINGLE_WATCH,
     DLVC_START,
@@ -259,6 +258,8 @@ struct Dlv_Call {
             int watch_idx;
         } delete_watch;
     };
+
+    Dlv_Call *copy();
 };
 
 enum Save_Var_Mode {

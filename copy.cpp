@@ -480,3 +480,27 @@ Vim_Command *Vim_Command::copy() {
     ret->motion = copy_raw_list(motion);
     return ret;
 }
+
+Dlv_Call *Dlv_Call::copy() {
+    auto ret = clone(this);
+
+    switch (type) {
+    case DLVC_TOGGLE_BREAKPOINT:
+        ret->toggle_breakpoint.filename = cp_strdup(toggle_breakpoint.filename);
+        break;
+
+    case DLVC_VAR_LOAD_MORE:
+        // do not copy var_load_more.var, it is meant to be a pointer provided by the caller!
+        break;
+
+    case DLVC_CREATE_WATCH:
+        ret->create_watch.expression = cp_strdup(create_watch.expression);
+        break;
+
+    case DLVC_EDIT_WATCH:
+        ret->edit_watch.expression = cp_strdup(edit_watch.expression);
+        break;
+    }
+
+    return ret;
+}

@@ -1367,313 +1367,316 @@ void Debugger::do_everything() {
         }
     };
 
+    auto copied_calls = new_list(Dlv_Call);
     {
         SCOPED_LOCK(&calls_lock);
-        For (&calls) {
-            switch (it.type) {
-            case DLVC_CREATE_WATCH: {
-                auto &args = it.create_watch;
+        For (&calls)
+            copied_calls->append(it.copy());
+        calls.len = 0;
+        calls_mem.reset();
+    }
 
-                auto watch = watches.append();
-                watch->fresh = false;
-                watch->state = DBGWATCH_PENDING;
+    For (copied_calls) {
+        switch (it.type) {
+        case DLVC_CREATE_WATCH: {
+            auto &args = it.create_watch;
 
-                {
-                    SCOPED_MEM(&watches_mem);
-                    cp_strcpy_fixed(watch->expr, args.expression);
-                    cp_strcpy_fixed(watch->expr_tmp, args.expression);
-                }
+            auto watch = watches.append();
+            watch->fresh = false;
+            watch->state = DBGWATCH_PENDING;
 
-                if (state_flag == DLV_STATE_PAUSED) eval_watch(watch);
-                break;
-            }
-            case DLVC_EDIT_WATCH: {
-                auto &args = it.edit_watch;
-
-                auto watch = &watches[args.watch_idx];
-
-                watch->fresh = false;
-                watch->state = DBGWATCH_PENDING;
-                watch->editing = false;
-
-                {
-                    SCOPED_MEM(&watches_mem);
-                    cp_strcpy_fixed(watch->expr, args.expression);
-                    cp_strcpy_fixed(watch->expr_tmp, args.expression);
-                }
-
-                if (state_flag == DLV_STATE_PAUSED) eval_watch(watch);
-                break;
-            }
-            case DLVC_DELETE_WATCH: {
-                auto &args = it.delete_watch;
-                watches.remove(args.watch_idx);
-                if (!watches.len) {
-                    watches_mem.cleanup();
-                    watches_mem.init();
-                }
-                break;
+            {
+                SCOPED_MEM(&watches_mem);
+                cp_strcpy_fixed(watch->expr, args.expression);
+                cp_strcpy_fixed(watch->expr_tmp, args.expression);
             }
 
-            case DLVC_VAR_LOAD_MORE: {
-                auto &args = it.var_load_more;
-                if (args.state_id != state_id) break;
+            if (state_flag == DLV_STATE_PAUSED) eval_watch(watch);
+            break;
+        }
+        case DLVC_EDIT_WATCH: {
+            auto &args = it.edit_watch;
 
-                auto var = *args.var;
-                if (!var->incomplete()) break;
+            auto watch = &watches[args.watch_idx];
 
-                bool notfound = false;
-                auto newvar = var->copy();
+            watch->fresh = false;
+            watch->state = DBGWATCH_PENDING;
+            watch->editing = false;
 
-                switch (var->kind) {
-                case GO_KIND_STRUCT:
-                case GO_KIND_INTERFACE:
-                    eval_expression(
-                        cp_sprintf("*(*\"%s\")(0x%" PRIx64 ")", var->type, var->address),
-                        state->current_goroutine_id,
-                        state->current_frame,
-                        newvar,
-                        var->kind == GO_KIND_STRUCT ? SAVE_VAR_CHILDREN_APPEND : SAVE_VAR_CHILDREN_OVERWRITE
-                    );
-                    break;
+            {
+                SCOPED_MEM(&watches_mem);
+                cp_strcpy_fixed(watch->expr, args.expression);
+                cp_strcpy_fixed(watch->expr_tmp, args.expression);
+            }
 
-                case GO_KIND_ARRAY:
-                case GO_KIND_SLICE:
-                case GO_KIND_STRING: {
-                    auto offset = var->kind == GO_KIND_STRING ? strlen(var->value) : var->children->len;
-                    eval_expression(
-                        cp_sprintf("(*(*\"%s\")(0x%" PRIx64 "))[%d:]", var->type, var->address, offset),
-                        state->current_goroutine_id,
-                        state->current_frame,
-                        newvar,
-                        var->kind == GO_KIND_STRING ? SAVE_VAR_VALUE_APPEND : SAVE_VAR_CHILDREN_APPEND
-                    );
-                    break;
+            if (state_flag == DLV_STATE_PAUSED) eval_watch(watch);
+            break;
+        }
+        case DLVC_DELETE_WATCH: {
+            auto &args = it.delete_watch;
+            watches.remove(args.watch_idx);
+            if (!watches.len) {
+                watches_mem.cleanup();
+                watches_mem.init();
+            }
+            break;
+        }
+
+        case DLVC_VAR_LOAD_MORE: {
+            auto &args = it.var_load_more;
+            if (args.state_id != state_id) break;
+
+            auto var = *args.var;
+            if (!var->incomplete()) break;
+
+            bool notfound = false;
+            auto newvar = var->copy();
+
+            switch (var->kind) {
+            case GO_KIND_STRUCT:
+            case GO_KIND_INTERFACE:
+                eval_expression(
+                    cp_sprintf("*(*\"%s\")(0x%" PRIx64 ")", var->type, var->address),
+                    state->current_goroutine_id,
+                    state->current_frame,
+                    newvar,
+                    var->kind == GO_KIND_STRUCT ? SAVE_VAR_CHILDREN_APPEND : SAVE_VAR_CHILDREN_OVERWRITE
+                );
+                break;
+
+            case GO_KIND_ARRAY:
+            case GO_KIND_SLICE:
+            case GO_KIND_STRING: {
+                auto offset = var->kind == GO_KIND_STRING ? strlen(var->value) : var->children->len;
+                eval_expression(
+                    cp_sprintf("(*(*\"%s\")(0x%" PRIx64 "))[%d:]", var->type, var->address, offset),
+                    state->current_goroutine_id,
+                    state->current_frame,
+                    newvar,
+                    var->kind == GO_KIND_STRING ? SAVE_VAR_VALUE_APPEND : SAVE_VAR_CHILDREN_APPEND
+                );
+                break;
+            }
+
+            case GO_KIND_MAP:
+                eval_expression(
+                    cp_sprintf("(*(*\"%s\")(0x%" PRIx64 "))[%d:]", var->type, var->address, var->children->len / 2),
+                    state->current_goroutine_id,
+                    state->current_frame,
+                    newvar,
+                    SAVE_VAR_CHILDREN_APPEND
+                );
+                break;
+            default:
+                notfound = true;
+                break;
+            }
+
+            if (notfound) break;
+
+            Pool *mem = NULL;
+            if (args.is_watch)
+                mem = &watches_mem;
+            else
+                mem = which_state_pool ? &state_mem_a : &state_mem_b;
+
+            {
+                SCOPED_MEM(mem);
+                auto ptr = new_object(Dlv_Var);
+                memcpy(ptr, newvar->copy(), sizeof(Dlv_Var));
+                *args.var = ptr;
+            }
+            break;
+        }
+        case DLVC_DELETE_ALL_BREAKPOINTS:
+            pause_and_resume([&]() {
+                if (state_flag != DLV_STATE_INACTIVE) {
+                    For (&breakpoints) {
+                        send_packet("ClearBreakpoint", [&]() {
+                            rend->field("Id", (int)it.dlv_id);
+                        });
+                    }
                 }
+                breakpoints.len = 0;
+            });
+            break;
 
-                case GO_KIND_MAP:
-                    eval_expression(
-                        cp_sprintf("(*(*\"%s\")(0x%" PRIx64 "))[%d:]", var->type, var->address, var->children->len / 2),
-                        state->current_goroutine_id,
-                        state->current_frame,
-                        newvar,
-                        SAVE_VAR_CHILDREN_APPEND
-                    );
-                    break;
-                default:
-                    notfound = true;
-                    break;
-                }
+        case DLVC_SET_CURRENT_FRAME: {
+            auto &args = it.set_current_frame;
 
-                if (notfound) break;
+            if (state->current_goroutine_id != args.goroutine_id)
+                send_command("switchGoroutine", true, args.goroutine_id);
 
-                Pool *mem = NULL;
-                if (args.is_watch)
-                    mem = &watches_mem;
-                else
-                    mem = which_state_pool ? &state_mem_a : &state_mem_b;
+            mutate_state([&](auto draft) {
+                draft->current_goroutine_id = args.goroutine_id;
+                draft->current_frame = args.frame;
+
+                fill_stacktrace(draft);
+                fill_local_vars(draft);
+                fill_function_args(draft);
+            });
+
+            state_flag = DLV_STATE_PAUSED;
+            jump_to_frame();
+            eval_watches();
+            break;
+        }
+        case DLVC_STOP:
+            exiting = true;
+            if (state_flag == DLV_STATE_RUNNING)
+                halt_when_already_running();
+
+            {
+                SCOPED_FRAME();
+                send_packet("Detach", [&]() {
+                    rend->field("Kill", true);
+                });
+            }
+
+            stop();
+            state_flag = DLV_STATE_INACTIVE;
+            loop_mem.reset();
+            break;
+
+        case DLVC_START:
+        case DLVC_DEBUG_TEST_UNDER_CURSOR: {
+            {
+                SCOPED_LOCK(&lock);
+
+                which_state_pool ^= 1;
+                Pool *mem = which_state_pool ? &state_mem_a : &state_mem_b;
+                mem->reset();
 
                 {
                     SCOPED_MEM(mem);
-                    auto ptr = new_object(Dlv_Var);
-                    memcpy(ptr, newvar->copy(), sizeof(Dlv_Var));
-                    *args.var = ptr;
+                    state = new_object(Debugger_State);
+                    state->goroutines = new_list(Dlv_Goroutine);
+                    state->current_goroutine_id = -1;
+                    state->current_frame = 0;
                 }
-                break;
+
+                state_flag = DLV_STATE_STARTING;
+                packetid = 0;
+                exiting = false;
             }
-            case DLVC_DELETE_ALL_BREAKPOINTS:
-                pause_and_resume([&]() {
-                    if (state_flag != DLV_STATE_INACTIVE) {
-                        For (&breakpoints) {
-                            send_packet("ClearBreakpoint", [&]() {
-                                rend->field("Id", (int)it.dlv_id);
-                            });
-                        }
+
+            Debug_Profile *debug_profile = NULL;
+            if (it.type == DLVC_DEBUG_TEST_UNDER_CURSOR) {
+                For (project_settings.debug_profiles) {
+                    if (it.is_builtin && it.type == DEBUG_TEST_CURRENT_FUNCTION) {
+                        debug_profile = &it;
+                        break;
                     }
-                    breakpoints.len = 0;
-                });
-                break;
+                }
+            } else {
+                if (it.type == DLVC_START)
+                    if (it.start.use_custom_profile)
+                        if (it.start.profile_index < project_settings.debug_profiles->len)
+                            debug_profile = &project_settings.debug_profiles->items[it.start.profile_index];
 
-            case DLVC_SET_CURRENT_FRAME: {
-                auto &args = it.set_current_frame;
+                if (!debug_profile)
+                    debug_profile = project_settings.get_active_debug_profile();
+            }
 
-                if (state->current_goroutine_id != args.goroutine_id)
-                    send_command("switchGoroutine", true, args.goroutine_id);
-
-                mutate_state([&](auto draft) {
-                    draft->current_goroutine_id = args.goroutine_id;
-                    draft->current_frame = args.frame;
-
-                    fill_stacktrace(draft);
-                    fill_local_vars(draft);
-                    fill_function_args(draft);
-                });
-
-                state_flag = DLV_STATE_PAUSED;
-                jump_to_frame();
-                eval_watches();
+            if (!debug_profile) {
+                // be more specific?
+                send_tell_user("Unable to find debug profile.", "Error");
                 break;
             }
-            case DLVC_STOP:
-                exiting = true;
-                if (state_flag == DLV_STATE_RUNNING)
-                    halt_when_already_running();
 
-                {
-                    SCOPED_FRAME();
-                    send_packet("Detach", [&]() {
-                        rend->field("Kill", true);
-                    });
-                }
-
-                stop();
+            if (!start(debug_profile)) {
+                SCOPED_LOCK(&lock);
                 state_flag = DLV_STATE_INACTIVE;
                 loop_mem.reset();
                 break;
-
-            case DLVC_START:
-            case DLVC_DEBUG_TEST_UNDER_CURSOR: {
-                {
-                    SCOPED_LOCK(&lock);
-
-                    which_state_pool ^= 1;
-                    Pool *mem = which_state_pool ? &state_mem_a : &state_mem_b;
-                    mem->reset();
-
-                    {
-                        SCOPED_MEM(mem);
-                        state = new_object(Debugger_State);
-                        state->goroutines = new_list(Dlv_Goroutine);
-                        state->current_goroutine_id = -1;
-                        state->current_frame = 0;
-                    }
-
-                    state_flag = DLV_STATE_STARTING;
-                    packetid = 0;
-                    exiting = false;
-                }
-
-                Debug_Profile *debug_profile = NULL;
-                if (it.type == DLVC_DEBUG_TEST_UNDER_CURSOR) {
-                    For (project_settings.debug_profiles) {
-                        if (it.is_builtin && it.type == DEBUG_TEST_CURRENT_FUNCTION) {
-                            debug_profile = &it;
-                            break;
-                        }
-                    }
-                } else {
-                    if (it.type == DLVC_START)
-                        if (it.start.use_custom_profile)
-                            if (it.start.profile_index < project_settings.debug_profiles->len)
-                                debug_profile = &project_settings.debug_profiles->items[it.start.profile_index];
-
-                    if (!debug_profile)
-                        debug_profile = project_settings.get_active_debug_profile();
-                }
-
-                if (!debug_profile) {
-                    // be more specific?
-                    send_tell_user("Unable to find debug profile.", "Error");
-                    break;
-                }
-
-                if (!start(debug_profile)) {
-                    SCOPED_LOCK(&lock);
-                    state_flag = DLV_STATE_INACTIVE;
-                    loop_mem.reset();
-                    break;
-                }
-
-                auto new_ids = new_list(int);
-
-                For (&breakpoints) {
-                    auto js = set_breakpoint(it.file, it.line)->js();
-                    auto idx = js.get(0, ".result.Breakpoint.id");
-                    new_ids->append(idx == -1 ? -1 : js.num(idx));
-                }
-
-                exec_continue(false);
-
-                {
-                    SCOPED_LOCK(&lock);
-                    for (int i = 0; i < breakpoints.len; i++) {
-                        auto id = new_ids->at(i);
-                        if (id != -1)
-                            breakpoints[i].dlv_id = id;
-                        breakpoints[i].pending = false;
-                    }
-                    state_flag = DLV_STATE_RUNNING;
-                }
-                break;
             }
 
-            case DLVC_TOGGLE_BREAKPOINT: {
-                auto &args = it.toggle_breakpoint;
+            auto new_ids = new_list(int);
 
-                auto bkpt = breakpoints.find([&](auto it) {
-                    return are_breakpoints_same(args.filename, args.lineno, it->file, it->line);
-                });
-
-                if (!bkpt) {
-                    Client_Breakpoint b;
-                    {
-                        SCOPED_MEM(&breakpoints_mem);
-                        b.file = cp_strdup(args.filename);
-                    }
-                    b.line = args.lineno;
-                    b.pending = true;
-                    bkpt = breakpoints.append(&b);
-
-                    if (state_flag != DLV_STATE_INACTIVE) {
-                        auto js = set_breakpoint(bkpt->file, bkpt->line)->js();
-                        bkpt->dlv_id = js.num(js.get(0, ".result.Breakpoint.id"));
-                    }
-
-                    bkpt->pending = false;
-                } else {
-                    if (state_flag != DLV_STATE_INACTIVE)
-                        unset_breakpoint(bkpt->dlv_id);
-                    breakpoints.remove(bkpt);
-                    if (!breakpoints.len)
-                        breakpoints_mem.reset();
-                }
-                break;
+            For (&breakpoints) {
+                auto js = set_breakpoint(it.file, it.line)->js();
+                auto idx = js.get(0, ".result.Breakpoint.id");
+                new_ids->append(idx == -1 ? -1 : js.num(idx));
             }
-            case DLVC_BREAK_ALL:
-                if (state_flag == DLV_STATE_RUNNING)
-                    halt_when_already_running();
-                break;
-            case DLVC_CONTINUE_RUNNING:
-                if (state_flag == DLV_STATE_PAUSED) {
-                    state_flag = DLV_STATE_RUNNING;
-                    exec_continue(false);
+
+            exec_continue(false);
+
+            {
+                SCOPED_LOCK(&lock);
+                for (int i = 0; i < breakpoints.len; i++) {
+                    auto id = new_ids->at(i);
+                    if (id != -1)
+                        breakpoints[i].dlv_id = id;
+                    breakpoints[i].pending = false;
                 }
-                break;
-            case DLVC_STEP_INTO:
-                if (state_flag == DLV_STATE_PAUSED) {
-                    state_flag = DLV_STATE_RUNNING;
-                    exec_step_into(false);
-                }
-                break;
-            case DLVC_STEP_OVER:
-                if (state_flag == DLV_STATE_PAUSED) {
-                    state_flag = DLV_STATE_RUNNING;
-                    exec_step_over(false);
-                    step_over_time = current_time_nano();
-                }
-                break;
-            case DLVC_STEP_OUT:
-                if (state_flag == DLV_STATE_PAUSED) {
-                    state_flag = DLV_STATE_RUNNING;
-                    exec_step_out(false);
-                }
-                break;
-            case DLVC_RUN_UNTIL: break;
-            case DLVC_CHANGE_VARIABLE: break;
+                state_flag = DLV_STATE_RUNNING;
             }
+            break;
         }
-        calls.len = 0;
-        calls_mem.reset();
+
+        case DLVC_TOGGLE_BREAKPOINT: {
+            auto &args = it.toggle_breakpoint;
+
+            auto bkpt = breakpoints.find([&](auto it) {
+                return are_breakpoints_same(args.filename, args.lineno, it->file, it->line);
+            });
+
+            if (!bkpt) {
+                Client_Breakpoint b;
+                {
+                    SCOPED_MEM(&breakpoints_mem);
+                    b.file = cp_strdup(args.filename);
+                }
+                b.line = args.lineno;
+                b.pending = true;
+                bkpt = breakpoints.append(&b);
+
+                if (state_flag != DLV_STATE_INACTIVE) {
+                    auto js = set_breakpoint(bkpt->file, bkpt->line)->js();
+                    bkpt->dlv_id = js.num(js.get(0, ".result.Breakpoint.id"));
+                }
+
+                bkpt->pending = false;
+            } else {
+                if (state_flag != DLV_STATE_INACTIVE)
+                    unset_breakpoint(bkpt->dlv_id);
+                breakpoints.remove(bkpt);
+                if (!breakpoints.len)
+                    breakpoints_mem.reset();
+            }
+            break;
+        }
+        case DLVC_BREAK_ALL:
+            if (state_flag == DLV_STATE_RUNNING)
+                halt_when_already_running();
+            break;
+        case DLVC_CONTINUE_RUNNING:
+            if (state_flag == DLV_STATE_PAUSED) {
+                state_flag = DLV_STATE_RUNNING;
+                exec_continue(false);
+            }
+            break;
+        case DLVC_STEP_INTO:
+            if (state_flag == DLV_STATE_PAUSED) {
+                state_flag = DLV_STATE_RUNNING;
+                exec_step_into(false);
+            }
+            break;
+        case DLVC_STEP_OVER:
+            if (state_flag == DLV_STATE_PAUSED) {
+                state_flag = DLV_STATE_RUNNING;
+                exec_step_over(false);
+                step_over_time = current_time_nano();
+            }
+            break;
+        case DLVC_STEP_OUT:
+            if (state_flag == DLV_STATE_PAUSED) {
+                state_flag = DLV_STATE_RUNNING;
+                exec_step_out(false);
+            }
+            break;
+        case DLVC_RUN_UNTIL: break;
+        }
     }
 
     if (state_flag != DLV_STATE_RUNNING) return;
