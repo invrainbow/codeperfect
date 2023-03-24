@@ -2772,6 +2772,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
         case 'p':
         case 'P':
         case '.':
+        case 'Q':
             skip_motion = true;
             out->op->append(it);
             ptr++;
@@ -4932,14 +4933,14 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
 
         case 'q': {
             if (world.vim.macro_state == MACRO_RECORDING) {
-                auto macro = vim_get_macro(world.vim.macro_record);
+                auto macro = vim_get_macro(world.vim.macro_record.macro);
                 if (macro && macro->inputs->len) {
                     auto input = macro->inputs->last();
                     if (!input->is_key && input->ch == 'q')
                         macro->inputs->len--;
                 }
                 world.vim.macro_state = MACRO_IDLE;
-                world.vim.macro_record = 0;
+                world.vim.macro_record.macro = 0;
                 return true;
             }
 
@@ -4962,22 +4963,26 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             }
 
             world.vim.macro_state = MACRO_RECORDING;
-            world.vim.macro_record = (char)arg;
+            world.vim.macro_record.macro = (char)arg;
+            world.vim.macro_record.last = (char)arg;
             return true;
         }
 
+        case 'Q':
         case '@': {
             if (world.vim.macro_state != MACRO_IDLE) break;
 
-            auto arg = get_second_char_arg();
-            if (!arg) break;
+            char arg = 0;
 
-            if (arg == '@') {
-                if (!world.vim.macro_run.last_run)
-                    break;
-                arg = world.vim.macro_run.last_run;
+            if (inp.ch == 'Q') {
+                arg = world.vim.macro_record.last;
+            } else {
+                arg = get_second_char_arg();
+                if (arg == '@')
+                    arg = world.vim.macro_run.last;
             }
 
+            if (!arg) break;
             if (!(arg < 127 && (isalnum(arg) && islower(arg)) || arg == '"')) break;
 
             int idx = isalpha(arg) ? arg-'a' : (isdigit(arg) ? arg-'0' + 26 : 26+10);
@@ -4989,7 +4994,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             world.vim.macro_run.runs = o_count;
             world.vim.macro_run.run_idx = 0;
             world.vim.macro_run.input_idx = 0;
-            world.vim.macro_run.last_run = arg; // do we set this before or after the run?
+            world.vim.macro_run.last = arg; // do we set this before or after the run?
             return true;
         }
 
@@ -5884,8 +5889,8 @@ void Editor::handle_type_backspace(int mods) {
 bool Editor::vim_handle_input(Vim_Command_Input *input) {
     do {
         if (world.vim.macro_state != MACRO_RECORDING) break;
-        if (!world.vim.macro_record) break;
-        auto macro = vim_get_macro(world.vim.macro_record);
+        if (!world.vim.macro_record.macro) break;
+        auto macro = vim_get_macro(world.vim.macro_record.macro);
         if (!macro) break;
 
         // when user presses q to end recording, the handler for q will erase

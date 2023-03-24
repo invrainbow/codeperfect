@@ -451,9 +451,12 @@ struct World {
             int runs;      // how many runs
             int run_idx;   // which run we're on
             int input_idx; // which input we're on current run
-            char last_run;
+            char last;
         } macro_run;
-        char macro_record;
+        struct {
+            char macro;
+            char last;
+        } macro_record;
 
         List<char> yank_register;
         bool yank_register_filled;

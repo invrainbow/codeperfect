@@ -3976,7 +3976,7 @@ void reset_everything_when_switching_editors(Editor *old_editor) {
     if (world.vim.on) {
         if (world.vim.macro_state != MACRO_IDLE) {
             world.vim.macro_state = MACRO_IDLE;
-            world.vim.macro_record = 0;
+            world.vim.macro_record.macro = 0;
         }
     }
 }
