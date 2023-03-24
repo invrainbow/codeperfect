@@ -5211,8 +5211,12 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                 return true;
             }
             case VI_VISUAL:
-                // TODO
-                break;
+                auto selection = get_selection(SEL_LINE);
+                vim_yank_text(get_selection_text(selection));
+
+                vim_return_to_normal_mode();
+                move_cursor_normal(selection->ranges->at(0).start);
+                return true;
             }
             break;
         }
