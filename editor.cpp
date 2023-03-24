@@ -5050,10 +5050,8 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             switch (world.vim_mode()) {
             case VI_NORMAL:
                 enter_insert_mode([&]() {
-                    auto start = new_cur2(first_nonspace_cp(c.y), c.y);
-                    auto end = new_cur2(lines[c.y].len, c.y);
-                    vim_delete_range(start, end);
-                    move_cursor(start);
+                    vim_delete_lines(c.y, c.y + o_count - 1);
+                    move_cursor(open_newline(c.y));
                 });
                 *can_dotrepeat = true;
                 return true;
