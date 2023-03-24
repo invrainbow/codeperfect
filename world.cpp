@@ -2494,15 +2494,18 @@ void handle_command(Command cmd, bool from_menu) {
 
         auto editor = get_current_editor();
         if (!editor) break;
-        editor->select_start = new_cur2(0, 0);
+
+        if (!world.vim.on)
+            editor->select_start = new_cur2(0, 0);
 
         auto buf = editor->buf;
         int y = buf->lines.len-1;
         int x = buf->lines[y].len;
         editor->move_cursor(new_cur2(x, y));
 
-        if (editor->select_start != editor->cur)
-            editor->selecting = true;
+        if (!world.vim.on)
+            if (editor->select_start != editor->cur)
+                editor->selecting = true;
         break;
     }
 

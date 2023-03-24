@@ -6143,9 +6143,11 @@ void UI::draw_everything() {
                         if (OS_MAC ? io.KeySuper : io.KeyCtrl) {
                             handle_goto_definition(pos);
                         } else {
-                            editor->select_start = pos;
-                            editor->selecting = true;
-                            editor->mouse_selecting = true;
+                            if (!world.vim.on) {
+                                editor->select_start = pos;
+                                editor->selecting = true;
+                                editor->mouse_selecting = true;
+                            }
 
                             auto opts = default_move_cursor_opts();
                             opts->is_user_movement = true;
@@ -6284,9 +6286,11 @@ void UI::draw_everything() {
 
                 if (its.pos == ite.pos) break;
 
-                editor->selecting = true;
-                editor->select_start = its.pos;
-                editor->double_clicked_selection = true;
+                if (!world.vim.on) {
+                    editor->selecting = true;
+                    editor->select_start = its.pos;
+                    editor->double_clicked_selection = true;
+                }
                 editor->move_cursor(ite.pos);
             } while (0);
 
