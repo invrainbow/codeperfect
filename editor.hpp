@@ -24,9 +24,9 @@ enum Vim_Mode {
     VI_VISUAL,
     VI_INSERT,
     VI_REPLACE,
-    VI_OPERATOR,
-    VI_CMDLINE,
-    VI_UNKNOWN,
+    // VI_OPERATOR,
+    // VI_CMDLINE,
+    // VI_UNKNOWN,
 };
 
 struct Client_Parameter_Hint {

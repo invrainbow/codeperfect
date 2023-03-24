@@ -7510,8 +7510,8 @@ void UI::draw_everything() {
                     case VI_NORMAL: mode_str = "NORMAL"; break;
                     case VI_INSERT: mode_str = "INSERT"; break;
                     case VI_REPLACE: mode_str = "REPLACE"; break;
-                    case VI_OPERATOR: mode_str = "OPERATOR"; break;
-                    case VI_CMDLINE: mode_str = "CMDLINE"; break;
+                    // case VI_OPERATOR: mode_str = "OPERATOR"; break;
+                    // case VI_CMDLINE: mode_str = "CMDLINE"; break;
                     case VI_VISUAL:
                         switch (editor->vim.visual_type) {
                         case SEL_CHAR: mode_str = "VISUAL"; break;
