@@ -5375,7 +5375,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
 
                 indent_block(y1, y2, o_count * (inp.key == '<' ? -1 : 1));
                 vim_return_to_normal_mode();
-                move_cursor_normal(c); // enforce bounds on current po
+                move_cursor_normal(c); // enforce bounds on current pos
                 *can_dotrepeat = true;
                 return true;
             }
