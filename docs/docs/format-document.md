@@ -8,12 +8,9 @@ When you save a file, CodePerfect automatically formats your file using
 To manually format your document, run `Format` &gt; `Format File`.
 
 By default, Format File does _not_ automatically add and remove imports. To
-format with import organization, run `Format` &gt;
-`Format File and Organize Imports`.
-
-By default, Organize Imports uses our native implementation, which is faster and
-more accurate than `goimports` due to our in-memory index. When the indexer is
-busy, we fallback to `goimports`, which sometimes has a lag.
+format with import organization, run `Format` &gt; `Format File and Organize
+Imports`. This organizes imports using our native implementation, which uses our
+in-memory index to provide faster and more accurate results.
 
 ## Keyboard shortcuts
 
