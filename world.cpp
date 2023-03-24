@@ -3985,6 +3985,7 @@ void open_current_file_search(bool replace, bool from_vim) {
     auto &wnd = world.wnd_current_file_search;
     wnd.replace = replace;
     wnd.opened_from_vim = from_vim;
+    if (from_vim) wnd.use_regex = true;
 
     if (wnd.show) {
         wnd.cmd_focus = true;
