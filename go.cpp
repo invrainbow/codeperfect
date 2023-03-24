@@ -5445,6 +5445,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             if (it.status != GPS_READY) continue;
             if (!it.package_name) continue;
             if (streq(it.import_path, ctx->import_path)) continue;
+            if (it.package_name[0] == '@') continue;
 
             // gofile->imports
             // TODO: check if import already exists in file
