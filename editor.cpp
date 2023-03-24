@@ -4520,7 +4520,8 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
     auto &c = cur;
     auto &lines = buf->lines;
 
-    buf->hist_force_push_next_change = true;
+    if (mode == VI_NORMAL)
+        buf->hist_force_push_next_change = true;
 
     int o_count = cmd->o_count == 0 ? 1 : cmd->o_count;
 
