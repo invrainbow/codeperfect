@@ -3409,36 +3409,42 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                 bool find_close = (arg != inp.ch);
 
                 auto try_using_ast = [&]() -> bool {
-                    if (lang != LANG_GO) return false;;
+                    if (lang != LANG_GO) return false;
                     auto root = new_ast_node(ts_tree_root_node(buf->tree), NULL);
                     if (root->type() != TS_SOURCE_FILE) return false;
 
                     Ast_Node *target = NULL;
+                    Ast_Node *last = NULL;
 
-                    int i = 0;
                     FOR_NODE_CHILDREN (root) {
                         if (it->end() >= c) {
                             target = it;
                             break;
                         }
-                        i++;
+                        last = it;
+                    }
+
+                    if (!target) {
+                        if (forward) return false;
+                        target = last;
                     }
 
                     cur2 dest = c;
-                    for (i = 0; i < count; i++) {
+                    for (int i = 0; i < count; i++) {
                         if (forward) {
-                            if (!find_close || buf->inc_gr(dest) >= target->end()) {
-                                target = target->next();
-                                if (!target) break;
-                            }
+                            if (dest >= target->start())
+                                if (!find_close || buf->inc_gr(dest) == target->end())
+                                    if (!(target = target->next()))
+                                        break;
                         } else {
-                            if (find_close || dest == target->start()) {
-                                target = target->prev();
-                                if (!target) break;
-                            }
+                            if (dest < target->end())
+                                if (find_close || dest <= target->start())
+                                    if (!(target = target->prev()))
+                                        break;
                         }
                         dest = (find_close ? buf->dec_gr(target->end()) : target->start());
                     }
+
                     ret->dest = dest;
                     return true;
                 };
