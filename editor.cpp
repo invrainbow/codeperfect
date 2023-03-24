@@ -3249,7 +3249,7 @@ Gr_Type gr_type(Grapheme gr) {
 
 Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
     auto motion = cmd->motion;
-    if (!motion->len) return NULL;
+    cp_assert(motion->len);
 
     auto op = cmd->op;
 
@@ -3265,11 +3265,6 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
     c = buf->fix_cur(c);
     cp_assert(buf->is_valid(c));
 
-    auto goto_line_first_nonspace = [&](int y) {
-        ret->dest = new_cur2(first_nonspace_cp(y), y);
-        ret->type = MOTION_LINE;
-    };
-
     auto get_second_char_arg = [&]() -> uchar {
         if (motion->len < 2) return 0;
         auto &inp = motion->at(1);
@@ -3277,9 +3272,18 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
         return inp.ch;
     };
 
+    auto return_line_first_nonspace = [&](int y) {
+        ret->dest = new_cur2(first_nonspace_cp(y), y);
+        ret->type = MOTION_LINE;
+    };
+
+#define CLAMP_UPPER(val, hi) do { if (val > hi) { val = hi; ret->interrupted = true; } } while (0)
+#define CLAMP_LINE_Y(val) CLAMP_UPPER(val, lines.len-1)
+
     auto handle_plus_command = [&]() {
-        int y = min(cur.y + count, lines.len - 1);
-        goto_line_first_nonspace(y);
+        int y = cur.y + count;
+        CLAMP_LINE_Y(y);
+        return_line_first_nonspace(y);
     };
 
     auto inp = motion->at(0);
@@ -3335,12 +3339,19 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                         }
                     }
 
-                    if (it.bof()) break;
+                    if (it.bof()) {
+                        ret->interrupted = true;
+                        break;
+                    }
 
-                    if (gr_isspace(it.gr_peek()))
-                        while (!it.bof())
+                    if (gr_isspace(it.gr_peek())) {
+                        while (!it.bof()) {
                             if (!gr_isspace(it.gr_prev()))
                                 break;
+                            if (it.bof())
+                                ret->interrupted = true;
+                        }
+                    }
                 }
 
                 ret->dest = it.pos;
@@ -3349,15 +3360,19 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             }
 
             case 'g':
-                if (!cmd->o_count && !cmd->m_count)
-                    goto_line_first_nonspace(0);
-                else
-                    goto_line_first_nonspace(count-1);
+                if (!cmd->o_count && !cmd->m_count) {
+                    return_line_first_nonspace(0);
+                } else {
+                    int y = count-1;
+                    CLAMP_LINE_Y(y);
+                    return_line_first_nonspace(y);
+                }
                 return ret;
-            case 'o':
-                ret->dest = buf->offset_to_cur(count - 1);
+            case 'o': {
+                ret->dest = buf->offset_to_cur(count - 1, &ret->interrupted);
                 ret->type = MOTION_CHAR_EXCL;
                 return ret;
+            }
             }
             break;
         }
@@ -3380,12 +3395,14 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
 
                 if (y == -1) {
                     pos = new_cur2(0, 0);
+                    ret->interrupted = true;
                     break;
                 }
 
                 if (y >= lines.len) {
                     y = lines.len-1;
                     pos = new_cur2(relu_sub(lines[y].len, 1), y);
+                    ret->interrupted = true;
                     break;
                 }
 
@@ -3432,13 +3449,17 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                         if (forward) {
                             if (dest >= target->start())
                                 if (!find_close || buf->inc_gr(dest) == target->end())
-                                    if (!(target = target->next()))
+                                    if (!(target = target->next())) {
+                                        ret->interrupted = true;
                                         break;
+                                    }
                         } else {
                             if (dest < target->end())
                                 if (find_close || dest <= target->start())
-                                    if (!(target = target->prev()))
+                                    if (!(target = target->prev())) {
+                                        ret->interrupted = true;
                                         break;
+                                    }
                         }
                         dest = (find_close ? buf->dec_gr(target->end()) : target->start());
                     }
@@ -3454,12 +3475,16 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                         uchar target = (find_close ? '}' : '{');
                         if (forward) {
                             for (; y < lines.len-1; y++)
-                                if (lines[y].len && lines[y][0] == target)
+                                if (lines[y].len && lines[y][0] == target) {
+                                    ret->interrupted = true;
                                     break;
+                                }
                         } else {
                             for (; y > 0; y--)
-                                if (lines[y].len && lines[y][0] == target)
+                                if (lines[y].len && lines[y][0] == target) {
+                                    ret->interrupted = true;
                                     break;
+                                }
                         }
                     }
                     ret->dest = new_cur2(0, y);
@@ -3496,7 +3521,10 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                 }
             }
 
-            if (it.eol()) break;
+            if (it.eol()) {
+                ret->interrupted = true;
+                break;
+            }
 
             ret->dest = inp.ch == 't' ? last : it.pos;
             ret->type = MOTION_CHAR_INCL;
@@ -3635,7 +3663,7 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                     }
                 };
 
-                for (int i = 0; i < count && !(forward ? it.eof() : it.bof()); i++) {
+                for (int i = 0; i < count; i++) {
                     it.pos = end;
 
                     find_next_word();
@@ -3647,6 +3675,11 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                     }
 
                     end = it.pos;
+
+                    if (forward ? it.eof() : it.bof()) {
+                        ret->interrupted = true;
+                        break;
+                    }
                 }
 
                 if (already_had_visual)
@@ -3756,7 +3789,10 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                     end = newend;
                 }
 
-                if (error) break;
+                if (error) {
+                    ret->interrupted = true;
+                    break;
+                }
 
                 if (ret->type == MOTION_OBJ_INNER) {
                     start = buf->inc_cur(start);
@@ -3822,7 +3858,10 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                 return true;
             };
 
-            if (!do_shit()) break;
+            if (!do_shit()) {
+                ret->interrupted = true;
+                break;
+            }
 
             ret->dest = inp.ch == 'T' ? last : it.pos;
             ret->type = MOTION_CHAR_INCL;
@@ -3830,10 +3869,13 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
         }
 
         case 'G':
-            if (!cmd->o_count && !cmd->m_count)
-                goto_line_first_nonspace(lines.len-1);
-            else
-                goto_line_first_nonspace(count-1);
+            if (!cmd->o_count && !cmd->m_count) {
+                return_line_first_nonspace(lines.len-1);
+            } else {
+                int y = count-1;
+                CLAMP_LINE_Y(y);
+                return_line_first_nonspace(y);
+            }
             return ret;
 
         case '0':
@@ -3849,8 +3891,9 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
         }
 
         case '$': {
-            int newy = min(lines.len-1, c.y + count-1);
-            ret->dest = new_cur2(lines[newy].len, newy);
+            int y = c.y + count-1;
+            CLAMP_LINE_Y(y);
+            ret->dest = new_cur2(lines[y].len, y);
             ret->type = MOTION_CHAR_INCL;
             return ret;
         }
@@ -3864,7 +3907,9 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             auto it = op->at(0);
             if (it.is_key || it.ch != inp.ch) break;
 
-            int y = min(c.y + count-1, lines.len-1);
+            int y = c.y + count-1;
+            CLAMP_LINE_Y(y);
+
             ret->dest = new_cur2(0, y);
             ret->type = MOTION_LINE;
             return ret;
@@ -3889,16 +3934,25 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                     if (ch) break;
                 }
 
-                if (!ch) break;
+                if (!ch) {
+                    ret->interrupted = true;
+                    break;
+                }
 
                 auto res = find_matching_brace(ch, it.pos);
-                if (res == NULL_CUR) break;
+                if (res == NULL_CUR) {
+                    ret->interrupted = true;
+                    break;
+                }
 
                 ret->dest = res;
                 ret->type = MOTION_CHAR_INCL;
                 return ret;
             } else {
-                if (count > 100) break;
+                if (count > 100) {
+                    ret->interrupted = true;
+                    break;
+                }
 
                 int y = min(lines.len * count / 100, lines.len-1);
                 ret->dest = new_cur2(first_nonspace_cp(y), y);
@@ -3916,7 +3970,10 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                 while (!it.eof() && !gr_isident(it.gr_peek()))
                     it.gr_next();
 
-                if (it.eof()) break;
+                if (it.eof()) {
+                    ret->interrupted = true;
+                    break;
+                }
 
                 while (!it.bof()) {
                     auto old = it.pos;
@@ -3941,7 +3998,11 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
 
                 auto &wnd = world.wnd_current_file_search;
 
-                if (chars->len + 2 > _countof(wnd.query)) break;
+                if (chars->len + 2 > _countof(wnd.query)) {
+                    ret->interrupted = true;
+                    break;
+                }
+
                 auto query = cp_sprintf("\\b%.*s\\b", chars->len, chars->items);
 
                 cp_strcpy_fixed(wnd.permanent_query, query);
@@ -3954,7 +4015,10 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             }
 
             auto idx = move_file_search_result(inp.ch == 'n' || inp.ch == '*', count);
-            if (idx == -1) break;
+            if (idx == -1) {
+                ret->interrupted = true;
+                break;
+            }
 
             file_search.current_idx = idx;
             ret->dest = file_search.results[idx].start;
@@ -3965,9 +4029,13 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
         case 'j':
         case 'k': {
             int newy = c.y + count * (inp.ch == 'j' ? 1 : -1);
-            if (newy < 0) newy = 0;
-            if (newy >= lines.len) newy = lines.len-1;
-            if (newy == c.y) break;
+            if (newy < 0)          { ret->interrupted = true; newy = 0; }
+            if (newy >= lines.len) { ret->interrupted = true; newy = lines.len-1; }
+            if (newy == c.y)       { ret->interrupted = true; break; }
+
+            if (ret->interrupted) {
+                print("break here");
+            }
 
             auto vx = buf->idx_cp_to_vcp(c.y, c.x);
             auto newvx = max(vx, vim.hidden_vx);
@@ -3982,23 +4050,37 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
         }
         case 'h': {
             auto it = iter();
-            for (int i = 0; i < count && !it.bol(); i++)
+            for (int i = 0; i < count; i++) {
                 it.gr_prev();
+                if (it.bol()) {
+                    ret->interrupted = true;
+                    break;
+                }
+            }
             ret->dest = it.pos;
             ret->type = MOTION_CHAR_EXCL;
             return ret;
         }
         case 'l': {
             auto it = iter();
-            for (int i = 0; i < count && !it.eol(); i++)
+            for (int i = 0; i < count && !it.eol(); i++) {
                 it.gr_next();
+                if (it.eol()) {
+                    ret->interrupted = true;
+                    break;
+                }
+            }
             ret->dest = it.pos;
             ret->type = MOTION_CHAR_EXCL;
             return ret;
         }
         case '-': {
-            int y = relu_sub(cur.y, count);
-            goto_line_first_nonspace(y);
+            int y = cur.y - count;
+            if (y < 0) {
+                ret->interrupted = true;
+                y = 0;
+            }
+            return_line_first_nonspace(y);
             return ret;
         }
         case '+': {
@@ -4006,8 +4088,9 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             return ret;
         }
         case '_': {
-            int y = min(cur.y + count - 1, lines.len - 1);
-            goto_line_first_nonspace(y);
+            int y = cur.y + count-1;
+            CLAMP_LINE_Y(y);
+            return_line_first_nonspace(y);
             return ret;
         }
         case 'H':
@@ -4019,17 +4102,19 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
             if (inp.ch == 'L') y = view.y + relu_sub(view.h, 1 + max(count - 1, options.scrolloff));
 
             // this needs to be refactored out
-            if (y >= lines.len)
+            if (y >= lines.len) {
+                // does this count as an interruption?
                 y = lines.len ? lines.len-1 : 0;
+            }
 
-            goto_line_first_nonspace(y);
+            return_line_first_nonspace(y);
             return ret;
         }
         case 'w':
         case 'W': {
             auto it = iter();
 
-            for (int i = 0; i < count && !it.eof(); i++) {
+            for (int i = 0; i < count; i++) {
                 auto gr = it.gr_peek();
                 it.gr_next();
 
@@ -4053,6 +4138,10 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                         it.gr_next();
                     }
                 }
+                if (it.eof()) {
+                    ret->interrupted = true;
+                    break;
+                }
             }
 
             ret->dest = it.pos;
@@ -4063,7 +4152,7 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
         case 'B': {
             auto it = iter();
 
-            for (int i = 0; i < count && !it.bof(); i++) {
+            for (int i = 0; i < count; i++) {
                 auto is_start = [&](Grapheme prev_graph, Gr_Type current_type) {
                     if (inp.ch == 'b')
                         return gr_type(prev_graph) != current_type;
@@ -4086,7 +4175,10 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                     }
                 }
 
-                if (it.bof()) break;
+                if (it.bof()) {
+                    ret->interrupted = true;
+                    break;
+                }
 
                 // now go to the front of the previous word
                 type = gr_type(it.gr_prev());
@@ -4096,6 +4188,11 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                         it.pos = old;
                         break;
                     }
+                }
+
+                if (it.bof()) {
+                    ret->interrupted = true;
+                    break;
                 }
             }
 
@@ -4107,7 +4204,7 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
         case 'E': {
             auto it = iter();
 
-            for (int i = 0; i < count && !it.eof(); i++) {
+            for (int i = 0; i < count; i++) {
                 auto is_end = [&](Grapheme next_graph, Gr_Type current_type) {
                     if (inp.ch == 'e')
                         return gr_type(next_graph) != current_type;
@@ -4121,7 +4218,10 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                     while (!it.eof() && gr_isspace(it.gr_peek()))
                         it.gr_next();
 
-                if (it.eof()) break;
+                if (it.eof()) {
+                    ret->interrupted = true;
+                    break;
+                }
 
                 // now go to the end of the next word
                 type = gr_type(it.gr_peek());
@@ -4132,6 +4232,11 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                         it.pos = old;
                         break;
                     }
+                }
+
+                if (it.eof()) {
+                    ret->interrupted = true;
+                    break;
                 }
             }
 
@@ -4511,9 +4616,16 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
 
     auto mode = world.vim_mode();
 
-    auto motion_result = vim_eval_motion(cmd);
-    if (cmd->motion->len && !motion_result)
-        return false;
+    vim.last_command_interrupted = false;
+
+    Motion_Result *motion_result = NULL;
+    if (cmd->motion->len) {
+        motion_result = vim_eval_motion(cmd);
+        if (!motion_result || motion_result->interrupted)
+            vim.last_command_interrupted = true;
+        if (cmd->motion->len && !motion_result)
+            return false;
+    }
 
     auto &c = cur;
     auto &lines = buf->lines;
@@ -5965,6 +6077,14 @@ void Editor::vim_execute_macro_little_bit(u64 deadline) {
         // if input failed, skip rest of run
         if (!vim_handle_input(input))
             mr.input_idx = macro->inputs->len;
+
+        // cut the whole ting short if a command was interrupted
+        if (vim.last_command_interrupted) {
+            world.vim.macro_state = MACRO_IDLE;
+            if (world.vim_mode() == VI_INSERT || world.vim_mode() == VI_REPLACE)
+                vim_handle_key(CP_KEY_ESCAPE, 0);
+            return;
+        }
     }
 }
 

@@ -140,6 +140,7 @@ struct Motion_Result {
     Motion_Type type;
     cur2 dest; // anything else?
     cur2 object_start; // for MOTION_OBJECT and MOTION_OBJECT_INNER
+    bool interrupted;
 };
 
 struct Motion_Range {
@@ -287,6 +288,7 @@ struct Editor {
     struct {
         Pool mem;
         List<Vim_Command_Input> *command_buffer;
+        bool last_command_interrupted;
         int hidden_vx;
 
         // Right now the mode is stored in world, but the mode-specific

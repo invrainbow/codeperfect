@@ -1175,8 +1175,9 @@ u32 Buffer::internal_convert_x_vx(int y, int off, bool to_vx) {
     return to_vx ? vx : x;
 }
 
-cur2 Buffer::offset_to_cur(i32 off, bool nothrow) {
+cur2 Buffer::offset_to_cur(i32 off, bool *overflow) {
     cur2 ret = NULL_CUR;
+    if (overflow) *overflow = false;
 
     Fori (&bytecounts) {
         if (off < it) {
@@ -1188,9 +1189,8 @@ cur2 Buffer::offset_to_cur(i32 off, bool nothrow) {
     }
 
     if (ret == NULL_CUR) {
-        if (!nothrow) {
-            cp_assert(!off);
-        }
+        if (off && overflow) *overflow = true;
+
         ret.y = lines.len-1;
         ret.x = lines[ret.y].len;
     }

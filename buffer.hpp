@@ -276,7 +276,7 @@ struct Buffer {
     cur2 inc_cur(cur2 c);
     cur2 dec_cur(cur2 c);
     i32 cur_to_offset(cur2 c);
-    cur2 offset_to_cur(i32 off, bool nothrow = true);
+    cur2 offset_to_cur(i32 off, bool *overflow = NULL);
     cur2 inc_gr(cur2 c);
     cur2 dec_gr(cur2 c);
 
