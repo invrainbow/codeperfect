@@ -5499,10 +5499,15 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
         t.log("more crazy shit part 2");
 
+        bool is_current_file_test_file = str_ends_with(gofile->filename, "_test.go");
+
         auto results = list_package_decls(ctx->import_path, LISTDECLS_EXCLUDE_METHODS);
         if (results) {
             For (results) {
                 bool is_own_file = (gofile && streq(gofile->filename, it.ctx->filename));
+
+                if (!is_current_file_test_file && str_ends_with(it.ctx->filename, "_test.go"))
+                    break;
 
                 auto result = add_declaration_result(it.decl->name);
                 if (result) {
