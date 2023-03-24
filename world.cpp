@@ -95,7 +95,7 @@ void History::actually_go(History_Loc *it) {
     focus_editor_by_id(it->editor_id, pos);
 }
 
-bool History::go_forward() {
+bool History::go_forward(int count) {
     assert_main_thread();
     check_marks();
 
@@ -103,7 +103,11 @@ bool History::go_forward() {
 
     check_marks();
 
-    curr = inc(curr);
+    for (int i = 0; i < count; i++) {
+        curr = inc(curr);
+        if (curr == top) break;
+    }
+
     actually_go(&ring[dec(curr)]);
     check_marks();
     return true;
@@ -137,45 +141,41 @@ void History::check_marks(int upper) {
 #endif
 }
 
-bool History::go_backward() {
+bool History::go_backward(int count) {
+    cp_assert(count > 0);
     assert_main_thread();
     check_marks();
 
     if (curr == start) return false;
 
-    {
-        auto editor = get_current_editor();
-        auto &it = ring[dec(curr)];
+    auto pos = curr;
 
-        // handle the case of: open file a, open file b, move down 4 lines (something < threshold),
-        // go back, go forward, cursor will now be on line 0 instead of line 4
-        if (!editor || it.editor_id != editor->id || it.pos != editor->cur) {
+    {
+        // for first jump, handle the case of: open file a, open file b, move
+        // down 4 lines (something < threshold), go back, go forward, cursor
+        // will now be on line 0 instead of line 4
+        auto &last = ring[dec(pos)];
+        auto editor = get_current_editor();
+
+        if (!editor || last.editor_id != editor->id || last.pos != editor->cur) {
             if (editor) {
                 actually_push(editor->id, editor->cur);
-                curr = dec(curr);
+                pos = dec(pos);
             }
-
-            check_marks();
-
-            actually_go(&it);
-
-            check_marks();
-
-            return true;
+            count--;
         }
     }
 
-    check_marks();
+    for (int i = 0; i < count; i++) {
+        auto next = dec(pos);
+        if (next == start)
+            break;
+        pos = next;
+    }
 
-    if (dec(curr) == start) return false;
-
-    check_marks();
-
-    curr = dec(curr);
+    curr = pos;
+    cp_assert(curr != start);
     actually_go(&ring[dec(curr)]);
-
-    check_marks();
-
     return true;
 }
 

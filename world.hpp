@@ -107,8 +107,8 @@ struct History {
     void actually_push(int editor_id, cur2 pos);
     void push(int editor_id, cur2 pos);
     void actually_go(History_Loc *it);
-    bool go_forward();
-    bool go_backward();
+    bool go_forward(int count = 1);
+    bool go_backward(int count = 1);
     void remove_invalid_marks();
     void save_latest();
     void check_marks(int upper = -1);
