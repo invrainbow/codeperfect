@@ -2697,10 +2697,6 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
         case CP_MOD_NONE:
             switch (it.key) {
             case CP_KEY_TAB:
-            case CP_KEY_UP:
-            case CP_KEY_LEFT:
-            case CP_KEY_RIGHT:
-            case CP_KEY_DOWN:
                 out->op->append(it);
                 skip_motion = true;
                 break;
@@ -3006,6 +3002,18 @@ done:
                 return VIM_PARSE_DONE;
             }
             break;
+
+        case CP_MOD_NONE:
+            switch (it.key) {
+            case CP_KEY_UP:
+            case CP_KEY_LEFT:
+            case CP_KEY_RIGHT:
+            case CP_KEY_DOWN:
+                ptr++;
+                out->motion->append(it);
+                return VIM_PARSE_DONE;
+            }
+            break;
         }
 
         return VIM_PARSE_DISCARD;
@@ -3287,15 +3295,78 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
         return_line_first_nonspace(y);
     };
 
+    auto handle_basic_up_down = [&](bool down) -> bool {
+        int newy = c.y + count * (down ? 1 : -1);
+        if (newy < 0)          { ret->interrupted = true; newy = 0; }
+        if (newy >= lines.len) { ret->interrupted = true; newy = lines.len-1; }
+        if (newy == c.y)       { ret->interrupted = true; return false; }
+
+        auto vx = buf->idx_cp_to_vcp(c.y, c.x);
+        auto newvx = max(vx, vim.hidden_vx);
+
+        auto newx = buf->idx_vcp_to_cp(newy, newvx);
+        if (newx >= lines[newy].len && lines[newy].len > 0)
+            newx = lines[newy].len-1;
+
+        ret->dest = new_cur2(newx, newy);
+        ret->type = MOTION_LINE;
+        return true;
+    };
+
+    auto handle_basic_left = [&]() {
+        auto it = iter();
+        for (int i = 0; i < count; i++) {
+            it.gr_prev();
+            if (it.bol()) {
+                ret->interrupted = true;
+                break;
+            }
+        }
+        ret->dest = it.pos;
+        ret->type = MOTION_CHAR_EXCL;
+    };
+
+    auto handle_basic_right = [&]() {
+        auto it = iter();
+        for (int i = 0; i < count && !it.eol(); i++) {
+            it.gr_next();
+            if (it.eol()) {
+                ret->interrupted = true;
+                break;
+            }
+        }
+        ret->dest = it.pos;
+        ret->type = MOTION_CHAR_EXCL;
+    };
+
     auto inp = motion->at(0);
     if (inp.is_key) {
         switch (inp.key) {
         case CP_KEY_ENTER:
             handle_plus_command();
             return ret;
-        case CP_KEY_M:
-            if (inp.mods == CP_MOD_CTRL) {
+        }
+
+        switch (inp.mods) {
+        case CP_MOD_CTRL:
+            switch (inp.key) {
+            case CP_KEY_M:
                 handle_plus_command();
+                return ret;
+            }
+            break;
+        case CP_MOD_NONE:
+            switch (inp.key) {
+            case CP_KEY_DOWN:
+            case CP_KEY_UP:
+                if (!handle_basic_up_down(inp.key == CP_KEY_DOWN))
+                    break;
+                return ret;
+            case CP_KEY_RIGHT:
+                handle_basic_right();
+                return ret;
+            case CP_KEY_LEFT:
+                handle_basic_left();
                 return ret;
             }
             break;
@@ -4133,53 +4204,16 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
         }
 
         case 'j':
-        case 'k': {
-            int newy = c.y + count * (inp.ch == 'j' ? 1 : -1);
-            if (newy < 0)          { ret->interrupted = true; newy = 0; }
-            if (newy >= lines.len) { ret->interrupted = true; newy = lines.len-1; }
-            if (newy == c.y)       { ret->interrupted = true; break; }
-
-            if (ret->interrupted) {
-                print("break here");
-            }
-
-            auto vx = buf->idx_cp_to_vcp(c.y, c.x);
-            auto newvx = max(vx, vim.hidden_vx);
-
-            auto newx = buf->idx_vcp_to_cp(newy, newvx);
-            if (newx >= lines[newy].len && lines[newy].len > 0)
-                newx = lines[newy].len-1;
-
-            ret->dest = new_cur2(newx, newy);
-            ret->type = MOTION_LINE;
+        case 'k':
+            if (!handle_basic_up_down(inp.ch == 'j'))
+                break;
             return ret;
-        }
-        case 'h': {
-            auto it = iter();
-            for (int i = 0; i < count; i++) {
-                it.gr_prev();
-                if (it.bol()) {
-                    ret->interrupted = true;
-                    break;
-                }
-            }
-            ret->dest = it.pos;
-            ret->type = MOTION_CHAR_EXCL;
+        case 'h':
+            handle_basic_left();
             return ret;
-        }
-        case 'l': {
-            auto it = iter();
-            for (int i = 0; i < count && !it.eol(); i++) {
-                it.gr_next();
-                if (it.eol()) {
-                    ret->interrupted = true;
-                    break;
-                }
-            }
-            ret->dest = it.pos;
-            ret->type = MOTION_CHAR_EXCL;
+        case 'l':
+            handle_basic_right();
             return ret;
-        }
         case '-': {
             int y = cur.y - count;
             if (y < 0) {
