@@ -3891,8 +3891,33 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                 return ret;
             }
 
-            // experimental
-            case 't': break; // toplevel?
+            // toplevel
+            case 't': {
+                if (count > 1) break;
+                if (lang != LANG_GO) break;
+
+                cur2 start = NULL_CUR, end = NULL_CUR;
+
+                auto root = new_ast_node(ts_tree_root_node(buf->tree), NULL);
+                find_nodes_containing_pos(root, cur, false, [&](auto it) {
+                    auto parent = it->parent();
+                    if (!parent) return WALK_CONTINUE;
+
+                    if (parent->type() == TS_SOURCE_FILE) {
+                        start = it->start();
+                        end = it->end();
+                    }
+
+                    return WALK_ABORT;
+                });
+
+                if (start == NULL_CUR || end == NULL_CUR) break;
+
+                ret->object_start = start;
+                ret->dest = buf->dec_gr(end);
+                return ret;
+            }
+
             case 'a': break; // argument?
             case 'f': break; // function?
                              // think about supporting ast based text objects (it is literally our strength)
