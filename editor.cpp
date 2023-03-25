@@ -3770,6 +3770,8 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                     // determine if we need to repeat the previous process
                     // i.e. if we're already "covering" the given range
                     auto is_already_covering = [&]() {
+                        if (start == end) return false;
+
                         auto a = newstart;
                         auto b = newend;
                         if (ret->type == MOTION_OBJ_INNER) {
