@@ -6144,8 +6144,8 @@ void UI::draw_everything() {
                             if (!world.vim.on) {
                                 editor->select_start = pos;
                                 editor->selecting = true;
-                                editor->mouse_selecting = true;
                             }
+                            editor->mouse_selecting = true;
 
                             auto opts = default_move_cursor_opts();
                             opts->is_user_movement = true;
@@ -6284,11 +6284,17 @@ void UI::draw_everything() {
 
                 if (its.pos == ite.pos) break;
 
-                if (!world.vim.on) {
+                if (world.vim.on) {
+                    if (world.vim_mode() != VI_NORMAL)
+                        editor->vim_handle_key(CP_KEY_ESCAPE, 0);
+                    editor->move_cursor(its.pos);
+                    editor->vim_handle_char('v');
+                    ite.prev();
+                } else {
                     editor->selecting = true;
                     editor->select_start = its.pos;
-                    editor->double_clicked_selection = true;
                 }
+                editor->double_clicked_selection = true;
                 editor->move_cursor(ite.pos);
             } while (0);
 
@@ -6325,9 +6331,16 @@ void UI::draw_everything() {
             }
 
             if (world.ui.mouse_just_released[0]) {
-                if (editor->selecting)
-                    if (editor->select_start == editor->cur)
-                        editor->selecting = false;
+                if (world.vim.on) {
+                    if (world.vim_mode() == VI_VISUAL)
+                        if (editor->cur == editor->vim.visual_start)
+                            editor->vim_handle_key(CP_KEY_ESCAPE, 0);
+                } else {
+                    if (editor->selecting)
+                        if (editor->select_start == editor->cur)
+                            editor->selecting = false;
+                }
+
                 editor->double_clicked_selection = false;
                 editor->mouse_selecting = false;
             }
