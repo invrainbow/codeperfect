@@ -5089,7 +5089,8 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                 } else {
                     cur2 pos = c;
                     if (inp.ch == 'p')
-                        pos = buf->inc_gr(pos);
+                        if (lines[pos.y].len)
+                            pos = buf->inc_gr(pos);
                     paste_and_move_cursor(pos);
                 }
                 *can_dotrepeat = true;
