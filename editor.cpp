@@ -3809,10 +3809,87 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
 
             case '"':
             case '\'':
-            case '`':
-                // TODO: i think strings are slightly different from braces,
-                // can't be nested, have to handle backslashes, etc
-                break;
+            case '`': {
+                if (count > 1) break;
+
+                Ts_Ast_Type node_type;
+                switch (arg) {
+                case '"': node_type = TS_INTERPRETED_STRING_LITERAL; break;
+                case '`': node_type = TS_RAW_STRING_LITERAL; break;
+                case '\'': node_type = TS_RUNE_LITERAL; break;
+                }
+
+                cur2 start = NULL_CUR;
+                cur2 end = NULL_CUR;
+
+                // first try with ast
+                if (lang == LANG_GO) {
+                    auto root = new_ast_node(ts_tree_root_node(buf->tree), NULL);
+                    find_nodes_containing_pos(root, cur, false, [&](auto it) {
+                        if (it->type() != node_type) return WALK_CONTINUE;
+
+                        start = it->start();
+                        end = buf->dec_cur(it->end());
+                        return WALK_ABORT;
+                    });
+                }
+
+                // then try with just text
+                if (start == NULL_CUR || end == NULL_CUR) {
+                    auto its = iter(c);
+                    auto ite = iter(c);
+
+                    while (true) {
+                        if (its.peek() == arg) break;
+                        if (arg == '`') {
+                            if (its.bof()) break;
+                        } else {
+                            if (its.bol()) break;
+                        }
+                        its.prev();
+                    }
+
+                    if (its.peek() != arg) break;
+
+                    ite.next();
+                    while (true) {
+                        if (ite.peek() == arg) break;
+                        if (arg == '`') {
+                            if (ite.eof()) break;
+                        } else {
+                            if (ite.eol()) break;
+                        }
+                        ite.next();
+                    }
+
+                    if (ite.peek() != arg) break;
+
+                    start = its.pos;
+                    end = ite.pos;
+                }
+
+                cp_assert(start != NULL_CUR);
+                cp_assert(end != NULL_CUR);
+
+                if (ret->type == MOTION_OBJ_INNER) {
+                    start = buf->inc_cur(start);
+                    end = buf->dec_cur(end);
+
+                    // if we're already covering the inner area, grab the quotes back
+                    if (world.vim_mode() == VI_VISUAL) {
+                        auto curr_start = vim.visual_start;
+                        auto curr_end = c;
+                        if (curr_start <= start && curr_end >= end) {
+                            start = buf->dec_cur(start);
+                            end = buf->inc_cur(end);
+                        }
+                    }
+                }
+
+                ret->object_start = start;
+                ret->dest = end;
+                return ret;
+            }
 
             // experimental
             case 't': break; // toplevel?
