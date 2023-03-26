@@ -366,6 +366,7 @@ void World::init() {
     mark_fridge.init(512);
     mark_node_fridge.init(512);
     change_fridge.init(512);
+    treap_fridge.init(512);
 
     chunk0_fridge.init(512);
     chunk1_fridge.init(256);

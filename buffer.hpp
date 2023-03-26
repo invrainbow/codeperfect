@@ -165,11 +165,58 @@ struct Change {
     Change *next;
 };
 
+struct Treap {
+    int val; // Bytecount of given line that node represents
+    int size; // Size of subtree
+    int sum; // Total bytecount of whole subtree
+    int priority; // Unimportant random value that treaps need to work
+    Treap *left;
+    Treap *right;
+};
+
+struct Treap_Split {
+    Treap *left;
+    Treap *right;
+};
+
+int treap_node_size(Treap *t);
+int treap_node_sum(Treap *t);
+void treap_node_update_stats(Treap *t);
+
+Treap_Split *treap_split(Treap *t, int idx, int add = 0);
+Treap *treap_merge(Treap *l, Treap *r);
+Treap *treap_insert_node(Treap *t, int idx, Treap *node);
+void treap_free(Treap *t);
+Treap *treap_delete(Treap *t, int idx, int add = 0);
+int treap_get(Treap *t, int idx, int add = 0);
+bool treap_set(Treap *t, int idx, int val, int add = 0);
+
+struct Bytecounts_Tree {
+    Treap *root;
+
+    void init() { ptr0(this); }
+
+    int size() { return treap_node_size(root); }
+    void append(int val) { insert(treap_node_size(root), val); }
+    void remove(int index) { root = treap_delete(root, index); }
+    void set(int idx, int val) { treap_set(root, idx, val); }
+    int get(int idx) { return treap_get(root, idx); }
+
+    int sum(int until);
+    int internal_offset_to_line(Treap *t, int limit, int *rem);
+    void insert(int idx, int val);
+
+    int offset_to_line(int limit, int *rem) {
+        *rem = 0;
+        return internal_offset_to_line(root, limit, rem);
+    }
+};
+
 struct Buffer {
     Pool *mem;
 
     List<Line> lines;
-    List<u32> bytecounts;
+    Bytecounts_Tree bctree;
     Mark_Tree mark_tree;
 
     bool initialized;

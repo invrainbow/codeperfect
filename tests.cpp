@@ -310,22 +310,82 @@ void test_mark_tree_fuzz_replay() {
     cp_assert(mtf.replay());
 }
 
+void test_bytecounts() {
+    mt_seed32(0);
 
+    Bytecounts_Tree bc; bc.init();
+    List<int> nums; nums.init();
 
+    // prefill nums and root with 100 values, make sure we start out in sync
+    for (int i = 0; i < 100; i++) {
+        int num = (mt_lrand() % 100) + 1;
+        nums.append(num);
+        bc.append(num);
+    }
+    cp_assert(bc.size() == nums.len);
+    Fori (&nums)
+        cp_assert(bc.get(i) == it);
 
+    // 10k iterations of random actions: insert, delete, sum
+    for (int i = 0; i < 10000; i++) {
+        int action = mt_lrand() % 4;
 
+        if (action == 0) { // insert item
+            int pos = mt_lrand() % (nums.len + 1);
+            int num = (mt_lrand() % 100) + 1;
+            print("inserting %d at %d", num, pos);
 
+            if (pos == nums.len)
+                nums.append(num);
+            else
+                nums.insert(pos, num);
 
+            bc.insert(pos, num);
+            cp_assert(bc.get(pos) == num);
+            cp_assert(bc.size() == nums.len);
+        } else if (action == 1) { // delete item
+            if (!nums.len) continue;
 
+            int pos = mt_lrand() % nums.len;
+            print("deleting at %d", pos);
 
+            bc.remove(pos);
+            nums.remove(pos);
+            cp_assert(bc.size() == nums.len);
+        } else if (action == 2) { // sum range
+            if (!nums.len) continue;
 
+            int hi = mt_lrand() % nums.len;
 
+            int want = 0;
+            for (int k = 0; k < hi; k++)
+                want += nums[k];
 
+            print("getting sum until %d, expecting %d", hi, want);
+            cp_assert(bc.sum(hi) == want);
+        } else if (action == 3) { // offset to line
+            int hi = 1 + (mt_lrand() % (nums.len-1));
+            int limit = 0;
+            for (int i = 0; i < hi; i++)
+                limit += nums[i];
+            print("checking offset_to_line up until line %d", hi);
 
+            int rem = 0;
 
+            if (hi == 70 && limit == 3509)
+                BREAK_HERE();
 
+            cp_assert(bc.offset_to_line(limit, &rem) == hi);
+            cp_assert(rem == 0);
 
+            cp_assert(bc.offset_to_line(limit + nums[hi]-1, &rem) == hi);
+            cp_assert(rem == nums[hi]-1);
 
+            cp_assert(bc.offset_to_line(limit - 1, &rem) == hi-1);
+            cp_assert(rem == nums[hi-1]-1);
+        }
+    }
+}
 
 void run_tests(ccstr test_name) {
     if (streq(test_name, "diff")) test_diff();

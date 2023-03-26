@@ -359,6 +359,7 @@ struct World {
 
     Fridge<Mark> mark_fridge;
     Fridge<Mark_Node> mark_node_fridge;
+    Fridge<Treap> treap_fridge;
     Fridge<Change> change_fridge;
     Fridge<Chunk0> chunk0_fridge;
     Fridge<Chunk1> chunk1_fridge;

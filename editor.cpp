@@ -1315,8 +1315,8 @@ Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos, bool pos_in_byte_format) 
         cppos.y = editor.buf->lines.len - 1;
 
     if (pos_in_byte_format) {
-        if (cppos.x >= editor.buf->bytecounts[cppos.y])
-            cppos.x = editor.buf->bytecounts[cppos.y] - 1;
+        int bc = editor.buf->bctree.get(cppos.y);
+        if (cppos.x >= bc) cppos.x = bc-1;
         cppos.x = editor.buf->idx_byte_to_cp(cppos.y, cppos.x);
     } else {
         if (cppos.x > editor.buf->lines[cppos.y].len)

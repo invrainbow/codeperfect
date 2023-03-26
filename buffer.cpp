@@ -5,6 +5,44 @@
 #include "diff.hpp"
 #include "defer.hpp"
 
+int Bytecounts_Tree::sum(int until) {
+    auto s = treap_split(root, until);
+    int sum = treap_node_sum(s->left);
+    root = treap_merge(s->left, s->right);
+    return sum;
+}
+
+int Bytecounts_Tree::internal_offset_to_line(Treap *t, int limit, int *rem) {
+    if (!t) return 0;
+
+    if (limit >= treap_node_sum(t))
+        return treap_node_size(t);
+
+    int left_sum = treap_node_sum(t->left);
+    if (limit < left_sum)
+        return internal_offset_to_line(t->left, limit, rem);
+
+    if (limit == left_sum)
+        return treap_node_size(t->left);
+
+    if (limit - left_sum < t->val) {
+        *rem = limit - left_sum;
+        return treap_node_size(t->left);
+    }
+
+    return treap_node_size(t->left) + 1
+        + internal_offset_to_line(t->right, limit - left_sum - t->val, rem);
+}
+
+void Bytecounts_Tree::insert(int idx, int val) {
+    auto node = world.treap_fridge.alloc();
+    node->val = val;
+    node->size = 1;
+    node->sum = val;
+    node->priority = rand();
+    root = treap_insert_node(root, idx, node);
+}
+
 s32 uchar_to_cstr(uchar c, cstr out) {
     u32 k = 0;
     if (c <= 0x7f) {
@@ -342,7 +380,6 @@ void Buffer::init(Pool *_mem, int _lang, bool _use_history) {
     {
         SCOPED_MEM(mem);
         lines.init(LIST_POOL, 128);
-        bytecounts.init(LIST_POOL, 128);
         edit_buffer_old.init();
         edit_buffer_new.init();
     }
@@ -416,17 +453,12 @@ bool Buffer::read(Buffer_Read_Func f, bool reread) {
     clear();
 
     Line *line = NULL;
-    u32 *bc = NULL;
 
     auto insert_new_line = [&]() -> bool {
         line = lines.append();
-        bc = bytecounts.append();
-
-        // make this check more robust/at the right place?
-        if (!line) return false;
+        bctree.append(0);
 
         line->init(LIST_CHUNK, CHUNK0);
-        *bc = 0;
         return true;
     };
 
@@ -435,17 +467,20 @@ bool Buffer::read(Buffer_Read_Func f, bool reread) {
     Cstr_To_Ustr conv; conv.init();
     bool last_was_cr = false;
     char ch;
+    u32 bc = 0;
 
     while (f(&ch)) {
-        (*bc)++;
+        bc++;
 
         if (conv.feed(ch)) {
             if (conv.uch == '\n') {
                 if (last_was_cr) {
-                    (*bc)--;
+                    bc--;
                     last_was_cr = false;
                 }
+                bctree.set(bctree.size()-1, bc);
                 if (!insert_new_line()) return false;
+                bc = 0;
             } else {
                 if (last_was_cr) {
                     if (!line->append('\r')) return false;
@@ -459,7 +494,7 @@ bool Buffer::read(Buffer_Read_Func f, bool reread) {
         }
     }
 
-    (*bytecounts.last())++;
+    bctree.set(bctree.size()-1, bc+1);
     dirty = false;
 
     if (lang != LANG_NONE && !reread) {
@@ -545,14 +580,12 @@ void Buffer::internal_delete_lines(u32 y1, u32 y2) {
 
     for (u32 y = y1; y < y2; y++)
         lines[y].cleanup();
-
-    if (y2 < lines.len) {
+    if (y2 < lines.len)
         memmove(&lines[y1], &lines[y2], sizeof(Line) * (lines.len - y2));
-        memmove(&bytecounts[y1], &bytecounts[y2], sizeof(u32) * (bytecounts.len - y2));
-    }
-
     lines.len -= (y2 - y1);
-    bytecounts.len -= (y2 - y1);
+
+    for (int i = y1; i < y2; i++)
+        bctree.remove(y1);
 
     dirty = true;
 }
@@ -571,24 +604,19 @@ s32 get_bytecount(Line *line) {
 void Buffer::internal_insert_line(u32 y, uchar* text, s32 len) {
     cp_assert(!editable_from_main_thread_only || is_main_thread);
 
-    lines.ensure_cap(lines.len + 1);
-    bytecounts.ensure_cap(bytecounts.len + 1);
+    lines.append();
 
-    if (y > lines.len) {
+    if (y > lines.len)
         y = lines.len;
-    } else if (y < lines.len) {
+    else if (y < lines.len)
         memmove(&lines[y + 1], &lines[y], sizeof(Line) * (lines.len - y));
-        memmove(&bytecounts[y + 1], &bytecounts[y], sizeof(u32) * (bytecounts.len - y));
-    }
 
     lines[y].init(LIST_CHUNK, len);
     lines[y].len = len;
     memcpy(lines[y].items, text, sizeof(uchar) * len);
 
-    bytecounts[y] = get_bytecount(&lines[y]);
+    bctree.insert(y, get_bytecount(&lines[y]));
 
-    lines.len++;
-    bytecounts.len++;
     dirty = true;
 }
 
@@ -649,7 +677,8 @@ cur2 Buffer::insert(cur2 start, uchar* text, s32 len, bool applying_change) {
         u32 bc = 0;
         for (u32 i = 0; i < len; i++)
             bc += uchar_size(text[i]);
-        bytecounts[y] += bc;
+
+        bctree.set(y, bctree.get(y) + bc);
     }
 
     // easier/better way to calculate this?
@@ -1006,7 +1035,7 @@ void Buffer::remove(cur2 start, cur2 end, bool applying_change) {
             memcpy(lines[y1].items + x1, lines[y2].items + x2, sizeof(uchar) * (lines[y2].len - x2));
         internal_delete_lines(y1 + 1, min(lines.len, y2 + 1));
     }
-    bytecounts[y1] = get_bytecount(&lines[y1]);
+    bctree.set(y1, get_bytecount(&lines[y1]));
     dirty = true;
 
     internal_finish_edit(start);
@@ -1059,13 +1088,9 @@ void Buffer::free_temp_array(uchar* buf, s32 size) {
 }
 
 i32 Buffer::cur_to_offset(cur2 c) {
-    i32 ret = 0;
-    for (u32 y = 0; y < c.y; y++)
-        ret += bytecounts[y];
-
+    i32 ret = bctree.sum(c.y);
     for (u32 x = 0; x < c.x; x++)
         ret += uchar_size(lines[c.y][x]);
-
     return ret;
 }
 
@@ -1176,26 +1201,17 @@ u32 Buffer::internal_convert_x_vx(int y, int off, bool to_vx) {
 }
 
 cur2 Buffer::offset_to_cur(i32 off, bool *overflow) {
-    cur2 ret = NULL_CUR;
     if (overflow) *overflow = false;
 
-    Fori (&bytecounts) {
-        if (off < it) {
-            ret.y = i;
-            ret.x = idx_byte_to_cp(i, off);
-            break;
-        }
-        off -= it;
-    }
+    int rem = 0;
+    int y = bctree.offset_to_line(off, &rem);
 
-    if (ret == NULL_CUR) {
-        if (off && overflow) *overflow = true;
+    if (y < bctree.size())
+        return new_cur2(idx_byte_to_cp(y, rem), y);
 
-        ret.y = lines.len-1;
-        ret.x = lines[ret.y].len;
-    }
-
-    return ret;
+    if (overflow) *overflow = true;
+    y = lines.len-1;
+    return new_cur2(lines[y].len, y);
 }
 
 // ============
@@ -1641,4 +1657,112 @@ bool is_mark_valid(Mark *mark) {
 }
 
 // ============
-// mark_tree_marker
+// treap_marker
+
+int treap_node_size(Treap *t) { return t ? t->size : 0; }
+int treap_node_sum(Treap *t) { return t ? t->sum : 0; }
+
+void treap_node_update_stats(Treap *t) {
+    if (!t) return;
+
+    t->size = 1 + treap_node_size(t->left) + treap_node_size(t->right);
+    t->sum = t->val + treap_node_sum(t->left) + treap_node_sum(t->right);
+}
+
+Treap_Split *treap_split(Treap *t, int idx, int add) {
+    auto ret = new_object(Treap_Split);
+
+    if (!t) {
+        ret->left = NULL;
+        ret->right = NULL;
+        return ret;
+    }
+
+    int curr = add + treap_node_size(t->left);
+    if (idx <= curr) {
+        auto split = treap_split(t->left, idx, add);
+        ret->left = split->left;
+        t->left = split->right;
+        ret->right = t;
+    } else {
+        auto split = treap_split(t->right, idx, curr + 1);
+        t->right = split->left;
+        ret->right = split->right;
+        ret->left = t;
+    }
+
+    treap_node_update_stats(t);
+    return ret;
+}
+
+Treap *treap_merge(Treap *l, Treap *r) {
+    Treap *ret = NULL;
+
+    if (!l || !r) {
+        ret = l ? l : r;
+    } else if (l->priority > r->priority) {
+        l->right = treap_merge(l->right, r);
+        ret = l;
+    } else {
+        r->left = treap_merge(l, r->left);
+        ret = r;
+    }
+
+    treap_node_update_stats(ret);
+    return ret;
+}
+
+Treap *treap_insert_node(Treap *t, int idx, Treap *node) {
+    auto split = treap_split(t, idx);
+    return treap_merge(treap_merge(split->left, node), split->right);
+}
+
+void treap_free(Treap *t) {
+    if (!t) return;
+
+    treap_free(t->left);
+    treap_free(t->right);
+    world.treap_fridge.free(t);
+}
+
+Treap *treap_delete(Treap *t, int idx, int add) {
+    int curr = add + treap_node_size(t->left);
+    if (idx == curr) {
+        auto ret = treap_merge(t->left, t->right);
+        world.treap_fridge.free(t);
+        return ret;
+    }
+
+    if (idx > curr)
+        t->right = treap_delete(t->right, idx, curr + 1);
+    else
+        t->left = treap_delete(t->left, idx, add);
+
+    treap_node_update_stats(t);
+    return t;
+}
+
+int treap_get(Treap *t, int idx, int add) {
+    if (!t) return -1;
+
+    int curr = add + treap_node_size(t->left);
+    if (idx == curr) return t->val;
+
+    if (idx < curr)
+        return treap_get(t->left, idx, add);
+    return treap_get(t->right, idx, curr + 1);
+}
+
+bool treap_set(Treap *t, int idx, int val, int add) {
+    if (!t) return false;
+
+    int curr = add + treap_node_size(t->left);
+    if (idx == curr) {
+        t->val = val;
+        return true;
+    }
+
+    if (idx < curr)
+        return treap_set(t->left, idx, val, add);
+    return treap_set(t->right, idx, val, curr + 1);
+}

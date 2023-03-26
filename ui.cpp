@@ -6920,15 +6920,13 @@ void UI::draw_everything() {
                 draw_rect(b, color);
             };
 
-            u32 byte_offset = 0;
-            for (u32 y = 0; y < view.y; y++)
-                byte_offset += buf->bytecounts[y];
+            u32 byte_offset = buf->bctree.sum(view.y);
 
             auto grapheme_codepoints = new_list(uchar);
 
             auto relative_y = 0;
             for (u32 y = view.y; y < view.y + view.h && y < buf->lines.len; y++, relative_y++) {
-                defer { byte_offset += buf->bytecounts[y]; };
+                defer { byte_offset += buf->bctree.get(y); };
 
                 auto line = &buf->lines[y];
 

@@ -186,6 +186,21 @@ struct List {
         len--;
     }
 
+    T* insert(u32 i) {
+        ensure_cap(len+1);
+        memmove(items+i+1, items+i, sizeof(T) * (len-i));
+        len++;
+        return items+i;
+    }
+
+    T* insert(u32 i, T t) { return insert(i, &t); }
+
+    T* insert(u32 i, T *p) {
+        auto ret = insert(i);
+        memcpy(ret, p, sizeof(T));
+        return ret;
+    }
+
     typedef fn<bool(T* it)> find_pred;
 
     T* find(find_pred f) {
