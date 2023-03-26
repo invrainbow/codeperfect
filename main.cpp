@@ -31,6 +31,7 @@
 #include "fzy_match.h"
 #include "icons.h"
 #include "imgui.h"
+#include "tests.hpp"
 
 static const char WINDOW_TITLE[] = "CodePerfect 95";
 
@@ -951,6 +952,11 @@ int realmain(int argc, char **argv) {
 
     t.log("init world");
     SCOPED_MEM(&world.frame_mem);
+
+    if (world.test_running) {
+        run_tests(world.test_name);
+        return 0;
+    }
 
     {
         SCOPED_MEM(&world.world_mem);

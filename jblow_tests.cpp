@@ -5,16 +5,7 @@
 #include "ostype.hpp"
 #include "defer.hpp"
 #include "enums.hpp"
-
-extern "C" {
-#ifdef __cplusplus
-#   undef __cplusplus
-#   include "mtwist.h"
-#   define __cplusplus
-#else
-#   include "mtwist.h"
-#endif
-}
+#include "mtwist_shim.hpp"
 
 void Jblow_Tests::inject(Window_Event_Type type, fn<void(Window_Event*)> cb) {
     Jblow_Test_Event te; ptr0(&te);

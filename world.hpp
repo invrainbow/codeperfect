@@ -370,6 +370,9 @@ struct World {
 
     ccstr configdir;
 
+    bool test_running;
+    char test_name[256];
+
     Jblow_Tests jblow_tests;
 
     struct Frameskip {

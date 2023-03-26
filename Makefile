@@ -63,7 +63,7 @@ endif
 
 PYTHON = python3
 
-SEPARATE_SRC_FILES = tests.cpp enums.cpp
+SEPARATE_SRC_FILES = enums.cpp
 SRC_FILES := $(filter-out $(SEPARATE_SRC_FILES), $(wildcard *.cpp))
 OBJ_FILES = $(patsubst %.cpp,obj/%.o,$(SRC_FILES))
 DEP_FILES = $(patsubst %.cpp,obj/%.d,$(SRC_FILES))
@@ -76,13 +76,11 @@ ifeq ($(OSTYPE), mac)
 	OBJ_DEPS += obj/objclibs.o
 endif
 
-.PHONY: all test clean prep launcher
+.PHONY: all clean prep launcher
 
 all: build/bin/ide$(BINARY_SUFFIX) build/bin/buildcontext.go
 
 launcher: build/launcher$(BINARY_SUFFIX)
-
-test: build/bin/test build/bin/buildcontext.go
 
 prep:
 	mkdir -p obj build/bin
@@ -90,9 +88,6 @@ prep:
 clean:
 	rm -rf obj/ build/bin/
 	mkdir -p obj build/bin
-
-build/bin/test: $(filter-out obj/main.o, $(OBJ_DEPS)) obj/tests.o obj/enums.o binaries.c
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDFLAGS)
 
 build/bin/ide$(BINARY_SUFFIX): $(OBJ_DEPS) binaries.c obj/enums.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
@@ -103,9 +98,6 @@ $(OBJ_FILES): obj/%.o: %.cpp gohelper.h tstypes.hpp enums.hpp # Makefile
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 obj/enums.o: enums.cpp # Makefile
-	$(CC) $(CFLAGS) -c -o $@ $<
-
-obj/tests.o: tests.cpp # Makefile
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 obj/objclibs.o: objclibs.mm

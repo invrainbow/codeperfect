@@ -32,10 +32,11 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "test",
-            "program": "build/bin/test",
+            "name": "\"unit\" tests",
+            "program": "${workspaceFolder}/build/bin/ide",
             "args": [
-                "parser_profile"
+                "--test",
+                "bytecounts",
             ],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native",

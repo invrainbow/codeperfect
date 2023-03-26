@@ -1,3 +1,4 @@
+#include "tests.hpp"
 #include "buffer.hpp"
 #include "common.hpp"
 #include "dbg.hpp"
@@ -8,6 +9,7 @@
 #include "world.hpp"
 #include "diff.hpp"
 #include "defer.hpp"
+#include "mtwist_shim.hpp"
 
 void test_diff() {
     auto run = [&](ccstr a, ccstr b) {
@@ -285,13 +287,9 @@ struct Mark_Tree_Fuzzer {
 };
 
 void test_mark_tree_fuzz() {
-    Pool pool;
-    pool.init();
-    defer { pool.cleanup(); };
-    SCOPED_MEM(&pool);
-
     for (int i = 0; i < 10000; i++) {
-        pool.reset();
+        SCOPED_FRAME();
+
         print("trial %d", i);
 
         Mark_Tree_Fuzzer mtf;
@@ -304,11 +302,6 @@ void test_mark_tree_fuzz() {
 }
 
 void test_mark_tree_fuzz_replay() {
-    Pool pool;
-    pool.init();
-    defer { pool.cleanup(); };
-    SCOPED_MEM(&pool);
-
     Mark_Tree_Fuzzer mtf;
     mtf.init();
     defer { mtf.cleanup(); };
@@ -317,68 +310,27 @@ void test_mark_tree_fuzz_replay() {
     cp_assert(mtf.replay());
 }
 
-void profile_parser() {
-    auto &gi = world.indexer;
-    auto resolved_path = "/opt/homebrew/Cellar/go/1.18.1/libexec/src/net/http";
 
-    Timer t; t.init();
 
-    auto source_files = gi.list_source_files(resolved_path, true);
-    if (!source_files) return;
-    if (!source_files->len) return;
 
-    t.log("list source files");
 
-    For (source_files) {
-        auto filename = it;
 
-        SCOPED_FRAME();
 
-        auto filepath = path_join(resolved_path, it);
 
-        auto pf = gi.parse_file(filepath);
-        if (!pf) continue;
-        defer { gi.free_parsed_file(pf); };
 
-        t.logf("parse file: %s", it);
 
-        Go_File file;
-        file.pool.init("file pool", 512); // tweak this
-        defer { file.pool.cleanup(); };
 
-        {
-            SCOPED_MEM(&file.pool);
-            file.filename = cp_strdup(it);
-            file.scope_ops = new_list(Go_Scope_Op);
-            file.decls = new_list(Godecl);
-            file.imports = new_list(Go_Import);
-            file.references = new_list(Go_Reference);
-        }
 
-        ccstr pkgname = NULL;
-        gi.process_tree_into_gofile(&file, pf->root, filepath, &pkgname, true);
 
-        t.logf("process file: %s", it);
-        print("");
-    }
 
-    t.total();
-}
 
-int main(int argc, char *argv[]) {
-    init_platform_crap();
-    world.init();
 
-    auto match = [&](ccstr s) -> bool {
-        if (argc <= 1) return true;
-        return streq(argv[1], s);
-    };
 
-    if (match("diff")) test_diff();
-    if (match("mark_tree")) test_mark_tree();
-    if (match("mtf")) test_mark_tree_fuzz();
-    if (match("mtf_replay")) test_mark_tree_fuzz_replay();
-    if (match("parser_profile")) profile_parser();
 
-    return 0;
+void run_tests(ccstr test_name) {
+    if (streq(test_name, "diff")) test_diff();
+    if (streq(test_name, "mark_tree")) test_mark_tree();
+    if (streq(test_name, "mtf")) test_mark_tree_fuzz();
+    if (streq(test_name, "mtf_replay")) test_mark_tree_fuzz_replay();
+    if (streq(test_name, "bytecounts")) test_bytecounts();
 }

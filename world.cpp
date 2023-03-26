@@ -429,6 +429,14 @@ void World::init() {
 
 #ifndef RELEASE_MODE
 
+        else if (streq(it, "--test")) {
+            if (i+1 >= gargc) cp_panic("missing test name");
+            auto name = gargv[++i];
+
+            cp_strcpy_fixed(test_name, name);
+            test_running = true;
+        }
+
         else if (streq(it, "--jblow-tests")) {
             if (i+1 >= gargc) cp_panic("missing test name");
 
