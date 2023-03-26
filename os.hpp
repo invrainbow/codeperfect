@@ -42,11 +42,19 @@
 #   elif defined(__GNUC__) && defined(__arm__) && !defined(__thumb__)
 #       define BREAK_HERE() __asm__ volatile(".inst 0xe7f001f0");
 #   else
-#       define BREAK_HERE() cp_panic("break")
+#       define BREAK_HERE()
 #   endif
 #else
 #   define BREAK_HERE()
 #endif
+
+#ifdef DEBUG_BUILD
+#define cp_panic(s) do { BREAK_HERE(); exit(1); } while (0)
+#else
+NORETURN void cp_panic(ccstr s);
+#endif
+
+#define cp_assert(x) if (!(x)) cp_panic("assertion failed")
 
 #include "common.hpp"
 #include "list.hpp"

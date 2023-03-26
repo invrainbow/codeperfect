@@ -15,6 +15,8 @@ enum List_Mode {
 uchar* alloc_chunk_stub(s32 needed, s32* new_size);
 void free_chunk_stub(uchar* buf, s32 cap);
 
+NORETURN void panic_stub(ccstr s);
+
 void *get_current_pool_stub();
 void *alloc_from_pool_stub(void *pool, s32 n);
 
@@ -52,17 +54,17 @@ struct List {
             cap = _cap;
             items = (T*)cp_malloc(sizeof(T) * cap);
             if (!items)
-                cp_panic("unable to cp_malloc for array");
+                panic_stub("unable to cp_malloc for array");
             global_mem_allocated += sizeof(T) * cap;
             mem0(items, sizeof(T) * cap);
             break;
         case LIST_CHUNK:
             items = (T*)alloc_chunk_stub(_cap, &cap);
             if (!items)
-                cp_panic("unable to alloc chunk for array");
+                panic_stub("unable to alloc chunk for array");
             break;
         default:
-            cp_panic("invalid mode");
+            panic_stub("invalid mode");
             break;
         }
     }
@@ -166,7 +168,7 @@ struct List {
         }
 
         case LIST_UNINITIALIZED:
-            cp_panic("invalid mode");
+            panic_stub("invalid mode");
             break;
         }
 

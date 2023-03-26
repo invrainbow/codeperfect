@@ -416,7 +416,6 @@ struct enumerate {
 #define Fori(arr) for (auto &&[i, it] : enumerate(*arr))
 
 #define define_str_case(x) case x: return #x
-#define cp_assert(x) if (!(x)) cp_panic("assertion failed")
 
 void* cp_malloc(size_t size);
 void cp_free(void* p);
@@ -425,8 +424,6 @@ bool str_starts_with(ccstr a, ccstr pre);
 
 extern s32 global_mem_allocated;
 extern const u64 MAX_U64;
-
-NORETURN void cp_panic(ccstr s);
 
 extern thread_local bool is_main_thread;
 void assert_main_thread();

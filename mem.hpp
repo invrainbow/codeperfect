@@ -55,7 +55,7 @@ struct Fridge {
     T* alloc() {
         if (!head) {
             add_new_block();
-            cp_assert(head);
+            memhpp_assert_stub(head);
         }
 
         T* ret = (T*)head;
@@ -70,6 +70,8 @@ struct Fridge {
         head = el;
     }
 };
+
+void memhpp_assert_stub(bool cond);
 
 #define POOL_DEFAULT_BUCKET_SIZE 65536
 #define POOL_MEMORY_ALIGNMENT 8
@@ -189,7 +191,7 @@ struct Pool {
                 pblock = obsolete_blocks.find([&](auto it) -> bool {
                     return *it == block;
                 });
-                cp_assert(pblock);
+                memhpp_assert_stub(pblock);
                 // if the block was obsoleted, we're not going to use it,
                 // but we *can* just reset all the current used blocks
                 if (curr) {

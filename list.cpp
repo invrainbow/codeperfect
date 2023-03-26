@@ -1,4 +1,5 @@
 #include "list.hpp"
+#include "os.hpp"
 #include "mem.hpp"
 #include "utils.hpp"
 
@@ -22,4 +23,8 @@ int binary_search_stub(void *list, s32 num, s32 size, bs_stub_test_func test) {
     return binary_search(list, num, size, [&](const void *it) {
         return test(it);
     });
+}
+
+NORETURN void panic_stub(ccstr s) {
+    cp_panic(s);
 }

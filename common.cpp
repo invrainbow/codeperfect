@@ -109,36 +109,6 @@ bool boxf::contains(vec2f point) {
 
 s32 global_mem_allocated = 0;
 
-// cases to handle:
-// cp_panic from main thread
-//    throw exception, signal handler handles
-// cp_panic from nonmain thread
-//    send message to main thread, gen stacktrace, exit this thread
-//    in main thread, take stacktrace, invoke signal handler manually? lol
-// general crash
-//    signal handler handles
-
-NORETURN void cp_panic(ccstr s) {
-#ifdef DEBUG_BUILD
-    // print("%s", generate_stack_trace(s));
-    // throw exception so we can debug it
-	throw Panic_Exception(s);
-#else
-    if (is_main_thread) {
-        tell_user(s, "An error has occurred");
-        throw Panic_Exception(s);
-    } else {
-        auto st = generate_stack_trace(s);
-        world.message_queue.add([&](auto msg) {
-            msg->type = MTM_PANIC;
-            msg->panic_message = cp_strdup(s);
-            msg->panic_stacktrace = cp_strdup(st);
-        });
-        exit_thread(1);
-    }
-#endif
-}
-
 void assert_main_thread() {
     cp_assert(is_main_thread);
 }

@@ -1,5 +1,6 @@
 #include "diff.hpp"
 #include "mem.hpp"
+#include "os.hpp"
 
 DString new_dstr(List<uchar> *text) {
     DString i;
@@ -14,6 +15,15 @@ Diff *add_diff(List<Diff> *arr, Diff_Type type, DString s) {
     diff->type = type;
     diff->s = s;
     return diff;
+}
+
+uchar DString::get(int i) {
+    if (i < 0)
+        i = len()+i;
+    if (start+i >= end) {
+        cp_panic("out of bounds");
+    }
+    return text->at(start + i);
 }
 
 int index_of(DString big, DString small, int start = 0) {

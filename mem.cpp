@@ -91,3 +91,5 @@ void free_chunk(uchar* buf, s32 cap) {
         default: cp_free(buf); break;
     }
 }
+
+void memhpp_assert_stub(bool cond) { cp_assert(cond); }

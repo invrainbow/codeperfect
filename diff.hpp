@@ -30,14 +30,7 @@ struct DString {
         return ret;
     }
 
-    uchar get(int i) {
-        if (i < 0)
-            i = len()+i;
-        if (start+i >= end) {
-            cp_panic("out of bounds");
-        }
-        return text->at(start + i);
-    }
+    uchar get(int i);
 
     bool equals(DString other) {
         if (len() != other.len()) return false;
