@@ -202,18 +202,7 @@ bool menu_command(Command cmd, bool selected) {
 }
 
 int get_line_number_width(Editor *editor) {
-    auto buf = editor->buf;
-
-    u32 maxval = 0;
-    if (world.replace_line_numbers_with_bytecounts) {
-        For (&buf->bytecounts)
-            if (it > maxval)
-                maxval = it;
-    } else {
-        maxval = buf->lines.len;
-    }
-
-    return max(4, (int)log10(maxval) + 1);
+    return max(4, (int)log10(editor->buf->lines.len) + 1);
 }
 
 vec3f merge_colors(vec3f a, vec3f b, float perc) {
@@ -2506,7 +2495,6 @@ void UI::draw_everything() {
             im::MenuItem("History viewer", NULL, &world.wnd_history.show);
             im::MenuItem("Show mouse position", NULL, &world.wnd_mouse_pos.show);
             im::MenuItem("Style editor", NULL, &world.wnd_style_editor.show);
-            im::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
             im::MenuItem("Disable framerate cap", NULL, &world.turn_off_framerate_cap);
             im::MenuItem("Hover Info", NULL, &world.wnd_hover_info.show);
             im::MenuItem("Show frame index", NULL, &world.show_frame_index);
@@ -7004,11 +6992,7 @@ void UI::draw_everything() {
 
                 {
                     cur_pos.x += settings.line_number_margin_left;
-                    ccstr line_number_str = NULL;
-                    if (world.replace_line_numbers_with_bytecounts)
-                        line_number_str = cp_sprintf("%*d", line_number_width, buf->bytecounts[y]);
-                    else
-                        line_number_str = cp_sprintf("%*d", line_number_width, y + 1);
+                    ccstr line_number_str = line_number_str = cp_sprintf("%*d", line_number_width, y + 1);
                     auto len = strlen(line_number_str);
                     for (u32 i = 0; i < len; i++)
                         draw_char(&cur_pos, line_number_str[i], rgba(global_colors.foreground, 0.3));

@@ -515,7 +515,6 @@ struct World {
     // cur2 navigating_to_pos;
     // int navigating_to_editor;
 
-    bool replace_line_numbers_with_bytecounts;
     bool turn_off_framerate_cap;
     bool show_frame_index;
     bool trace_next_frame;
