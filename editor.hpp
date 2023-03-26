@@ -147,10 +147,14 @@ struct Motion_Range {
     cur2 start;
     cur2 end;
     bool is_line;
-    // stuff for is_line
-    bool at_end;
-    int y1;
-    int y2;
+
+    union {
+        struct {
+            bool at_end;
+            int y1;
+            int y2;
+        } line_info;
+    };
 };
 
 enum Selection_Type {

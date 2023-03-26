@@ -4691,9 +4691,9 @@ Motion_Range* Editor::vim_process_motion(Motion_Result *motion_result) {
         ret->start = start;
         ret->end = end;
         ret->is_line = true;
-        ret->at_end = at_end;
-        ret->y1 = y1;
-        ret->y2 = y2;
+        ret->line_info.at_end = at_end;
+        ret->line_info.y1 = y1;
+        ret->line_info.y2 = y2;
     }
     }
     return ret;
@@ -5160,10 +5160,12 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             auto paste_and_move_cursor = [&](cur2 pos) {
                 auto newpos = NULL_CUR;
                 for (int i = 0; i < o_count; i++) {
+                    int oldy = pos.y;
+                    pos = buf->insert(pos, text->items, text->len);
+
                     // for line based pasting, move cursor to beginning of first line
                     if (as_line && i == 0)
-                        newpos = new_cur2(first_nonspace_cp(pos.y), pos.y);
-                    pos = buf->insert(pos, text->items, text->len);
+                        newpos = new_cur2(first_nonspace_cp(oldy), oldy);
                 }
                 if (newpos == NULL_CUR)
                     newpos = buf->dec_gr(pos);
@@ -5546,7 +5548,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                 auto res = vim_process_motion(motion_result);
                 enter_insert_mode([&]() {
                     vim_delete_range(res->start, res->end);
-                    move_cursor(res->is_line ? open_newline(res->y1) : res->start);
+                    move_cursor(res->is_line ? open_newline(res->line_info.y1) : res->start);
                 });
                 *can_dotrepeat = true;
                 return true;
@@ -5570,7 +5572,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                 auto res = vim_process_motion(motion_result);
                 if (res->is_line) {
                     vim_delete_range(res->start, res->end);
-                    int y = res->y1;
+                    int y = res->line_info.y1;
                     CLAMP_LINE_Y(y);
                     move_cursor_normal(new_cur2(first_nonspace_cp(y), y));
                 } else {
@@ -5599,18 +5601,23 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                 auto res = vim_process_motion(motion_result);
                 if (res->is_line) {
                     auto real_start = res->start;
-                    if (res->at_end)
+                    if (res->line_info.at_end)
                         real_start = buf->inc_cur(real_start);
 
                     auto text = buf->get_text(real_start, res->end);
-                    if (res->at_end)
+                    if (res->line_info.at_end)
                         text = cp_strcat(text, "\n");
 
                     vim_yank_text(text);
-                    move_cursor_normal(real_start);
                 } else {
                     vim_yank_text(buf->get_text(res->start, res->end));
-                    move_cursor_normal(res->start);
+
+                    switch (motion_result->type) {
+                    case MOTION_OBJ:
+                    case MOTION_OBJ_INNER:
+                        move_cursor_normal(res->start);
+                        break;
+                    }
                 }
                 *can_dotrepeat = true;
                 return true;
