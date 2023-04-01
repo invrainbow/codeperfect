@@ -1697,9 +1697,11 @@ void Mark_Tree::check_duplicate_marks() {
 }
 
 void Mark_Tree::check_tree_integrity() {
+#ifdef DEBUG_BUILD
     check_ordering();
     check_mark_cycle(root);
     check_duplicate_marks();
+#endif
 }
 
 void Mark_Tree::check_ordering() {
