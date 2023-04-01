@@ -334,7 +334,7 @@ struct Editor {
     void init();
     void cleanup();
 
-    bool is_unsaved() { return is_modifiable() && (file_was_deleted || buf->dirty); }
+    bool is_unsaved();
     bool is_modifiable();
 
     void move_cursor(cur2 c, Move_Cursor_Opts *opts = NULL);

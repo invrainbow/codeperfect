@@ -2433,6 +2433,21 @@ void Editor::handle_save(bool about_to_close) {
     }
 }
 
+bool Editor::is_unsaved() {
+    if (!is_modifiable())
+        return false;
+    if (file_was_deleted)
+        return true;
+    if (buf->dirty) {
+        // even if it's dirty, don't count it as unsaved if it's an untitled empty file
+        if (is_untitled)
+            if (buf->lines.len == 1 && !buf->lines[0].len)
+                return false;
+        return true;
+    }
+    return false;
+}
+
 bool Editor::ask_user_about_unsaved_changes() {
     if (!is_unsaved()) return true;
 
