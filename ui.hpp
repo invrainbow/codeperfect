@@ -314,6 +314,7 @@ struct UI {
     Keyboard_Nav get_keyboard_nav(Wnd *wnd, int flags);
     bool im_begin_popup_rect(ccstr str_id, boxf rect);
     bool im_begin_popup(ccstr str_id);
+    void im_select_all_last();
 };
 
 extern UI ui;
@@ -400,3 +401,5 @@ ccstr get_import_path_label(ccstr import_path, Go_Workspace *workspace);
 
 extern const int ZOOM_LEVELS[];
 extern const int ZOOM_LEVELS_COUNT;
+
+bool check_cmd_flag(bool *b);

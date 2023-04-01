@@ -2626,7 +2626,7 @@ void handle_command(Command cmd, bool from_menu) {
         auto &wnd = world.wnd_search_and_replace;
         if (wnd.show) {
             wnd.cmd_focus = true;
-            wnd.focus_textbox = 1;
+            wnd.cmd_focus_textbox = true;
         }
         wnd.show = true;
         wnd.replace = (cmd == CMD_SEARCH_AND_REPLACE);
@@ -3998,6 +3998,7 @@ void open_current_file_search(bool replace, bool from_vim) {
 
     if (wnd.show) {
         wnd.cmd_focus = true;
+        wnd.cmd_focus_search = true;
     } else {
         wnd.show = true;
         cp_strcpy_fixed(wnd.query, wnd.permanent_query);

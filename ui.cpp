@@ -543,17 +543,11 @@ void UI::init_window(Wnd *wnd) {
 
     wnd->appearing = im::IsWindowAppearing();
 
-    auto checkflag = [](bool *b) {
-        auto ret = *b;
-        *b = false;
-        return ret;
-    };
-
-    if (checkflag(&wnd->cmd_focus)) {
+    if (check_cmd_flag(&wnd->cmd_focus)) {
         im::SetWindowFocus();
     }
 
-    if (checkflag(&wnd->cmd_make_visible_but_dont_focus)) {
+    if (check_cmd_flag(&wnd->cmd_make_visible_but_dont_focus)) {
         im::SetWindowFocus();
         im::SetWindowFocus(NULL);
     }
@@ -4810,7 +4804,9 @@ void UI::draw_everything() {
         else
             label = cp_sprintf("%d of %d", fs.current_idx + 1, matches.len);
 
-        if (im_input_text_full(cp_sprintf("Search (%s)", label), "current_file_search_search", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
+        auto text_input_id = "current_file_search_search";
+
+        if (im_input_text_full(cp_sprintf("Search (%s)", label), text_input_id, wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
             if (wnd.opened_from_vim) {
                 wnd.show = false;
                 im::SetWindowFocus(NULL);
@@ -4822,6 +4818,12 @@ void UI::draw_everything() {
                     ed->move_cursor(matches[idx].start);
                 }
             }
+        }
+
+
+        if (check_cmd_flag(&wnd.cmd_focus_search)) {
+            im::SetKeyboardFocusHere(-1);
+            im_select_all_last();
         }
 
         if (im::IsItemEdited()) {
@@ -5221,25 +5223,17 @@ void UI::draw_everything() {
 
         im_push_mono_font();
         {
-            auto should_focus_textbox = [&]() -> bool {
-                if (wnd.focus_textbox == 1) {
-                    wnd.focus_textbox = 2;
-                    return true;
-                }
-                if (wnd.focus_textbox == 2) {
-                    wnd.focus_textbox = 0;
-                    return true;
-                }
-                return false;
-            };
+            bool focus_textbox = im::IsWindowAppearing() || check_cmd_flag(&wnd.cmd_focus_textbox);
 
-            if (im::IsWindowAppearing() || should_focus_textbox()) {
-                im::SetKeyboardFocusHere();
-                im::SetScrollHereY();
-            }
+            if (focus_textbox) im::SetScrollHereY();
 
             if (im_input_text_full("Search for", wnd.find_str, _countof(wnd.find_str), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll))
                 search_again = true;
+
+            if (focus_textbox) {
+                im::SetKeyboardFocusHere(-1);
+                im_select_all_last();
+            }
 
             if (im::IsItemEdited())
                 search_again = true;
@@ -7752,6 +7746,14 @@ ccstr get_import_path_label(ccstr import_path, Go_Workspace *workspace) {
     return cp_sprintf("%s/%s", mod_short, import_path);
 }
 
+void UI::im_select_all_last() {
+    auto g = im::GetCurrentContext();
+    if (g) {
+        auto state = im::GetInputTextState(g->LastItemData.ID);
+        if (state) state->SelectAll();
+    }
+}
+
 bool UI::im_begin_popup(ccstr str_id) {
     auto ret = im::BeginPopup(str_id);
     if (ret)
@@ -8676,4 +8678,10 @@ bool Font::can_render_grapheme(Grapheme gr) {
         if (!stbtt_FindGlyphIndex(&stbfont, it))
             return false;
     return true;
+}
+
+bool check_cmd_flag(bool *b) {
+    auto ret = *b;
+    *b = false;
+    return ret;
 }

@@ -547,6 +547,7 @@ struct World {
         bool use_regex;
         // bool search_in_selection;
         bool opened_from_vim;
+        bool cmd_focus_search;
     } wnd_current_file_search;
 
     struct Wnd_Enter_License : Wnd {
@@ -742,7 +743,7 @@ struct World {
         char replace_str[256];
         bool use_regex;
         bool case_sensitive;
-        int focus_textbox;
+        bool cmd_focus_textbox;
         int sel_file;
         int sel_result;
         int scroll_file;
