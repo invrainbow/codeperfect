@@ -239,10 +239,17 @@ struct List {
         return true;
     }
 
-    void concat(const T *arr, u32 len) {
+    void concat(const T *arr, u32 n) {
+        ensure_cap(len+n);
+        memcpy(items+len, arr, sizeof(T) * n);
+        len += n;
+    }
+
+    /*
         for (u32 i = 0; i < len; i++)
             append((T*)&arr[i]);
     }
+    */
 
     void concat(List<T> *x) { concat(x->items, x->len); }
 

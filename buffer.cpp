@@ -294,6 +294,49 @@ void Buffer::hist_apply_change(Change *change, bool undo) {
     insert(start, new_text->items, new_text->len, true);
 }
 
+void Buffer::tree_batch_start() {
+    tree_batch_mode = true;
+    tree_batch_edits.len = 0;
+    tree_batch_refs++;
+}
+
+void Buffer::tree_batch_end() {
+    Timer t; t.init("tree_batch_end"); t.always_log = true;
+
+    tree_batch_refs--;
+    if (tree_batch_refs == 0) {
+        tree_batch_mode = false;
+
+        TSInputEdit curr;
+        memcpy(&curr, &tree_batch_edits[0], sizeof(TSInputEdit));
+
+        Fori (&tree_batch_edits) {
+            if (i == 0) continue;
+
+            // if we can merge edit and it, do so
+            // otherwise, apply curr and set curr to it
+            if (curr.new_end_byte == it.old_end_byte) {
+                if (it.start_byte < curr.start_byte) {
+                    curr.start_byte = it.start_byte;
+                    curr.start_point = it.start_point;
+                }
+                curr.new_end_byte = it.new_end_byte;
+                curr.new_end_point = it.new_end_point;
+            } else {
+                ts_tree_edit(tree, &curr);
+                memcpy(&curr, &it, sizeof(TSInputEdit));
+            }
+        }
+        ts_tree_edit(tree, &curr);
+
+        t.log("apply tsedits");
+
+        update_tree();
+
+        t.log("call update_tree");
+    }
+}
+
 cur2 Buffer::hist_undo() {
     if (hist_curr == hist_start) return NULL_CUR;
 
@@ -335,17 +378,49 @@ cur2 Buffer::hist_redo() {
     return ret;
 }
 
+List<uchar>* Buffer::get_uchars(cur2 start, cur2 end, int limit, cur2 *actual_end) {
+    // make sure start and end are valid
+    if (start.x > lines[start.y].len) start.x = lines[start.y].len;
+    if (end.y >= lines.len)           end.y = lines.len-1;
+    if (end.x > lines[end.y].len)     end.x = lines[end.y].len;
+
+    auto ret = new_list(uchar);
+
+    if (limit != -1)
+        *actual_end = end;
+
+    for (int y = start.y; y <= end.y; y++) {
+        int xstart = y == start.y ? start.x : 0;
+        int xend = y == end.y ? end.x : lines[y].len;
+
+        int count = xend - xstart;
+        if (y < end.y) count++; // '\n'
+
+        if (limit != -1 && count > limit) {
+            ret->concat(lines[y].items + xstart, limit);
+            *actual_end = new_cur2(xstart + limit, y);
+            break;
+        } else {
+            ret->concat(lines[y].items + xstart, xend - xstart);
+            if (y < end.y)
+                ret->append('\n');
+        }
+
+        if (limit != -1)
+            limit -= count;
+    }
+
+    return ret;
+}
+
 ccstr Buffer::get_text(cur2 start, cur2 end) {
     auto ret = new_list(char);
-    char tmp[4];
 
-    // make sure start is valid
-    if (start.x > lines[start.y].len)
-        start.x = lines[start.y].len;
-
-    for (auto it = iter(start); it.pos < end && !it.eof(); it.next())
-        for (int i = 0, n = uchar_to_cstr(it.peek(), tmp); i < n; i++)
-            ret->append(tmp[i]);
+    For (get_uchars(start, end)) {
+        char tmp[4];
+        int count = uchar_to_cstr(it, tmp);
+        ret->concat(tmp, count);
+    }
 
     ret->append('\0');
     return ret->items;
@@ -382,6 +457,7 @@ void Buffer::init(Pool *_mem, int _lang, bool _use_history) {
         lines.init(LIST_POOL, 128);
         edit_buffer_old.init();
         edit_buffer_new.init();
+        tree_batch_edits.init();
     }
 
     initialized = true;
@@ -714,17 +790,20 @@ void Buffer::update_tree() {
             return buf->tsinput_buffer;
         }
 
-        auto it = buf->iter(new_cur2(buf->idx_byte_to_cp(pos.row, pos.column, true), pos.row));
+        auto start = new_cur2(buf->idx_byte_to_cp(pos.row, pos.column, true), pos.row);
+
+        int y = buf->lines.len-1;
+        auto end = new_cur2(buf->lines[y].len, y);
+
+        cur2 junk;
+        auto uchars = buf->get_uchars(start, end, _countof(buf->tsinput_buffer), &junk);
+
         u32 n = 0;
-
-        while (!it.eof()) {
-            auto uch = it.next();
-            if (!uch) break;
-
-            auto size = uchar_size(uch);
-            if (n + size + 1 > _countof(buf->tsinput_buffer)) break;
-
-            n += uchar_to_cstr(uch, &buf->tsinput_buffer[n]);
+        For (uchars) {
+            auto size = uchar_size(it);
+            if (n + size + 1 > _countof(buf->tsinput_buffer))
+                break;
+            n += uchar_to_cstr(it, &buf->tsinput_buffer[n]);
         }
 
         *read = n;
@@ -749,10 +828,7 @@ void Buffer::internal_start_edit(cur2 start, cur2 end) {
     tsedit.old_end_point = cur_to_tspoint(end);
 
     edit_buffer_old.len = 0;
-    edit_buffer_new.len = 0;
-
-    for (auto it = iter(start); it.pos < end && !it.eof(); it.next())
-        edit_buffer_old.append(it.peek());
+    edit_buffer_old.concat(get_uchars(start, end));
 }
 
 void Buffer::internal_finish_edit(cur2 new_end) {
@@ -762,9 +838,12 @@ void Buffer::internal_finish_edit(cur2 new_end) {
     tsedit.new_end_point = cur_to_tspoint(new_end);
 
     if (lang != LANG_NONE) {
-        ts_tree_edit(tree, &tsedit);
-        if (!tree_batch_mode)
+        if (!tree_batch_mode) {
+            ts_tree_edit(tree, &tsedit);
             update_tree();
+        } else {
+            tree_batch_edits.append(&tsedit);
+        }
     }
 
     // set this here or in .remove() and .insert()?
@@ -781,8 +860,8 @@ void Buffer::internal_update_mark_tree() {
         auto start = tspoint_to_cur(tsedit.start_point);
         auto end = tspoint_to_cur(tsedit.new_end_point);
 
-        for (auto it = iter(start); it.pos < end && !it.eof(); it.next())
-            edit_buffer_new.append(it.peek());
+        edit_buffer_new.len = 0;
+        edit_buffer_new.concat(get_uchars(start, end));
     }
 
     auto a = new_dstr(&edit_buffer_old);
@@ -904,10 +983,7 @@ void Buffer::internal_commit_insert_to_history(cur2 start, cur2 end) {
         if (start == c->new_end) {
             if (c->new_text.len + internal_distance_between(start, end) < CHUNKMAX) {
                 c->new_end = end;
-
-                auto it = iter(start);
-                while (it.pos != end)
-                    change->new_text.append(it.next());
+                change->new_text.concat(get_uchars(start, end));
                 return;
             }
         }
@@ -924,13 +1000,11 @@ void Buffer::internal_commit_insert_to_history(cur2 start, cur2 end) {
         change->start = start;
         change->old_end = start;
 
-        auto it = iter(start);
-        for (; it.pos != end; it.next())
-            if (!change->new_text.append(it.peek()))
-                break;
-
-        change->new_end = it.pos;
-        start = it.pos;
+        cur2 real_end;
+        auto uchars = get_uchars(start, end, CHUNKMAX - change->new_text.len, &real_end);
+        change->new_text.concat(uchars);
+        change->new_end = real_end;
+        start = real_end;
     }
 }
 
@@ -966,11 +1040,10 @@ void Buffer::internal_commit_remove_to_history(cur2 start, cur2 end) {
 
                 // basically, prepend to old_text
                 auto tmp = new_list(uchar);
-                For (&c->old_text) tmp->append(it);
+                tmp->concat(&c->old_text);
                 c->old_text.len = 0;
-                for (auto it = iter(start); it.pos != new_end; it.next())
-                    c->old_text.append(it.peek());
-                For (tmp) c->old_text.append(it);
+                c->old_text.concat(get_uchars(start, new_end));
+                c->old_text.concat(tmp);
                 return;
             }
         }
@@ -993,22 +1066,21 @@ void Buffer::internal_commit_remove_to_history(cur2 start, cur2 end) {
         change->new_end = old_start;
         change->old_text.len = 0;
 
-        auto it = iter(start);
-        for (; it.pos != end; it.next())
-            if (!change->old_text.append(it.peek()))
-                break;
+        cur2 real_end;
+        auto uchars = get_uchars(start, end, CHUNKMAX - change->old_text.len, &real_end);
+        change->old_text.concat(uchars);
 
-        // take old_start + (it.pos - start)
+        // take old_start + (real_end - start)
         auto adjusted_end = old_start;
-        if (it.pos.y != start.y) {
-            adjusted_end.x = it.pos.x;
-            adjusted_end.y += (it.pos.y - start.y);
+        if (real_end.y != start.y) {
+            adjusted_end.x = real_end.x;
+            adjusted_end.y += (real_end.y - start.y);
         } else {
-            adjusted_end.x += (it.pos.x - start.x);
+            adjusted_end.x += (real_end.x - start.x);
         }
         change->old_end = adjusted_end;
 
-        start = it.pos;
+        start = real_end;
     }
 }
 

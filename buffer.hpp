@@ -237,19 +237,10 @@ struct Buffer {
 
     bool tree_batch_mode;
     int tree_batch_refs;
+    List<TSInputEdit> tree_batch_edits;
 
-    void tree_batch_start() {
-        tree_batch_mode = true;
-        tree_batch_refs++;
-    }
-
-    void tree_batch_end() {
-        tree_batch_refs--;
-        if (tree_batch_refs == 0) {
-            tree_batch_mode = false;
-            update_tree();
-        }
-    }
+    void tree_batch_start();
+    void tree_batch_end();
 
     // TODO: if we have any more ring buffers, consider refactor
 
@@ -341,6 +332,7 @@ struct Buffer {
     u32 idx_cp_to_vcp(int y, int off) { return internal_convert_x_vx(y, off, true); }
 
     ccstr get_text(cur2 start, cur2 end);
+    List<uchar>* get_uchars(cur2 start, cur2 end, int limit = -1, cur2 *actual_end = NULL);
 
     bool is_valid(cur2 c);
     cur2 fix_cur(cur2 c);
