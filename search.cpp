@@ -230,6 +230,7 @@ bool Searcher::start_search(ccstr _query, Searcher_Opts *_opts) {
     SCOPED_MEM(&mem);
 
     bool ok = false;
+    search_start_time_milli = current_time_milli();
     state = SEARCH_SEARCH_IN_PROGRESS;
     defer { if (!ok) state = SEARCH_NOTHING_HAPPENING; };
 

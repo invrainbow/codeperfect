@@ -124,6 +124,7 @@ struct Searcher {
     Searcher_State state;
     Searcher_Opts opts;
     ccstr replace_with;
+    u64 search_start_time_milli;
 
     List<ccstr> *include_parts;
     List<ccstr> *exclude_parts;

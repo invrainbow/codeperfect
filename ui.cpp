@@ -5217,7 +5217,7 @@ void UI::draw_everything() {
         auto title = cp_sprintf("%s###search_and_replace", wnd.replace ? "Search and Replace" : "Search");
         begin_window(title, &wnd, ImGuiWindowFlags_AlwaysAutoResize, false, true);
 
-        bool entered = false;
+        bool search_again = false;
 
         im_push_mono_font();
         {
@@ -5239,26 +5239,29 @@ void UI::draw_everything() {
             }
 
             if (im_input_text_full("Search for", wnd.find_str, _countof(wnd.find_str), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll))
-                entered = true;
+                search_again = true;
+
+            if (im::IsItemEdited())
+                search_again = true;
 
             if (wnd.replace)
                 if (im_input_text_full("Replace with", wnd.replace_str, _countof(wnd.replace_str), ImGuiInputTextFlags_EnterReturnsTrue))
-                    entered = true;
+                    search_again = true;
         }
         im_pop_font();
 
         im_small_newline();
 
         if (im::Checkbox("Case-sensitive", &wnd.case_sensitive))
-            entered = true;
+            search_again = true;
 
         im::SameLine();
         if (im::Checkbox("Regular expression", &wnd.use_regex))
-            entered = true;
+            search_again = true;
 
         im_small_newline();
 
-        if (entered) {
+        if (search_again) {
             auto &s = world.searcher;
 
             s.cleanup();
@@ -5280,10 +5283,13 @@ void UI::draw_everything() {
 
         switch (world.searcher.state) {
         case SEARCH_SEARCH_IN_PROGRESS:
-            im::Text("Searching...");
-            im::SameLine();
-            if (im::Button("Cancel")) {
-                world.searcher.cleanup();
+            // wait 100ms before showing "searching..." to avoid flicker
+            if (current_time_milli() - world.searcher.search_start_time_milli > 100) {
+                im::Text("Searching...");
+                im::SameLine();
+                if (im::Button("Cancel")) {
+                    world.searcher.cleanup();
+                }
             }
             break;
         case SEARCH_SEARCH_DONE: {
