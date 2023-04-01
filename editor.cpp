@@ -5173,17 +5173,15 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             bool as_line = (*text->last() == '\n');
 
             auto paste_and_move_cursor = [&](cur2 pos) {
-                auto newpos = NULL_CUR;
-                for (int i = 0; i < o_count; i++) {
-                    int oldy = pos.y;
-                    pos = buf->insert(pos, text->items, text->len);
+                auto full_text = new_list(uchar);
+                for (int i = 0; i < o_count; i++)
+                    full_text->concat(text);
 
-                    // for line based pasting, move cursor to beginning of first line
-                    if (as_line && i == 0)
-                        newpos = new_cur2(first_nonspace_cp(oldy), oldy);
-                }
-                if (newpos == NULL_CUR)
-                    newpos = buf->dec_gr(pos);
+                cur2 newpos = buf->insert(pos, full_text->items, full_text->len);
+                if (as_line)
+                    newpos = new_cur2(first_nonspace_cp(pos.y), pos.y);
+                else
+                    newpos = buf->dec_gr(newpos);
                 move_cursor_normal(newpos);
             };
 
