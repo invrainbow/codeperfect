@@ -368,6 +368,7 @@ struct World {
     Fridge<Chunk4> chunk4_fridge;
     Fridge<Chunk5> chunk5_fridge;
     Fridge<Chunk6> chunk6_fridge;
+    Fridge<Chunk7> chunk7_fridge;
 
     ccstr configdir;
 

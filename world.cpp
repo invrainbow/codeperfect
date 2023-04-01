@@ -375,6 +375,7 @@ void World::init() {
     chunk4_fridge.init(32);
     chunk5_fridge.init(16);
     chunk6_fridge.init(8);
+    chunk7_fridge.init(8);
 
     t.log("init random shit");
 

@@ -52,7 +52,7 @@ void* _alloc_mem(s32 size, bool zero) {
 }
 
 uchar* alloc_chunk(s32 needed, s32* new_size) {
-    Chunk_Size sizes[] = { CHUNK0, CHUNK1, CHUNK2, CHUNK3, CHUNK4, CHUNK5, CHUNK6 };
+    Chunk_Size sizes[] = { CHUNK0, CHUNK1, CHUNK2, CHUNK3, CHUNK4, CHUNK5, CHUNK6, CHUNK7 };
 
     for (auto size : sizes) {
         if (size < needed) continue;
@@ -66,6 +66,7 @@ uchar* alloc_chunk(s32 needed, s32* new_size) {
             case CHUNK4: return (uchar*)world.chunk4_fridge.alloc();
             case CHUNK5: return (uchar*)world.chunk5_fridge.alloc();
             case CHUNK6: return (uchar*)world.chunk6_fridge.alloc();
+            case CHUNK7: return (uchar*)world.chunk7_fridge.alloc();
         }
     }
 
@@ -88,6 +89,7 @@ void free_chunk(uchar* buf, s32 cap) {
         case CHUNK4: world.chunk4_fridge.free((Chunk4*)buf); break;
         case CHUNK5: world.chunk5_fridge.free((Chunk5*)buf); break;
         case CHUNK6: world.chunk6_fridge.free((Chunk6*)buf); break;
+        case CHUNK7: world.chunk7_fridge.free((Chunk7*)buf); break;
         default: cp_free(buf); break;
     }
 }

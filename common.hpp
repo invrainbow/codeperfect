@@ -79,9 +79,10 @@ enum Chunk_Size {
     CHUNK4 = 5000,
     CHUNK5 = 10000,
     CHUNK6 = 20000,
+    CHUNK7 = 100000, // !!
 };
 
-#define CHUNKMAX CHUNK6
+#define CHUNKMAX CHUNK7
 
 typedef uchar Chunk0[CHUNK0];
 typedef uchar Chunk1[CHUNK1];
@@ -90,6 +91,7 @@ typedef uchar Chunk3[CHUNK3];
 typedef uchar Chunk4[CHUNK4];
 typedef uchar Chunk5[CHUNK5];
 typedef uchar Chunk6[CHUNK6];
+typedef uchar Chunk7[CHUNK7];
 
 struct vec2f;
 
