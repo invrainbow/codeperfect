@@ -931,6 +931,9 @@ Editor* goto_file_and_pos(ccstr file, cur2 pos, bool pos_in_byte_format, Ensure_
     auto editor = focus_editor(file, pos, pos_in_byte_format);
     if (!editor) return NULL; // TODO
 
+    if (world.vim.on && world.vim_mode() != VI_NORMAL)
+        editor->trigger_escape();
+
     editor->ensure_cursor_on_screen_by_moving_view(mode);
 
     world.cmd_unfocus_all_windows = true;
