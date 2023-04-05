@@ -191,7 +191,7 @@ List<ccstr> *list_go_files(ccstr subfolder) {
         list_directory(fullpath, [&](auto ent) {
             if (ent->type == DIRENT_FILE) {
                 if (str_ends_with(ent->name, ".go"))
-                    if (is_file_included_in_build(path_join(cwd, path_join(fullpath, ent->name))))
+                    if (is_file_included_in_build(path_join(cwd, fullpath, ent->name)))
                         go_files->append(path_join(path, ent->name));
             } else {
                 queue->append(path_join(path, ent->name));
