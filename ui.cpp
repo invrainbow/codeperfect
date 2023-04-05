@@ -2116,22 +2116,22 @@ void UI::im_small_newline() {
     im::Dummy(ImVec2(0.0f, im::GetFrameHeightWithSpacing() * 1/4));
 }
 
-bool UI::im_input_text_full(ccstr label, ccstr inputid, char *buf, int count, int flags) {
+bool UI::im_input_text_ex(ccstr label, ccstr inputid, char *buf, int count, int flags) {
     im::PushItemWidth(-1);
     defer { im::PopItemWidth(); };
 
-    im_push_ui_font();
-    im::Text("%s", label);
-    im_pop_font();
+    if (label) {
+        im_push_ui_font();
+        im::Text("%s", label);
+        im_pop_font();
+    }
 
     return im::InputText(cp_sprintf("###%s", inputid), buf, count, flags);
 }
 
-bool UI::im_input_text_full(ccstr label, char *buf, int count, int flags) {
-    return im_input_text_full(label, label, buf, count, flags);
+bool UI::im_input_text(ccstr label, char *buf, int count, int flags) {
+    return im_input_text_ex(label, label, buf, count, flags);
 }
-
-#define im_input_text_full_fixbuf(x, y) im_input_text_full(x, y, _countof(y))
 
 void UI::open_project_settings() {
     auto &wnd = world.wnd_project_settings;
@@ -3550,7 +3550,7 @@ void UI::draw_everything() {
 
             focus_keyboard_here(&wnd);
 
-            if (im_input_text_full("", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
+            if (im_input_text_fixbuf("", wnd.query, ImGuiInputTextFlags_EnterReturnsTrue)) {
                 do_generate_implementation();
                 wnd.show = false;
                 im::SetWindowFocus(NULL);
@@ -3645,7 +3645,7 @@ void UI::draw_everything() {
         im_push_mono_font();
 
         focus_keyboard_here(&wnd);
-        if (im_input_text_full(cp_sprintf("Rename %s to", wnd.declres->decl->name), wnd.rename_to, _countof(wnd.rename_to), ImGuiInputTextFlags_EnterReturnsTrue)) {
+        if (im_input_text_fixbuf(cp_sprintf("Rename %s to", wnd.declres->decl->name), wnd.rename_to, ImGuiInputTextFlags_EnterReturnsTrue)) {
             submitted = true;
         }
 
@@ -3739,12 +3739,12 @@ void UI::draw_everything() {
 
         begin_centered_window("Enter License Key", &wnd, 0, 500);
 
-        if (im_input_text_full("Email", wnd.email, _countof(wnd.email), ImGuiInputTextFlags_EnterReturnsTrue))
+        if (im_input_text_fixbuf("Email", wnd.email, ImGuiInputTextFlags_EnterReturnsTrue))
             entered = true;
 
         im_small_newline();
 
-        if (im_input_text_full("License Key", wnd.license, _countof(wnd.license), ImGuiInputTextFlags_EnterReturnsTrue))
+        if (im_input_text_fixbuf("License Key", wnd.license, ImGuiInputTextFlags_EnterReturnsTrue))
             entered = true;
 
         im_small_newline();
@@ -3952,7 +3952,7 @@ void UI::draw_everything() {
         if (!wnd.focused) wnd.show = false;
 
         im_push_mono_font();
-        bool entered = im_input_text_full("Name", wnd.name, _countof(wnd.name), ImGuiInputTextFlags_EnterReturnsTrue);
+        bool entered = im_input_text_fixbuf("New name", wnd.name, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
         im_pop_font();
 
         do {
@@ -4021,7 +4021,7 @@ void UI::draw_everything() {
         if (!wnd.focused) wnd.show = false;
 
         im_push_mono_font();
-        bool entered = im_input_text_full("Name", wnd.name, _countof(wnd.name), ImGuiInputTextFlags_EnterReturnsTrue);
+        bool entered = im_input_text_fixbuf("Name", wnd.name, ImGuiInputTextFlags_EnterReturnsTrue);
         im_pop_font();
 
         if (entered) {
@@ -4589,7 +4589,7 @@ void UI::draw_everything() {
                         }
 
                         im_with_disabled(dp.is_builtin, [&]() {
-                            im_input_text_full_fixbuf("Name", dp.label);
+                            im_input_text_fixbuf("Name", dp.label);
                         });
 
                         im_small_newline();
@@ -4618,7 +4618,7 @@ void UI::draw_everything() {
 
                             im_with_disabled(dp.test_package.use_current_package, [&]() {
                                 im_push_mono_font();
-                                im_input_text_full_fixbuf("Package path", dp.test_package.package_path);
+                                im_input_text_fixbuf("Package path", dp.test_package.package_path);
                                 im_pop_font();
                             });
 
@@ -4634,7 +4634,7 @@ void UI::draw_everything() {
 
                             im_with_disabled(dp.run_package.use_current_package, [&]() {
                                 im_push_mono_font();
-                                im_input_text_full_fixbuf("Package path", dp.run_package.package_path);
+                                im_input_text_fixbuf("Package path", dp.run_package.package_path);
                                 im_pop_font();
                             });
 
@@ -4643,14 +4643,14 @@ void UI::draw_everything() {
 
                         case DEBUG_RUN_BINARY:
                             im_push_mono_font();
-                            im_input_text_full_fixbuf("Binary path", dp.run_binary.binary_path);
+                            im_input_text_fixbuf("Binary path", dp.run_binary.binary_path);
                             im_pop_font();
                             im_small_newline();
                             break;
                         }
 
                         im_push_mono_font();
-                        im_input_text_full_fixbuf("Additional arguments", dp.args);
+                        im_input_text_fixbuf("Additional arguments", dp.args);
                         im_pop_font();
                     } else {
                         if (!ps->debug_profiles->len) {
@@ -4733,11 +4733,11 @@ void UI::draw_everything() {
                     if (0 <= index && index < ps->build_profiles->len) {
                         auto &bp = ps->build_profiles->at(index);
 
-                        im_input_text_full_fixbuf("Name", bp.label);
+                        im_input_text_fixbuf("Name", bp.label);
                         im_small_newline();
 
                         im_push_mono_font();
-                        im_input_text_full_fixbuf("Build command", bp.cmd);
+                        im_input_text_fixbuf("Build command", bp.cmd);
                         im_pop_font();
                     } else {
                         if (!ps->build_profiles->len) {
@@ -4818,7 +4818,7 @@ void UI::draw_everything() {
 
         focus_keyboard_here(&wnd);
 
-        if (im_input_text_full("Search for file:", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
+        if (im_input_text_fixbuf("Search for file:", wnd.query, ImGuiInputTextFlags_EnterReturnsTrue)) {
             if (wnd.filtered_results->len > 0) {
                 auto relpath = wnd.filepaths->at(wnd.filtered_results->at(wnd.selection));
                 auto filepath = path_join(world.current_path, relpath);
@@ -4913,7 +4913,7 @@ void UI::draw_everything() {
 
         auto text_input_id = "current_file_search_search";
 
-        if (im_input_text_full(cp_sprintf("Search (%s)", label), text_input_id, wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
+        if (im_input_text_ex_fixbuf(cp_sprintf("Search (%s)", label), text_input_id, wnd.query, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
             if (wnd.opened_from_vim) {
                 wnd.show = false;
                 im::SetWindowFocus(NULL);
@@ -4949,7 +4949,7 @@ void UI::draw_everything() {
         if (wnd.replace) {
             im_small_newline();
 
-            if (im_input_text_full("Replace:", wnd.replace_str, _countof(wnd.replace_str), ImGuiInputTextFlags_EnterReturnsTrue)) {
+            if (im_input_text_fixbuf("Replace:", wnd.replace_str, ImGuiInputTextFlags_EnterReturnsTrue)) {
                 SCOPED_BATCH_CHANGE(ed->buf);
 
                 auto repl_parts = parse_search_replacement(wnd.replace_str);
@@ -5059,7 +5059,7 @@ void UI::draw_everything() {
 
         im::PushItemWidth(-1);
         {
-            if (im::InputText("###run_command", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
+            if (im_input_text_ex_fixbuf(NULL, "run_command", wnd.query, ImGuiInputTextFlags_EnterReturnsTrue)) {
                 wnd.show = false;
                 im::SetWindowFocus(NULL);
 
@@ -5188,7 +5188,7 @@ void UI::draw_everything() {
                 im::SetWindowFocus(NULL);
             }
 
-            if (im_input_text_full("Search for symbol:", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
+            if (im_input_text_fixbuf("Search for symbol:", wnd.query, ImGuiInputTextFlags_EnterReturnsTrue)) {
                 wnd.show = false;
                 im::SetWindowFocus(NULL);
 
@@ -5334,7 +5334,7 @@ void UI::draw_everything() {
 
             if (focus_textbox) im::SetScrollHereY();
 
-            if (im_input_text_full("Search for", wnd.find_str, _countof(wnd.find_str), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll))
+            if (im_input_text_fixbuf("Search for", wnd.find_str, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
                 search_again = true;
 
             if (focus_textbox) {
@@ -5346,7 +5346,7 @@ void UI::draw_everything() {
                 search_again = true;
 
             if (wnd.replace)
-                if (im_input_text_full("Replace with", wnd.replace_str, _countof(wnd.replace_str), ImGuiInputTextFlags_EnterReturnsTrue))
+                if (im_input_text_fixbuf("Replace with", wnd.replace_str, ImGuiInputTextFlags_EnterReturnsTrue))
                     search_again = true;
         }
         im_pop_font();

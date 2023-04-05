@@ -284,8 +284,8 @@ struct UI {
     void open_project_settings();
 
     void im_small_newline();
-    bool im_input_text_full(ccstr label, ccstr inputid, char *buf, int count, int flags);
-    bool im_input_text_full(ccstr label, char *buf, int count, int flags = 0);
+    bool im_input_text_ex(ccstr label, ccstr inputid, char *buf, int count, int flags);
+    bool im_input_text(ccstr label, char *buf, int count, int flags = 0);
     bool im_key_pressed(Key key);
     bool im_wnd_key_pressed(Wnd *wnd, Key key, int mods, int flags = 0);
     void im_with_disabled(bool disable, fn<void()> f);
@@ -318,6 +318,9 @@ struct UI {
     bool im_begin_popup(ccstr str_id);
     void im_select_all_last();
 };
+
+#define im_input_text_fixbuf(x, y, ...) im_input_text(x, y, _countof(y), ##__VA_ARGS__)
+#define im_input_text_ex_fixbuf(x, y, z, ...) im_input_text_ex(x, y, z, _countof(z), ##__VA_ARGS__)
 
 extern UI ui;
 
