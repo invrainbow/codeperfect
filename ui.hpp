@@ -15,6 +15,7 @@
 #include "list.hpp"
 #include "dbg.hpp"
 #include "hash.hpp"
+#include "win.hpp"
 
 #define CODE_FONT_SIZE 15
 #define UI_FONT_SIZE 16
@@ -285,9 +286,10 @@ struct UI {
     void im_small_newline();
     bool im_input_text_full(ccstr label, ccstr inputid, char *buf, int count, int flags);
     bool im_input_text_full(ccstr label, char *buf, int count, int flags = 0);
-    bool im_special_key_pressed(int key);
-    bool im_key_pressed(int key);
+    bool im_key_pressed(Key key);
+    bool im_wnd_key_pressed(Wnd *wnd, Key key, int mods, int flags = 0);
     void im_with_disabled(bool disable, fn<void()> f);
+    bool im_can_window_receive_keys(Wnd *wnd, int flags);
     u32 im_get_keymods();
     bool im_icon_button(ccstr icon);
 
@@ -403,3 +405,4 @@ extern const int ZOOM_LEVELS[];
 extern const int ZOOM_LEVELS_COUNT;
 
 bool check_cmd_flag(bool *b);
+ImGuiKey cp_key_to_imgui_key(Key key);
