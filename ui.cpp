@@ -2275,6 +2275,19 @@ void UI::focus_keyboard_here(Wnd *wnd, int cond) {
     }
 }
 
+void UI::handle_popup_window_logic(Wnd *wnd, Wnd *parent) {
+    // close the window when we unfocus
+    if (!wnd->focused) wnd->show = false;
+
+    // if we just closed the window, refocus the parent
+    if (!wnd->show) {
+        parent->cmd_focus = true;
+
+        // need to set this to false - it gets set when we press escape
+        world.cmd_unfocus_all_windows = false;
+    }
+}
+
 void UI::draw_everything() {
     verts.len = 0;
 
@@ -3936,13 +3949,13 @@ void UI::draw_everything() {
         auto label = cp_sprintf("Rename %s", wnd.target->is_directory ? "folder" : "file");
         begin_centered_window(cp_sprintf("%s###add_file_or_folder", label), &wnd, 0, 300);
 
-        im::Text("Renaming");
+        handle_popup_window_logic(&wnd, &world.file_explorer);
 
-        im::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(140, 194, 248)));
-        im_push_mono_font();
-        im::Text("%s", wnd.location);
-        im::PopStyleColor();
-        im_pop_font();
+        im_with_disabled(true, [&]() {
+            im_push_mono_font();
+            im_input_text_fixbuf("Old name", wnd.location, ImGuiInputTextFlags_ReadOnly);
+            im_pop_font();
+        });
 
         im_small_newline();
 
@@ -3951,16 +3964,26 @@ void UI::draw_everything() {
         // close the window when we unfocus
         if (!wnd.focused) wnd.show = false;
 
+        // if we just closed the window, refocus the file explorer
+        if (!wnd.show) {
+            world.file_explorer.cmd_focus = true;
+            world.cmd_unfocus_all_windows = false;
+        }
+
         im_push_mono_font();
         bool entered = im_input_text_fixbuf("New name", wnd.name, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
         im_pop_font();
+
+        if (check_cmd_flag(&wnd.cmd_focus_textbox))
+            im_select_all_last();
 
         do {
             if (!entered) break;
 
             auto error_out = [&](ccstr msg) {
                 tell_user(msg, "Error");
-                wnd.name[0] = '\0';
+                wnd.cmd_focus_textbox = true;
+                // wnd.name[0] = '\0';
             };
 
             if (!strlen(wnd.name)) {
@@ -4405,6 +4428,10 @@ void UI::draw_everything() {
                 break;
             }
             }
+
+            if (wnd.selection)
+                if (im_wnd_key_pressed(&wnd, CP_KEY_R, CP_MOD_NONE))
+                    open_rename(wnd.selection);
 
             fstlog("wnd_file_explorer - handle keys");
         }

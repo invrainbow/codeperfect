@@ -3999,7 +3999,7 @@ void open_current_file_search(bool replace, bool from_vim) {
 
     if (wnd.show) {
         wnd.cmd_focus = true;
-        wnd.cmd_focus_search = true;
+        wnd.cmd_focus_textbox = true;
     } else {
         wnd.show = true;
         cp_strcpy_fixed(wnd.query, wnd.permanent_query);

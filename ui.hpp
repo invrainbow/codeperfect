@@ -131,6 +131,9 @@ struct Wnd {
     // "commands"
     bool cmd_focus;
     bool cmd_make_visible_but_dont_focus;
+    bool cmd_focus_textbox; // generic command for focusing the "main textbox"
+                            // whatever that is. create additional per-window
+                            // commands if this doesn't cover
 };
 
 #define PM_DEFAULT_COLOR IM_COL32(0x49, 0xfa, 0x98, 0x69)
@@ -317,6 +320,8 @@ struct UI {
     bool im_begin_popup_rect(ccstr str_id, boxf rect);
     bool im_begin_popup(ccstr str_id);
     void im_select_all_last();
+
+    void handle_popup_window_logic(Wnd *wnd, Wnd *parent);
 };
 
 #define im_input_text_fixbuf(x, y, ...) im_input_text(x, y, _countof(y), ##__VA_ARGS__)
