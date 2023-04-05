@@ -757,6 +757,7 @@ struct World {
         bool *files_open;
         bool *set_file_open;
         bool *set_file_close;
+        bool cmd_focus_replace_textbox;
     } wnd_search_and_replace;
 
     struct Wnd_Tree_Viewer : Wnd {

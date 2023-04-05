@@ -320,6 +320,7 @@ struct UI {
     bool im_begin_popup_rect(ccstr str_id, boxf rect);
     bool im_begin_popup(ccstr str_id);
     void im_select_all_last();
+    void im_select_clear_last();
 
     void handle_popup_window_logic(Wnd *wnd, Wnd *parent);
 };

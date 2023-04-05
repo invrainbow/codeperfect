@@ -5052,11 +5052,8 @@ void UI::draw_everything() {
             }
         }
 
-
-        if (check_cmd_flag(&wnd.cmd_focus_search)) {
-            im::SetKeyboardFocusHere(-1);
+        if (check_cmd_flag(&wnd.cmd_focus_textbox))
             im_select_all_last();
-        }
 
         if (im::IsItemEdited()) {
             search_again = true;
@@ -5452,6 +5449,8 @@ void UI::draw_everything() {
         begin_window(title, &wnd, ImGuiWindowFlags_AlwaysAutoResize, false, true);
 
         bool search_again = false;
+        bool search_box_focused = false;
+        bool replace_box_focused = false;
 
         im_push_mono_font();
         {
@@ -5459,20 +5458,30 @@ void UI::draw_everything() {
 
             if (focus_textbox) im::SetScrollHereY();
 
-            if (im_input_text_fixbuf("Search for", wnd.find_str, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
+            if (im_input_text_fixbuf("Search for", wnd.find_str, ImGuiInputTextFlags_EnterReturnsTrue)) {
                 search_again = true;
 
-            if (focus_textbox) {
+                // don't defocus or select text when pressing enter
                 im::SetKeyboardFocusHere(-1);
-                im_select_all_last();
+                im_select_clear_last();
             }
 
-            if (im::IsItemEdited())
-                search_again = true;
+            search_box_focused = im::IsItemFocused();
 
-            if (wnd.replace)
-                if (im_input_text_fixbuf("Replace with", wnd.replace_str, ImGuiInputTextFlags_EnterReturnsTrue))
+            if (focus_textbox)
+                im_select_all_last();
+
+            if (im::IsItemEdited())
+                if (strlen(wnd.find_str) >= 3)
                     search_again = true;
+
+            if (wnd.replace) {
+                im_input_text_fixbuf("Replace with", wnd.replace_str, ImGuiInputTextFlags_EnterReturnsTrue);
+                replace_box_focused = im::IsItemFocused();
+
+                if (check_cmd_flag(&wnd.cmd_focus_replace_textbox))
+                    im_select_all_last();
+            }
         }
         im_pop_font();
 
@@ -5717,9 +5726,8 @@ void UI::draw_everything() {
 
             auto handle_up = [&]() {
                 if (wnd.sel_file == -1) {
-                    int file_idx = search_results.len - 1;
-                    auto &file = search_results[file_idx];
-                    goto_result(file_idx, file.results->len - 1);
+                    if (!world.ui.input_captured_by_imgui)
+                        goto_result(0, -1);
                     return;
                 }
 
@@ -5728,7 +5736,13 @@ void UI::draw_everything() {
                     return;
                 }
 
-                if (!wnd.sel_file) return;
+                if (!wnd.sel_file) {
+                    if (wnd.replace)
+                        wnd.cmd_focus_replace_textbox = true;
+                    else
+                        wnd.cmd_focus_textbox = true;
+                    return;
+                }
 
                 int file_idx = wnd.sel_file-1;
                 if (wnd.files_open[file_idx])
@@ -5764,14 +5778,19 @@ void UI::draw_everything() {
 
                 switch (get_keyboard_nav(&wnd, KNF_ALLOW_IMGUI_FOCUSED)) {
                 case KN_UP:
-                    // defocus everything
-                    im::ClearActiveID();
-                    handle_up();
+                    if (search_box_focused)
+                        break;
+                    wnd.cmd_focus_textbox = true;
+                    // handle_up();
                     break;
                 case KN_DOWN:
-                    // defocus everything
-                    im::ClearActiveID();
-                    handle_down();
+                    if (wnd.replace && search_box_focused) {
+                        wnd.cmd_focus_replace_textbox = true;
+                    } else {
+                        // defocus everything
+                        im::ClearActiveID();
+                        handle_down();
+                    }
                     break;
                 }
             } else {
@@ -7978,7 +7997,17 @@ ccstr get_import_path_label(ccstr import_path, Go_Workspace *workspace) {
     return cp_sprintf("%s/%s", mod_short, import_path);
 }
 
+void UI::im_select_clear_last() {
+    auto g = im::GetCurrentContext();
+    if (g) {
+        auto state = im::GetInputTextState(g->LastItemData.ID);
+        if (state) state->ClearSelection();
+    }
+}
+
 void UI::im_select_all_last() {
+    im::SetKeyboardFocusHere(-1);
+
     auto g = im::GetCurrentContext();
     if (g) {
         auto state = im::GetInputTextState(g->LastItemData.ID);
