@@ -4023,6 +4023,8 @@ void UI::draw_everything() {
         auto label = cp_sprintf("Add %s", wnd.folder ? "Folder" : "File");
         begin_centered_window(cp_sprintf("%s###add_file_or_folder", label), &wnd, 0, 300);
 
+        handle_popup_window_logic(&wnd, &world.file_explorer);
+
         im::Text("Destination");
 
         im::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(140, 194, 248)));
@@ -4039,9 +4041,6 @@ void UI::draw_everything() {
         im_small_newline();
 
         focus_keyboard_here(&wnd);
-
-        // close the window when we unfocus
-        if (!wnd.focused) wnd.show = false;
 
         im_push_mono_font();
         bool entered = im_input_text_fixbuf("Name", wnd.name, ImGuiInputTextFlags_EnterReturnsTrue);
