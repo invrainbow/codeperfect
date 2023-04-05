@@ -250,7 +250,7 @@ bool exclude_from_file_tree(ccstr path) {
     return false;
 }
 
-void crawl_path_into_ftnode(ccstr path, FT_Node *parent, int depth = 0) {
+void crawl_path_into_ftnode(ccstr path, FT_Node *parent) {
     FT_Node *last_child = parent->children;
 
     list_directory(path, [&](Dir_Entry *ent) {
@@ -264,7 +264,7 @@ void crawl_path_into_ftnode(ccstr path, FT_Node *parent, int depth = 0) {
             file->num_children = 0;
             file->parent = parent;
             file->children = NULL;
-            file->depth = depth;
+            file->depth = parent->depth + 1;
             file->open = false;
             file->next = NULL;
 
@@ -278,7 +278,7 @@ void crawl_path_into_ftnode(ccstr path, FT_Node *parent, int depth = 0) {
 
             parent->num_children++;
             if (file->is_directory)
-                crawl_path_into_ftnode(fullpath, file, depth + 1);
+                crawl_path_into_ftnode(fullpath, file);
         } while (0);
 
         return true;
@@ -302,12 +302,14 @@ void fill_file_tree() {
         world.file_explorer.selection = NULL;
         world.file_explorer.last_file_copied = NULL;
         world.file_explorer.last_file_cut = NULL;
+        world.file_explorer.scroll_to = NULL;
+        world.file_explorer.dragging_source = NULL;
+        world.file_explorer.dragging_dest = NULL;
 
         world.file_tree = new_object(FT_Node);
         world.file_tree->is_directory = true;
-        world.file_tree->depth = -1;
-
-        u32 depth = 0;
+        world.file_tree->depth = 0;
+        world.file_tree->open = true;
 
         GHGitIgnoreInit(world.current_path); // why do we need this here?
         crawl_path_into_ftnode(world.current_path, world.file_tree);
@@ -3301,10 +3303,10 @@ void open_add_file_or_folder(bool folder, FT_Node *dest) {
         node = dest;
 
         if (!node) return true;
+        if (node == world.file_tree) return true;
         if (node->is_directory) return false;
 
-        node = node->parent;
-        return (!node->parent);
+        return node->parent == world.file_tree;
     };
 
     wnd.location_is_root = is_root();

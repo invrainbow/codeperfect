@@ -496,3 +496,5 @@ NORETURN void exit_from_crash_handler();
 void install_crash_handlers();
 
 int get_current_focused_window_pid();
+
+bool move_file_or_directory(ccstr src, ccstr dest);

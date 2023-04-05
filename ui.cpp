@@ -4030,10 +4030,14 @@ void UI::draw_everything() {
         im::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(140, 194, 248)));
         im_push_mono_font();
 
-        if (wnd.location_is_root)
-            im::Text("(workspace root)");
-        else
+        if (wnd.location_is_root) {
+            if (world.file_tree)
+                im::Text("%s (root)", cp_basename(world.current_path));
+            else
+                im::Text("(root)");
+        } else {
             im::Text("%s", wnd.location);
+        }
 
         im::PopStyleColor();
         im_pop_font();
@@ -4135,24 +4139,64 @@ void UI::draw_everything() {
 
         bool menu_handled = false;
 
+        auto handle_drag_drop = [&](FT_Node *source, FT_Node *dest) {
+            auto source_path = path_join(world.current_path, ft_node_to_path(source));
+            auto dest_path = path_join(world.current_path, ft_node_to_path(dest), source->name);
+
+            if (are_filepaths_equal(source_path, dest_path))
+                return;
+
+            auto result = check_path(dest_path);
+            if (result != CPR_NONEXISTENT) {
+                ccstr existing_type = (result == CPR_FILE ? "file" : "directory");
+                auto msg = cp_sprintf("A %s already exists there with the same name. Do you want to replace it?", existing_type);
+
+                auto msgbox_result = ask_user_yes_no_cancel(msg, "Replace", "Rename", "Cancel");
+                if (msgbox_result == ASKUSER_CANCEL)
+                    return;
+
+                if (msgbox_result == ASKUSER_YES) {
+                    delete_rm_rf(dest_path);
+                } else {
+                    bool found = false;
+                    for (int i = 1; i < 1000; i++) {
+                        dest_path = path_join(world.current_path, ft_node_to_path(dest), cp_sprintf("%s (%d)", source->name, i));
+                        if (check_path(dest_path) == CPR_NONEXISTENT) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        tell_user_error("Unable to find a suitable name to rename file to.");
+                        return;
+                    }
+                }
+            }
+
+            if (!move_file_or_directory(source_path, dest_path))
+                tell_user_error("Unable to move file or directory.");
+
+            reload_file_subtree(get_path_relative_to(cp_dirname(source_path), world.current_path));
+            reload_file_subtree(get_path_relative_to(cp_dirname(dest_path), world.current_path));
+
+            auto node = find_ft_node(get_path_relative_to(cp_dirname(dest_path), world.current_path));
+            if (node) node->open = true;
+
+            node = find_ft_node(get_path_relative_to(dest_path, world.current_path));
+            if (node) wnd.selection = node;
+        };
+
         begin_directory_child(); {
             SCOPED_FRAME();
 
-            /*
-            {
-                auto win = im::GetWindowPos();
-                auto tl = im::GetWindowContentRegionMin() + win;
-                auto br = im::GetWindowContentRegionMax() + win;
+            FT_Node *new_dragging_source = NULL;
+            FT_Node *new_dragging_dest = NULL;
+            FT_Node *new_hovered_item = NULL;
 
-                tl.y += im::GetScrollY();
-                br.y += im::GetScrollY();
-
-                im::GetForegroundDrawList()->AddRect(tl, br, IM_COL32(255, 255, 0, 255));
-            }
-            */
-
-            fn<void(FT_Node*)> draw = [&](auto it) {
+            fn<void(FT_Node*, bool)> draw = [&](auto it, bool highlight_dragging_into) {
                 for (u32 j = 0; j < it->depth; j++) im::Indent();
+
+                if (it == wnd.dragging_dest) highlight_dragging_into = true;
 
                 ccstr icon = NULL;
                 if (it->is_directory) {
@@ -4168,19 +4212,27 @@ void UI::draw_everything() {
                     bool mute = !it->is_directory && !str_ends_with(it->name, ".go");
                     ImGuiStyle &style = im::GetStyle();
 
+                    int pushed_colors = 0;
+
+                    auto push_color = [&](auto x, auto y) {
+                        im::PushStyleColor(x, y);
+                        pushed_colors++;
+                    };
+
                     if (wnd.selection != it) {
-                        im::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.2, 0.2, 0.2, 1.0));
-                        im::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.2, 0.2, 0.2, 1.0));
                         if (mute)
-                            im::PushStyleColor(ImGuiCol_Text, ImVec4(0.5, 0.5, 0.5, 1.0));
+                            push_color(ImGuiCol_Text, ImVec4(0.5, 0.5, 0.5, 1.0));
+                        push_color(ImGuiCol_HeaderHovered, ImVec4(0.2, 0.2, 0.2, 1.0));
+                        push_color(ImGuiCol_HeaderActive, ImVec4(0.2, 0.2, 0.2, 1.0));
                     }
+
                     im::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
 
-                    ccstr label = NULL;
+                    ccstr short_label = cp_sprintf("%s %s", icon, it->parent ? it->name : cp_basename(world.current_path));
+
+                    ccstr label = short_label;
                     if (it->is_directory)
-                        label = cp_sprintf("%s %s %s", icon, it->name, it->open ? ICON_MD_EXPAND_MORE : ICON_MD_CHEVRON_RIGHT);
-                    else
-                        label = cp_sprintf("%s %s", icon, it->name);
+                        label = cp_sprintf("%s %s", label, it->open ? ICON_MD_EXPAND_MORE : ICON_MD_CHEVRON_RIGHT);
 
                     if (it == wnd.scroll_to) {
                         keep_item_inside_scroll();
@@ -4191,11 +4243,40 @@ void UI::draw_everything() {
                     im::Selectable(label, wnd.selection == it, ImGuiSelectableFlags_AllowDoubleClick);
                     im::PopID();
 
+                    if (highlight_dragging_into) {
+                        auto rmin = im::GetItemRectMin();
+                        auto rmax = im::GetItemRectMax();
+                        rmin.x = 0;
+                        im::GetWindowDrawList()->AddRectFilled(rmin, rmax, IM_COL32(255, 255, 255, 50));
+                    }
+
                     im::PopStyleVar();
-                    if (wnd.selection != it) {
-                        im::PopStyleColor(2);
-                        if (mute)
-                            im::PopStyleColor();
+                    im::PopStyleColor(pushed_colors);
+
+                    // handle drag and drop
+
+                    if (wnd.dragging_source)
+                        if (im::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem))
+                            new_hovered_item = it;
+
+                    if (im::BeginDragDropSource()) {
+                        new_dragging_source = it;
+                        im::SetDragDropPayload("file_explorer_dnd", &it, sizeof(it));
+
+                        im::Text("%s", short_label);
+                        im::EndDragDropSource();
+                    }
+
+                    if (im::BeginDragDropTarget()) {
+                        new_dragging_dest = it;
+                        if (!it->is_directory)
+                            new_dragging_dest = new_dragging_dest->parent;
+
+                        auto payload = ImGui::AcceptDragDropPayload("file_explorer_dnd");
+                        if (payload)
+                            handle_drag_drop(*(FT_Node**)payload->Data, new_dragging_dest);
+
+                        im::EndDragDropTarget();
                     }
                 }
 
@@ -4313,14 +4394,13 @@ void UI::draw_everything() {
 
                 if (it->is_directory && it->open)
                     for (auto child = it->children; child; child = child->next)
-                        draw(child);
+                        draw(child, highlight_dragging_into);
             };
 
             if (world.file_tree_busy) {
                 im::Text("Generating file tree...");
             } else {
-                for (auto child = world.file_tree->children; child; child = child->next)
-                    draw(child);
+                draw(world.file_tree, false);
 
                 fstlog("wnd_file_explorer - draw files");
 
@@ -4342,7 +4422,26 @@ void UI::draw_everything() {
 
                 fstlog("wnd_file_explorer - right click");
             }
+
+            wnd.dragging_source = new_dragging_source;
+            wnd.dragging_dest = new_dragging_dest;
+
+            if (new_hovered_item != wnd.hovered) {
+                wnd.hovered = new_hovered_item;
+                if (wnd.hovered) {
+                    wnd.hovered_start_milli = current_time_milli();
+                    print("setting new time: %llu", wnd.hovered_start_milli);
+                }
+            }
+
+            if (wnd.hovered && current_time_milli() - wnd.hovered_start_milli > 700)
+                wnd.hovered->open = true;
         } im::EndChild();
+
+        // if users clicks on empty space in child, unset selection
+        if (im::IsItemClicked()) {
+            wnd.selection = NULL;
+        }
 
         if (!world.file_tree_busy) {
             switch (get_keyboard_nav(&wnd, KNF_ALLOW_HJKL)) {

@@ -693,13 +693,20 @@ struct World {
     Build build;
 
     struct File_Explorer : Wnd {
-        FT_Node *selection;
         // char buf[256];
         // bool adding_something;
         // bool thing_being_added_is_file;
+
+        // these all need to be invalidated - do so whenever we add a new one
+        FT_Node *selection;
         FT_Node *last_file_copied;
         FT_Node *last_file_cut;
         FT_Node *scroll_to;
+        FT_Node *dragging_source;
+        FT_Node *dragging_dest;
+
+        FT_Node *hovered;
+        u64 hovered_start_milli;
     } file_explorer;
 
     struct {

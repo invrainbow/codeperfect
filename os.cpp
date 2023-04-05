@@ -209,3 +209,6 @@ NORETURN void cp_panic(ccstr s) {
 }
 #endif
 
+bool move_file_or_directory(ccstr src, ccstr dest) {
+    return !rename(src, dest);
+}
