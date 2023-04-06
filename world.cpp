@@ -2513,10 +2513,7 @@ void handle_command(Command cmd, bool from_menu) {
         if (!world.vim.on)
             editor->select_start = new_cur2(0, 0);
 
-        auto buf = editor->buf;
-        int y = buf->lines.len-1;
-        int x = buf->lines[y].len;
-        editor->move_cursor(new_cur2(x, y));
+        editor->move_cursor(editor->buf->end_pos());
 
         if (!world.vim.on)
             if (editor->select_start != editor->cur)
@@ -3366,12 +3363,10 @@ void do_generate_function() {
             // if it's already open, just make the change
             auto uchars = cstr_to_ustr(result->insert_code);
 
-            if (result->insert_pos == NULL_CUR) {
-                int y = ed->buf->lines.len-1;
-                ed->buf->insert(new_cur2(y, ed->buf->lines[y].len), uchars->items, uchars->len);
-            } else {
+            if (result->insert_pos == NULL_CUR)
+                ed->buf->insert(ed->buf->end_pos(), uchars->items, uchars->len);
+            else
                 ed->buf->insert(result->insert_pos, uchars->items, uchars->len);
-            }
         } else {
             // otherwise, make the change on disk
             File_Replacer fr;

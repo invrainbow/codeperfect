@@ -6276,10 +6276,8 @@ void UI::draw_everything() {
                 auto y = view.y + pos.y / (ui.base_font->height * settings.line_height);
                 if (y > view.y + view.h) return NULL_CUR;
 
-                if (y >= buf->lines.len) {
-                    y = buf->lines.len-1;
-                    return new_cur2(buf->lines[y].len, y);
-                }
+                if (y >= buf->lines.len)
+                    return buf->end_pos();
 
                 if (pos.x < area.x)           return new_cur2(0, y);
                 if (pos.x >= area.x + area.w) return new_cur2(buf->lines[y].len, y);

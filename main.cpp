@@ -512,7 +512,7 @@ void handle_key_event(Window_Event *it) {
             editor->view.y += editor->view.h;
             if (editor->view.y > buf->lines.len-1) {
                 editor->view.y = buf->lines.len-1;
-                cur = new_cur2(buf->lines[buf->lines.len-1].len, buf->lines.len-1);
+                cur = buf->end_pos();
             } else {
                 editor->ensure_cursor_on_screen();
                 cur = editor->cur;

@@ -4759,7 +4759,7 @@ bool Go_Indexer::truncate_parsed_file(Parsed_File *pf, cur2 end_pos, ccstr chars
     if (pf->it->type != IT_BUFFER) return false;
 
     auto buf = pf->it->buffer_params.it.buf;
-    auto eof_pos = new_cur2(buf->lines.last()->len, buf->lines.len - 1);
+    auto eof_pos = buf->end_pos();
 
     TSInputEdit edit; ptr0(&edit);
     edit.start_byte = buf->cur_to_offset(end_pos);

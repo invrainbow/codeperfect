@@ -336,6 +336,11 @@ struct Buffer {
 
     bool is_valid(cur2 c);
     cur2 fix_cur(cur2 c);
+
+    cur2 end_pos() {
+        int y = lines.len-1;
+        return new_cur2(lines[y].len, y);
+    }
 };
 
 struct Scoped_Batch_Change {

@@ -435,11 +435,7 @@ bool Buffer::is_valid(cur2 c) {
 
 cur2 Buffer::fix_cur(cur2 c) {
     if (c.y < 0) return new_cur2(0, 0);
-
-    if (c.y >= lines.len) {
-        int y = lines.len-1;
-        return new_cur2(lines[y].len, y);
-    }
+    if (c.y >= lines.len) return end_pos();
 
     if (c.x < 0) c.x = 0;
     if (c.x > lines[c.y].len) c.x = lines[c.y].len;
@@ -639,7 +635,7 @@ void Buffer::remove_lines(u32 y1, u32 y2) {
         // if (!y1) return;
 
         start = dec_cur(start);
-        end = new_cur2(lines[lines.len-1].len, lines.len-1);
+        end = end_pos();
     } else {
         end = new_cur2(0, y2+1);
     }
@@ -791,9 +787,7 @@ void Buffer::update_tree() {
         }
 
         auto start = new_cur2(buf->idx_byte_to_cp(pos.row, pos.column, true), pos.row);
-
-        int y = buf->lines.len-1;
-        auto end = new_cur2(buf->lines[y].len, y);
+        auto end = buf->end_pos();
 
         cur2 junk;
         auto uchars = buf->get_uchars(start, end, _countof(buf->tsinput_buffer), &junk);
@@ -1282,8 +1276,7 @@ cur2 Buffer::offset_to_cur(i32 off, bool *overflow) {
         return new_cur2(idx_byte_to_cp(y, rem), y);
 
     if (overflow) *overflow = true;
-    y = lines.len-1;
-    return new_cur2(lines[y].len, y);
+    return end_pos();
 }
 
 // ============

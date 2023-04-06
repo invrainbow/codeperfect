@@ -2268,10 +2268,8 @@ bool Editor::optimize_imports() {
 
         {
             auto c = cur;
-            if (c.y >= buf->lines.len) {
-                c.y = buf->lines.len-1;
-                c.x = buf->lines[c.y].len;
-            }
+            if (c.y >= buf->lines.len)
+                c = buf->end_pos();
             if (c.x > buf->lines[c.y].len)
                 c.x = buf->lines[cur.y].len;
 
@@ -4700,7 +4698,7 @@ Motion_Range* Editor::vim_process_motion(Motion_Result *motion_result) {
         bool at_end = (y2 == buf->lines.len-1);
         if (at_end) {
             start = buf->dec_cur(start);
-            end = new_cur2(buf->lines[y2].len, y2);
+            end = buf->end_pos();
         }
 
         ret->start = start;
@@ -4849,10 +4847,8 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
 
         auto end = mr->dest;
         if (world.vim_mode() != VI_VISUAL) {
-            if (end.y >= lines.len) {
-                end.y = lines.len-1;
-                end.x = lines[end.y].len-1;
-            }
+            if (end.y >= lines.len)
+                end = buf->end_pos();
             int len = lines[end.y].len;
             if (end.x >= len && len > 0) end.x = len-1;
         } else if (mr->type == MOTION_OBJ || mr->type == MOTION_OBJ_INNER) {
@@ -5231,7 +5227,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                     int y = 0;
                     if (inp.ch == 'p') {
                         if (c.y == lines.len-1) {
-                            buf->insert(new_cur2(lines[c.y].len, c.y), '\n');
+                            buf->insert(buf->end_pos(), '\n');
                             text->len--; // ignore the last newline
                         }
                         y = c.y+1;
