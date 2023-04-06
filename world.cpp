@@ -3753,7 +3753,9 @@ done_writing:
         GHFmtAddLine(rend.finish());
         GHFmtAddLine("");
 
-        auto new_contents = gh_fmt_finish();
+        // format with gofmt, not gofumpt, because gofumpt can't handle
+        // snippets (i believe it requires a full file)
+        auto new_contents = gh_fmt_finish(false);
         if (!new_contents) return;
         defer { GHFree(new_contents); };
 

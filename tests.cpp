@@ -38,7 +38,7 @@ void test_diff() {
 void test_mark_tree() {
     Buffer buf;
     buf.init(&world.frame_mem, false, false);
-    buf.read_data("loldongs", -1);
+    buf.read("loldongs", -1);
 
     Mark_Tree mt; mt.init(&buf);
 

@@ -225,7 +225,7 @@ func GHFmtFinish(useGofumpt bool) *C.char {
 	}
 
 	if err != nil {
-		LastError = fmt.Errorf("unable to format")
+		LastError = fmt.Errorf("unable to format: %v", err)
 		return nil
 	}
 
@@ -372,6 +372,14 @@ func GHGitIgnoreInit(repo *C.char) bool {
 	}
 
 	return true
+}
+
+//export GHGetLastError
+func GHGetLastError() *C.char {
+	if LastError == nil {
+		return nil
+	}
+	return C.CString(LastError.Error())
 }
 
 //export GHGitIgnoreCheckFile

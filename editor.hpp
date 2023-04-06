@@ -479,3 +479,4 @@ bool gr_isspace(Grapheme gr);
 Gr_Type gr_type(Grapheme gr);
 
 char* gh_fmt_finish();
+char* gh_fmt_finish(bool use_gofumpt);

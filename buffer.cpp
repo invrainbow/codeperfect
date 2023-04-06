@@ -265,7 +265,9 @@ bool Cstr_To_Ustr::feed(u8 ch) {
     return false;
 }
 
-List<uchar>* cstr_to_ustr(ccstr s) {
+List<uchar>* cstr_to_ustr(ccstr s, int len) {
+    if (len == -1) len = strlen(s);
+
     Cstr_To_Ustr conv; conv.init();
 
     auto ret = new_list(uchar);
@@ -307,32 +309,32 @@ void Buffer::tree_batch_end() {
     if (tree_batch_refs == 0) {
         tree_batch_mode = false;
 
-        TSInputEdit curr;
-        memcpy(&curr, &tree_batch_edits[0], sizeof(TSInputEdit));
+        if (tree) {
+            TSInputEdit curr;
+            memcpy(&curr, &tree_batch_edits[0], sizeof(TSInputEdit));
 
-        Fori (&tree_batch_edits) {
-            if (i == 0) continue;
+            Fori (&tree_batch_edits) {
+                if (i == 0) continue;
 
-            // if we can merge edit and it, do so
-            // otherwise, apply curr and set curr to it
-            if (curr.new_end_byte == it.old_end_byte) {
-                if (it.start_byte < curr.start_byte) {
-                    curr.start_byte = it.start_byte;
-                    curr.start_point = it.start_point;
+                // if we can merge edit and it, do so
+                // otherwise, apply curr and set curr to it
+                if (curr.new_end_byte == it.old_end_byte) {
+                    if (it.start_byte < curr.start_byte) {
+                        curr.start_byte = it.start_byte;
+                        curr.start_point = it.start_point;
+                    }
+                    curr.new_end_byte = it.new_end_byte;
+                    curr.new_end_point = it.new_end_point;
+                } else {
+                    ts_tree_edit(tree, &curr);
+                    memcpy(&curr, &it, sizeof(TSInputEdit));
                 }
-                curr.new_end_byte = it.new_end_byte;
-                curr.new_end_point = it.new_end_point;
-            } else {
-                ts_tree_edit(tree, &curr);
-                memcpy(&curr, &it, sizeof(TSInputEdit));
             }
+            ts_tree_edit(tree, &curr);
+            t.log("apply tsedits");
         }
-        ts_tree_edit(tree, &curr);
-
-        t.log("apply tsedits");
 
         update_tree();
-
         t.log("call update_tree");
     }
 }
@@ -489,117 +491,22 @@ void Buffer::cleanup() {
     initialized = false;
 }
 
-void Buffer::copy_from(Buffer *other) {
-    Buffer_It it; ptr0(&it);
-    it.buf = other;
+void Buffer::read(char *data, int len) {
+    SCOPED_BATCH_CHANGE(this);
 
-    char tmp[4];
-    s32 count = 0;
-    u32 pos = 0;
-
-    read([&](char *out) -> bool {
-        if (pos >= count) {
-            if (it.eof()) return false;
-            count = uchar_to_cstr(it.next(), tmp);
-            pos = 0;
-        }
-        *out = tmp[pos++];
-        return true;
-    });
-}
-
-bool Buffer::read(Buffer_Read_Func f, bool reread) {
     cp_assert(!editable_from_main_thread_only || is_main_thread);
 
-    // Expects buf to be empty.
+    if (lines.len > 1 || lines[0].len)
+        remove(new_cur2(0, 0), end_pos());
 
-    if (reread) {
-        if (lines.len) {
-            u32 y = lines.len-1;
-            internal_start_edit(new_cur2(0, 0), new_cur2(lines[y].len, y));
-        } else {
-            internal_start_edit(new_cur2(0, 0), new_cur2(0, 0));
-        }
-    }
-
-    clear();
-
-    Line *line = NULL;
-
-    auto insert_new_line = [&]() -> bool {
-        line = lines.append();
-        bctree.append(0);
-
-        line->init(LIST_CHUNK, CHUNK0);
-        return true;
-    };
-
-    if (!insert_new_line()) return false;
-
-    Cstr_To_Ustr conv; conv.init();
-    bool last_was_cr = false;
-    char ch;
-    u32 bc = 0;
-
-    while (f(&ch)) {
-        bc++;
-
-        if (conv.feed(ch)) {
-            if (conv.uch == '\n') {
-                if (last_was_cr) {
-                    bc--;
-                    last_was_cr = false;
-                }
-                bctree.set(bctree.size()-1, bc);
-                if (!insert_new_line()) return false;
-                bc = 0;
-            } else {
-                if (last_was_cr) {
-                    if (!line->append('\r')) return false;
-                    last_was_cr = false;
-                } else if (conv.uch == '\r') {
-                    last_was_cr = true;
-                    continue;
-                }
-                if (!line->append(conv.uch)) return false;
-            }
-        }
-    }
-
-    bctree.set(bctree.size()-1, bc+1);
-    dirty = false;
-
-    if (lang != LANG_NONE && !reread) {
-        if (tree) {
-            ts_tree_delete(tree);
-            tree = NULL;
-        }
-        update_tree();
-    }
-
-    if (reread) {
-        u32 y = lines.len-1;
-        internal_finish_edit(new_cur2(lines[y].len, y));
-    }
-
-    return true;
-}
-
-bool Buffer::read_data(char *data, int len, bool reread) {
     if (len == -1) len = strlen(data);
 
-    int i = 0;
-    return read([&](char* out) {
-        if (i < len) {
-            *out = data[i++];
-            return true;
-        }
-        return false;
-    }, reread);
+    auto uchars = cstr_to_ustr(data, len);
+    insert(new_cur2(0, 0), uchars->items, uchars->len);
 }
 
-bool Buffer::read(File_Mapping *fm, bool reread) {
-    return read_data((char*)fm->data, fm->len, reread);
+void Buffer::read(File_Mapping *fm) {
+    read((char*)fm->data, fm->len);
 }
 
 void Buffer::write(File *f) {

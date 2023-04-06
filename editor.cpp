@@ -762,7 +762,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 GHFmtAddLine(rend.finish());
                 GHFmtAddLine("");
 
-                auto new_contents = gh_fmt_finish();
+                auto new_contents = gh_fmt_finish(false);
                 if (!new_contents) break;
                 defer { GHFree(new_contents); };
 
@@ -1001,23 +1001,13 @@ void Editor::reload_file(bool because_of_file_watcher) {
         return;
 
     auto fm = map_file_into_memory(filepath);
-    if (!fm) {
-        // don't error here
-        // tell_user(cp_sprintf("Unable to open %s for reading: %s", filepath, get_last_error()), "Error opening file");
-        return;
-    }
+    if (!fm) return;
     defer { fm->cleanup(); };
 
     if (!check_file(fm)) return;
 
-    /*
-    if (buf->initialized)
-        buf->cleanup();
-    buf->init(&mem, lang == LANG_GO);
-    */
-
     print("=== reloading %s", filepath);
-    buf->read(fm, true);
+    buf->read(fm);
 }
 
 Parse_Lang determine_lang(ccstr filepath) {
@@ -2231,7 +2221,7 @@ bool Editor::optimize_imports() {
         GHFmtAddLine(rend.finish());
         GHFmtAddLine("");
 
-        auto new_contents = gh_fmt_finish();
+        auto new_contents = gh_fmt_finish(false);
         if (!new_contents) break;
         defer { GHFree(new_contents); };
 
@@ -2261,10 +2251,12 @@ bool Editor::optimize_imports() {
 
         chars->concat(cstr_to_ustr(new_contents));
 
-        buf->hist_force_push_next_change = true;
-        if (start != old_end)
-            buf->remove(start, old_end);
-        buf->insert(start, chars->items, chars->len);
+        {
+            SCOPED_BATCH_CHANGE(buf);
+            if (start != old_end)
+                buf->remove(start, old_end);
+            buf->insert(start, chars->items, chars->len);
+        }
 
         {
             auto c = cur;
@@ -2284,9 +2276,6 @@ void Editor::format_on_save() {
     if (lang != LANG_GO) return; // any more checks needed?
 
     auto old_cur = cur;
-
-    Buffer swapbuf; ptr0(&swapbuf);
-    bool success = false;
 
     GHFmtStart();
 
@@ -2314,26 +2303,20 @@ void Editor::format_on_save() {
     }
     defer { GHFree(new_contents); };
 
-    int curr = 0;
-    swapbuf.init(MEM, false, false);
-    swapbuf.read([&](char *out) -> bool {
-        if (new_contents[curr] != '\0') {
-            *out = new_contents[curr++];
-            return true;
-        }
-        return false;
-    });
+    auto uchars = cstr_to_ustr(new_contents);
+    cp_assert(uchars);
 
-    /// auto was_dirty = buf->dirty;
-    buf->copy_from(&swapbuf);
-    buf->dirty = true;
+    {
+        SCOPED_BATCH_CHANGE(buf);
 
-    // we need to adjust cursor manually
-    if (cur.y >= buf->lines.len) {
-        cur.y = buf->lines.len-1;
-        cur.x = buf->lines[cur.y].len;
+        auto start = new_cur2(0, 0);
+        buf->remove(start, buf->end_pos());
+        buf->insert(start, uchars->items, uchars->len);
     }
 
+    // we need to adjust cursor manually
+    if (cur.y >= buf->lines.len)
+        cur = buf->end_pos();
     if (cur.x > buf->lines[cur.y].len)
         cur.x = buf->lines[cur.y].len;
 }
@@ -6412,5 +6395,22 @@ int Editor::find_current_or_next_match(cur2 pos, bool *in_match) {
 }
 
 char* gh_fmt_finish() {
-    return GHFmtFinish(options.format_with_gofumpt);
+    return gh_fmt_finish(options.format_with_gofumpt);
+}
+
+char* gh_fmt_finish(bool use_gofumpt) {
+    auto ret = GHFmtFinish(use_gofumpt);
+#ifdef DEBUG_BUILD
+    if (!ret) {
+        #
+        auto err = GHGetLastError();
+        if (err) {
+            print("%s", err);
+            GHFree(err);
+        } else {
+            print("unable to format and also there was no last error");
+        }
+    }
+#endif
+    return ret;
 }

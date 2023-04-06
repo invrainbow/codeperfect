@@ -57,7 +57,7 @@ struct Cstr_To_Ustr {
     // void read(u8 *chars, int len, uchar *buf, int buflen);
 };
 
-List<uchar>* cstr_to_ustr(ccstr s);
+List<uchar>* cstr_to_ustr(ccstr s, int len = -1);
 
 s32 uchar_to_cstr(uchar c, cstr out);
 char* uchar_to_cstr(uchar c);
@@ -280,12 +280,10 @@ struct Buffer {
     cur2 hist_redo();
     void hist_apply_change(Change *change, bool undo);
 
-    void copy_from(Buffer *other);
     void init(Pool *_mem, int _lang, bool use_history);
     void cleanup();
-    bool read(Buffer_Read_Func f, bool reread = false);
-    bool read_data(char *data, int len, bool reread = false);
-    bool read(File_Mapping* fm, bool reread = false);
+    void read(char *data, int len);
+    void read(File_Mapping* fm);
     void write(File* f);
     void clear();
     uchar* alloc_temp_array(s32 size);
