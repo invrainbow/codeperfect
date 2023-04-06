@@ -3811,6 +3811,7 @@ done_writing:
 
     auto editor = find_editor_by_filepath(filepath);
     if (editor) {
+        editor->disable_file_watcher_until = current_time_nano() + (2 * 1000000000);
         editor->reload_file();
 
         auto c = editor->cur;
