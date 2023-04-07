@@ -297,46 +297,50 @@ void Buffer::hist_apply_change(Change *change, bool undo) {
 }
 
 void Buffer::tree_batch_start() {
+    if (lang == LANG_NONE) return;
+
     tree_batch_mode = true;
     tree_batch_edits.len = 0;
     tree_batch_refs++;
 }
 
 void Buffer::tree_batch_end() {
+    if (lang == LANG_NONE) return;
+
     Timer t; t.init("tree_batch_end"); t.always_log = true;
 
     tree_batch_refs--;
-    if (tree_batch_refs == 0) {
-        tree_batch_mode = false;
+    if (tree_batch_refs != 0) return;
 
-        if (tree) {
-            TSInputEdit curr;
-            memcpy(&curr, &tree_batch_edits[0], sizeof(TSInputEdit));
+    tree_batch_mode = false;
 
-            Fori (&tree_batch_edits) {
-                if (i == 0) continue;
+    if (tree) {
+        TSInputEdit curr;
+        memcpy(&curr, &tree_batch_edits[0], sizeof(TSInputEdit));
 
-                // if we can merge edit and it, do so
-                // otherwise, apply curr and set curr to it
-                if (curr.new_end_byte == it.old_end_byte) {
-                    if (it.start_byte < curr.start_byte) {
-                        curr.start_byte = it.start_byte;
-                        curr.start_point = it.start_point;
-                    }
-                    curr.new_end_byte = it.new_end_byte;
-                    curr.new_end_point = it.new_end_point;
-                } else {
-                    ts_tree_edit(tree, &curr);
-                    memcpy(&curr, &it, sizeof(TSInputEdit));
+        Fori (&tree_batch_edits) {
+            if (i == 0) continue;
+
+            // if we can merge edit and it, do so
+            // otherwise, apply curr and set curr to it
+            if (curr.new_end_byte == it.old_end_byte) {
+                if (it.start_byte < curr.start_byte) {
+                    curr.start_byte = it.start_byte;
+                    curr.start_point = it.start_point;
                 }
+                curr.new_end_byte = it.new_end_byte;
+                curr.new_end_point = it.new_end_point;
+            } else {
+                ts_tree_edit(tree, &curr);
+                memcpy(&curr, &it, sizeof(TSInputEdit));
             }
-            ts_tree_edit(tree, &curr);
-            t.log("apply tsedits");
         }
-
-        update_tree();
-        t.log("call update_tree");
+        ts_tree_edit(tree, &curr);
+        t.log("apply tsedits");
     }
+
+    update_tree();
+    t.log("call update_tree");
 }
 
 cur2 Buffer::hist_undo() {
