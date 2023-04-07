@@ -60,18 +60,24 @@ Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title, ccstr yeslabel, 
 
 Ask_User_Result ask_user_yes_no(ccstr text, ccstr title, ccstr yeslabel, ccstr nolabel, bool cancel) {
     auto ret = os_ask_user_yes_no(text, title, yeslabel, nolabel, cancel);
-    handle_window_focus(true);
+    world.message_queue.add([&](auto msg) {
+        msg->type = MTM_RESET_AFTER_DEFOCUS;
+    });
     return ret;
 }
 
 void tell_user(ccstr text, ccstr title) {
     os_tell_user(text, title);
-    handle_window_focus(true);
+    world.message_queue.add([&](auto msg) {
+        msg->type = MTM_RESET_AFTER_DEFOCUS;
+    });
 }
 
 bool let_user_select_file(Select_File_Opts* opts) {
     auto ret = os_let_user_select_file(opts);
-    handle_window_focus(true);
+    world.message_queue.add([&](auto msg) {
+        msg->type = MTM_RESET_AFTER_DEFOCUS;
+    });
     return ret;
 }
 

@@ -62,6 +62,7 @@ enum Main_Thread_Message_Type {
     MTM_FOCUS_APP_DEBUGGER,
     // for tests
     MTM_TEST_MOVE_CURSOR,
+    MTM_RESET_AFTER_DEFOCUS,
 };
 
 struct Main_Thread_Message {

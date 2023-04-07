@@ -1397,6 +1397,8 @@ int realmain(int argc, char **argv) {
             world.fst.log_output = new_list(char);
         }
 
+        bool reset_inputs_after_defocus = false;
+
         {
             // Process message queue.
             auto messages = world.message_queue.start();
@@ -1404,6 +1406,10 @@ int realmain(int argc, char **argv) {
 
             For (messages) {
                 switch (it.type) {
+                case MTM_RESET_AFTER_DEFOCUS:
+                    reset_inputs_after_defocus = true;
+                    break;
+
                 case MTM_TEST_MOVE_CURSOR: {
                     auto editor = get_current_editor();
                     if (editor)
@@ -1568,6 +1574,15 @@ int realmain(int argc, char **argv) {
                 it.handled = true;
             }
         } while (0);
+
+        // this is called when we do something that defocuses window, like file
+        // dialog or message box basically, the message box interrupts the main
+        // UI loop and then quickly send a blur + focus in quick succession,
+        // which cancels out inside imgui. we want to add a blur after those
+        // two, in order to trigger the input reset, and we need to do it after
+        // handling window events, which is why we do it here.
+        if (reset_inputs_after_defocus)
+            handle_window_focus(false);
 
         fstlog("poll window events");
         world.window->events.len = 0;
