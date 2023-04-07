@@ -1031,7 +1031,6 @@ bool Editor::load_file(ccstr new_filepath) {
     buf->init(&mem, lang, true);
     buf->editable_from_main_thread_only = true;
 
-    FILE* f = NULL;
     if (new_filepath) {
         auto path = get_normalized_path(new_filepath);
         if (!path)
@@ -1057,7 +1056,16 @@ bool Editor::load_file(ccstr new_filepath) {
         is_untitled = true;
         uchar tmp = '\0';
         buf->insert(new_cur2(0, 0), &tmp, 0);
-        buf->dirty = false;
+    }
+
+    buf->dirty = false;
+
+    {
+        // reset buf history so user can't undo initial file contents
+        for (int i = buf->hist_start; i < buf->hist_top; i++)
+            buf->hist_free(i);
+        buf->hist_curr = buf->hist_start;
+        buf->hist_top = buf->hist_start;
     }
 
     auto &b = world.build;
