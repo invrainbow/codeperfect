@@ -7798,16 +7798,24 @@ void UI::draw_everything() {
 
         int index_mouse_flags = 0;
         switch (world.indexer.status) {
-        case IND_READY: {
-            auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEX READY"));
-            auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
-            index_mouse_flags = draw_status_piece(RIGHT, "INDEX READY", rgba(global_colors.status_index_ready_background, opacity), rgba(global_colors.status_index_ready_foreground, opacity));
-            break;
-        }
+        case IND_READY:
         case IND_WRITING: {
-            auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEXING..."));
-            auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
-            index_mouse_flags = draw_status_piece(RIGHT, "INDEXING...", rgba(global_colors.status_index_indexing_background, opacity), rgba(global_colors.status_index_indexing_foreground, opacity));
+            bool writing = false;
+            if (world.indexer.status == IND_WRITING) {
+                // if indexer runs for less than 500ms, just don't flash the indicator
+                if (current_time_milli() - world.indexer.time_started_writing_milli > 500)
+                    writing = true;
+            }
+
+            if (writing) {
+                auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEXING..."));
+                auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
+                index_mouse_flags = draw_status_piece(RIGHT, "INDEXING...", rgba(global_colors.status_index_indexing_background, opacity), rgba(global_colors.status_index_indexing_foreground, opacity));
+            } else {
+                auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEX READY"));
+                auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
+                index_mouse_flags = draw_status_piece(RIGHT, "INDEX READY", rgba(global_colors.status_index_ready_background, opacity), rgba(global_colors.status_index_ready_foreground, opacity));
+            }
             break;
         }
         case IND_READING: {

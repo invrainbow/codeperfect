@@ -6223,6 +6223,7 @@ bool Go_Indexer::acquire_lock(Indexer_Status new_status, bool just_try) {
         lock.enter();
     }
 
+    time_started_writing_milli = current_time_milli();
     status = new_status;
     reacquires++;
     return true;

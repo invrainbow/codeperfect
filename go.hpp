@@ -1203,6 +1203,7 @@ struct Go_Indexer {
     Indexer_Status status;
     int reacquires;
     bool dont_resolve_builtin;
+    u64 time_started_writing_milli;
 
     // ---
 
