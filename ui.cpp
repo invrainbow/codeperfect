@@ -2875,7 +2875,7 @@ void UI::draw_everything() {
 
                         im_small_newline();
 
-                        im::Checkbox("Format using gofumpt", &tmp.format_with_gofumpt);
+                        im::Checkbox("Use gofumpt", &tmp.format_with_gofumpt);
                     }
                     im::Unindent();
 
