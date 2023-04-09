@@ -1008,6 +1008,7 @@ void Editor::reload_file(bool because_of_file_watcher) {
 
     print("=== reloading %s", filepath);
     buf->read(fm);
+    buf->dirty = false;
 }
 
 Parse_Lang determine_lang(ccstr filepath) {
