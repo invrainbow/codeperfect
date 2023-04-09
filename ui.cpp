@@ -2632,6 +2632,12 @@ void UI::draw_everything() {
 
             im::Separator();
 
+            if (im::MenuItem("Delete .last_folder")) {
+                delete_file(path_join(world.configdir, ".last_folder"));
+            }
+
+            im::Separator();
+
             if (im::MenuItem("Message box - Ok")) {
                 tell_user("This is a message box.", "Message");
             }
