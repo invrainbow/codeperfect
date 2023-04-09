@@ -5,22 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/codeperfect95/codeperfect/go/utils"
-	"github.com/google/shlex"
 )
-
-func GetShellOutput(cmd string) string {
-	parts, err := shlex.Split(cmd)
-	if err != nil {
-		return ""
-	}
-	out, err := utils.MakeExecCommand(parts[0], parts[1:]...).Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
 
 // read file located in same folder as executable
 func ReadFileFromExeFolder(filename string) ([]byte, error) {

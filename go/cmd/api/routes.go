@@ -25,9 +25,11 @@ import (
 	"gorm.io/gorm"
 )
 
-var IsDevelMode = os.Getenv("DEVELOPMENT_MODE") == "1"
-var StripeAPIKey = os.Getenv("STRIPE_API_KEY")
-var StripeWebhookSecret = os.Getenv("STRIPE_WEBHOOK_SECRET")
+var (
+	IsDevelMode         = os.Getenv("DEVELOPMENT_MODE") == "1"
+	StripeAPIKey        = os.Getenv("STRIPE_API_KEY")
+	StripeWebhookSecret = os.Getenv("STRIPE_WEBHOOK_SECRET")
+)
 
 var eventQueue chan stripe.Event
 
