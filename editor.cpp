@@ -997,7 +997,8 @@ bool check_file(File_Mapping *fm) {
 
 // I'm just going to make this a separate function from load_file(), since it is doing mostly a different thing.
 void Editor::reload_file(bool because_of_file_watcher) {
-    if (because_of_file_watcher && disable_file_watcher_until > current_time_nano())
+    auto now = current_time_nano();
+    if (because_of_file_watcher && disable_file_watcher_until > now)
         return;
 
     auto fm = map_file_into_memory(filepath);
@@ -1006,7 +1007,6 @@ void Editor::reload_file(bool because_of_file_watcher) {
 
     if (!check_file(fm)) return;
 
-    print("=== reloading %s", filepath);
     buf->read(fm);
     buf->dirty = false;
 }
