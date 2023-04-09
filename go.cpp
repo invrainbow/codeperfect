@@ -2310,7 +2310,7 @@ void Go_Indexer::process_tree_into_gofile(
             case TS_PACKAGE_IDENTIFIER:
             case TS_TYPE_IDENTIFIER:
                 if (is_selector_sel(it)) break;
-                // fallthrough
+                FALLTHROUGH();
             case TS_QUALIFIED_TYPE:
             case TS_SELECTOR_EXPRESSION:
                 ref = node_to_reference(it);
@@ -5271,7 +5271,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         if (triggered_by_period) return false;
         keyword_start = pos;
         prefix = "";
-        // fallthrough
+        FALLTHROUGH();
     case FOUND_LONE_IDENTIFIER: {
         String_Set seen_strings;
         seen_strings.init();

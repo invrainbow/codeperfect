@@ -66,6 +66,8 @@ typedef const uchar* custr;
 
 #define _offsetof(type, field) ((size_t)&(((type *)0)->field))
 
+#define FALLTHROUGH()
+
 inline u32 max(u32 a, u32 b) { return a > b ? a : b; }
 inline u32 min(u32 a, u32 b) { return a < b ? a : b; }
 inline u32 relu_sub(u32 a, u32 b) { return a < b ? 0 : a - b; }
