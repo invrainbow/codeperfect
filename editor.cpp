@@ -1101,6 +1101,16 @@ bool Editor::load_file(ccstr new_filepath) {
         }
     }
 
+    // clean out world.last_closed
+    {
+        auto new_last_closed = new_list(Last_Closed);
+        For (world.last_closed)
+            if (!streq(filepath, it.filepath))
+                new_last_closed->append(it);
+        world.last_closed->len = 0;
+        world.last_closed->concat(new_last_closed);
+    }
+
     return true;
 }
 

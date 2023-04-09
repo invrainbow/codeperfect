@@ -2422,8 +2422,10 @@ void UI::draw_everything() {
             menu_command(CMD_OPEN_FOLDER);
             menu_command(CMD_SAVE_FILE);
             menu_command(CMD_SAVE_ALL);
+            im::Separator();
             menu_command(CMD_CLOSE_EDITOR);
             menu_command(CMD_CLOSE_ALL_EDITORS);
+            menu_command(CMD_OPEN_LAST_CLOSED_EDITOR);
             im::Separator();
             menu_command(CMD_EXIT);
             im::EndMenu();

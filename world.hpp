@@ -269,6 +269,7 @@ enum Command {
     CMD_OPEN_FILE_MANUALLY,
     CMD_CLOSE_EDITOR,
     CMD_CLOSE_ALL_EDITORS,
+    CMD_OPEN_LAST_CLOSED_EDITOR,
     CMD_OPEN_FOLDER,
     CMD_ZOOM_IN,
     CMD_ZOOM_OUT,
@@ -316,6 +317,11 @@ struct Auth_To_Disk {
             int reg_license_len;
         };
     };
+};
+
+struct Last_Closed {
+    char filepath[MAX_PATH];
+    cur2 pos;
 };
 
 struct Auth_Extras {
@@ -377,6 +383,8 @@ struct World {
     char test_name[256];
 
     Jblow_Tests jblow_tests;
+
+    List<Last_Closed> *last_closed;
 
     struct Frameskip {
         u64 timestamp;

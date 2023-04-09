@@ -412,6 +412,7 @@ void World::init() {
         // i assume we will have other things that "orchestrate" world
         SCOPED_MEM(&world_mem);
         message_queue.init();
+        last_closed = new_list(Last_Closed);
     }
 
     {
@@ -1656,6 +1657,9 @@ bool is_command_enabled(Command cmd) {
         return world.panes.len > 1;
     }
 
+    case CMD_OPEN_LAST_CLOSED_EDITOR:
+        return world.last_closed->len;
+
     case CMD_COMMAND_PALETTE:
         return !world.wnd_command.show;
 
@@ -2027,6 +2031,7 @@ void init_command_info_table() {
     command_info_table[CMD_OPEN_FILE_MANUALLY] = k(CP_MOD_PRIMARY, CP_KEY_O, "Open File...");
     command_info_table[CMD_CLOSE_EDITOR] = k(CP_MOD_PRIMARY, CP_KEY_W, "Close Editor");
     command_info_table[CMD_CLOSE_ALL_EDITORS] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_W, "Close All Editors");
+    command_info_table[CMD_OPEN_LAST_CLOSED_EDITOR] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_T, "Open Last Closed Editor");
     command_info_table[CMD_OPEN_FOLDER] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_O, "Open Folder...");
     command_info_table[CMD_ZOOM_IN] = k(CP_MOD_PRIMARY, CP_KEY_EQUAL, "Zoom In");
     command_info_table[CMD_ZOOM_OUT] = k(CP_MOD_PRIMARY, CP_KEY_MINUS, "Zoom Out");
@@ -2628,6 +2633,15 @@ void handle_command(Command cmd, bool from_menu) {
             close_pane(world.current_pane);
         else
             close_editor(pane, pane->current_editor);
+        break;
+    }
+
+    case CMD_OPEN_LAST_CLOSED_EDITOR: {
+        cp_assert(world.last_closed->len);
+
+        auto lc = world.last_closed->last();
+        world.last_closed->len--;
+        goto_file_and_pos(lc->filepath, lc->pos);
         break;
     }
 
@@ -4128,6 +4142,13 @@ bool close_editor(Pane *pane, int editor_index) {
     if (!world.dont_prompt_on_close_unsaved_tab)
         if (!editor.ask_user_about_unsaved_changes())
             return false;
+
+    Last_Closed lc; ptr0(&lc);
+    if (strlen(editor.filepath)+1 <= _countof(lc.filepath)) {
+        cp_strcpy_fixed(lc.filepath, editor.filepath);
+        lc.pos = editor.cur;
+        world.last_closed->append(&lc);
+    }
 
     editor.cleanup();
     pane->editors.remove(editor_index);
