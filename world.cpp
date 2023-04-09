@@ -381,8 +381,13 @@ void World::init() {
 
     t.log("init random shit");
 
-    configdir = GHGetConfigDir();
-    if (!configdir) cp_panic("couldn't get config dir");
+    {
+        auto tmp = GHGetConfigDir();
+        if (!tmp) cp_panic("couldn't get config dir");
+        defer { GHFree(tmp); };
+
+        cp_strcpy_fixed(configdir, tmp);
+    }
 
     t.log("get config dir");
 

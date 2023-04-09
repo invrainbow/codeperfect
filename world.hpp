@@ -371,7 +371,7 @@ struct World {
     Fridge<Chunk6> chunk6_fridge;
     Fridge<Chunk7> chunk7_fridge;
 
-    ccstr configdir;
+    char configdir[MAX_PATH];
 
     bool test_running;
     char test_name[256];
