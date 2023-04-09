@@ -2474,10 +2474,16 @@ void handle_command(Command cmd, bool from_menu) {
         auto &wnd = world.wnd_enter_license;
         if (wnd.show) {
             wnd.cmd_focus = true;
+            wnd.cmd_focus_textbox = true;
             break;
         }
-        wnd.email[0] = '\0';
-        wnd.license[0] = '\0';
+        if (world.auth.state == AUTH_REGISTERED) {
+            cp_strcpy_fixed(wnd.email, world.auth.reg_email);
+            cp_strcpy_fixed(wnd.license, world.auth.reg_license);
+        } else {
+            cp_strcpy_fixed(wnd.email, "");
+            cp_strcpy_fixed(wnd.license, "");
+        }
         wnd.show = true;
         break;
     }

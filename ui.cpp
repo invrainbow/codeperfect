@@ -3758,8 +3758,13 @@ void UI::draw_everything() {
 
         begin_centered_window("Enter License Key", &wnd, 0, 500);
 
-        if (im_input_text_fixbuf("Email", wnd.email, ImGuiInputTextFlags_EnterReturnsTrue))
+        focus_keyboard_here(&wnd);
+
+        if (im_input_text_fixbuf("Email", wnd.email, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll))
             entered = true;
+
+        if (check_cmd_flag(&wnd.cmd_focus_textbox))
+            im_select_all_last();
 
         im_small_newline();
 
