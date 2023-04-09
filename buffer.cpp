@@ -500,13 +500,26 @@ void Buffer::read(char *data, int len) {
 
     cp_assert(!editable_from_main_thread_only || is_main_thread);
 
+    auto start = new_cur2(0, 0);
+
     if (lines.len > 1 || lines[0].len)
-        remove(new_cur2(0, 0), end_pos());
+        remove(start, end_pos());
+
+    if (len == 0) {
+        if (!lines.len) {
+            // insert a space & remove it right away, to ensure we have at
+            // least one empty
+            uchar tmp = (uchar)' ';
+            insert(start, &tmp, 1);
+            remove(start, end_pos());
+        }
+        return;
+    }
 
     if (len == -1) len = strlen(data);
 
     auto uchars = cstr_to_ustr(data, len);
-    insert(new_cur2(0, 0), uchars->items, uchars->len);
+    insert(start, uchars->items, uchars->len);
 }
 
 void Buffer::read(File_Mapping *fm) {
@@ -514,20 +527,20 @@ void Buffer::read(File_Mapping *fm) {
 }
 
 void Buffer::write(File *f) {
-    auto write_char = [&](uchar ch) {
-        char buf[4];
-        auto count = uchar_to_cstr(ch, buf);
-        f->write(buf, count);
-    };
+    Fori (&lines) {
+        auto uchars = &it;
+        auto chars = new_list(char);
 
-    bool first = true;
-    For (&lines) {
-        if (first)
-            first = false;
-        else
-            write_char('\n');
-        for (auto ch : it)
-            write_char(ch);
+        For (uchars) {
+            char buf[4];
+            auto count = uchar_to_cstr(it, buf);
+            chars->concat(buf, count);
+        }
+
+        if (i != lines.len-1)
+            chars->append('\n');
+
+        f->write(chars->items, chars->len);
     }
 }
 
