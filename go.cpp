@@ -2057,18 +2057,6 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
         case TS_RECEIVE_STATEMENT:
         case TS_LABELED_STATEMENT:
         case TS_TYPE_PARAMETER_DECLARATION: {
-            if (node_type == TS_METHOD_DECLARATION || node_type == TS_FUNCTION_DECLARATION) {
-                Open_Scope os;
-                os.depth = depth;
-                os.close_pos = node->end();
-                open_scopes.append(&os);
-
-                Go_Scope_Op op;
-                op.type = GSOP_OPEN_SCOPE;
-                op.pos = node->start();
-                if (!cb(&op)) return WALK_ABORT;
-            }
-
             if (node_type == TS_RECEIVE_STATEMENT) {
                 bool ok = false;
                 do {
@@ -2090,6 +2078,18 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
                 op.decl = &scope_ops_decls->items[i];
                 op.decl_scope_depth = open_scopes.len;
                 op.pos = scope_ops_decls->items[i].decl_start;
+                if (!cb(&op)) return WALK_ABORT;
+            }
+
+            if (node_type == TS_METHOD_DECLARATION || node_type == TS_FUNCTION_DECLARATION) {
+                Open_Scope os;
+                os.depth = depth;
+                os.close_pos = node->end();
+                open_scopes.append(&os);
+
+                Go_Scope_Op op;
+                op.type = GSOP_OPEN_SCOPE;
+                op.pos = node->start();
                 if (!cb(&op)) return WALK_ABORT;
             }
             break;
@@ -5325,6 +5325,11 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
             auto entries = table.entries();
             For (entries) {
+                if (streq(it->value->decl->name, "init"))
+                    if (it->value->decl_scope_depth == 0)
+                        if (it->value->decl->type == GODECL_FUNC)
+                            continue;
+
                 auto r = add_declaration_result(it->name);
                 if (r) {
                     r->declaration_godecl = it->value->decl;
@@ -5511,6 +5516,10 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
                 if (!is_current_file_test_file && str_ends_with(it.ctx->filename, "_test.go"))
                     break;
+
+                if (streq(it.decl->name, "init"))
+                    if (it.decl->type == GODECL_FUNC)
+                        continue;
 
                 auto result = add_declaration_result(it.decl->name);
                 if (result) {
@@ -6841,10 +6850,6 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
         if (isastnull(name_node)) break;
 
         auto name = name_node->string();
-
-        if (node_type == TS_FUNCTION_DECLARATION)
-            if (is_toplevel && streq(name, "init"))
-                break;
 
         auto type_params = parse_type_params(node->field(TSF_TYPE_PARAMETERS));
 
