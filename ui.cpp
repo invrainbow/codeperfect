@@ -5276,16 +5276,33 @@ void UI::draw_everything() {
         fstlog("wnd_command");
     }
 
-    {
+    if (world.wnd_goto_symbol.show) {
         auto &wnd = world.wnd_goto_symbol;
 
-        if (wnd.show && wnd.fill_running && current_time_milli() - wnd.fill_time_started_ms > 100) {
-            begin_centered_window("Go To Symbol...###goto_symbol_filling", &wnd, 0, 650);
-            im::Text("Loading symbols...");
-            im::End();
-        }
+        switch (wnd.state) {
+        case GOTO_SYMBOL_RUNNING:
+            if (current_time_milli() - wnd.fill_time_started_ms > 100) {
+                begin_centered_window("Go To Symbol###goto_symbol_filling", &wnd, 0, 650);
+                im::Text("Loading symbols...");
+                im::End();
+            }
+            break;
 
-        if (wnd.show && !wnd.fill_running) {
+        case GOTO_SYMBOL_ERROR:
+            begin_centered_window("Go To Symbol###goto_symbol_filling", &wnd, 0, 650);
+            im::Text("Unable to load list of symbols.");
+            im::End();
+            break;
+
+        case GOTO_SYMBOL_WAITING:
+            begin_centered_window("Go To Symbol###goto_symbol_filling", &wnd, 0, 650);
+            im::Text("Waiting for indexer to become ready.");
+            im::End();
+            if (world.indexer.status == IND_READY)
+                init_goto_symbol();
+            break;
+
+        case GOTO_SYMBOL_READY: {
             begin_centered_window("Go To Symbol###goto_symbol_ready", &wnd, 0, 650);
 
             bool refilter = false;
@@ -5442,6 +5459,7 @@ void UI::draw_everything() {
 
             im::End();
             fstlog("wnd_goto_symbol");
+        }
         }
     }
 

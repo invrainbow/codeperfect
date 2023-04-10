@@ -336,6 +336,13 @@ struct Drawn_Quad {
     ccstr backtrace;
 };
 
+enum Goto_Symbol_State {
+    GOTO_SYMBOL_READY,
+    GOTO_SYMBOL_RUNNING,
+    GOTO_SYMBOL_WAITING,
+    GOTO_SYMBOL_ERROR,
+};
+
 struct World {
     Pool world_mem;
     Pool frame_mem;
@@ -816,7 +823,8 @@ struct World {
     } wnd_command;
 
     struct Wnd_Goto_Symbol : Wnd {
-        bool fill_running;
+        Goto_Symbol_State state;
+
         Thread_Handle fill_thread;
         Pool fill_thread_pool;
         u64 fill_time_started_ms;
@@ -879,6 +887,7 @@ ccstr ft_node_to_path(FT_Node *node);
 bool is_ignored_by_git(ccstr path, bool isdir);
 
 void init_goto_file();
+void init_goto_symbol();
 void filter_files();
 void filter_symbols();
 

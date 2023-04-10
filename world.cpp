@@ -2101,10 +2101,14 @@ void do_find_interfaces() {
 }
 
 void init_goto_symbol() {
-    if (!world.indexer.acquire_lock(IND_READING, true)) return;
-    defer { world.indexer.release_lock(IND_READING); };
-
     auto &wnd = world.wnd_goto_symbol;
+
+    wnd.show = true;
+
+    if (!world.indexer.acquire_lock(IND_READING, true)) {
+        wnd.state = GOTO_SYMBOL_WAITING;
+        return;
+    }
 
     if (!wnd.fill_thread)
         kill_thread(wnd.fill_thread);
@@ -2114,6 +2118,8 @@ void init_goto_symbol() {
     wnd.filtered_results = NULL;
 
     auto worker = [](void*) {
+        defer { world.indexer.release_lock(IND_READING); };
+
         auto &wnd = world.wnd_goto_symbol;
 
         SCOPED_MEM(&wnd.fill_thread_pool);
@@ -2131,12 +2137,11 @@ void init_goto_symbol() {
             wnd.workspace = world.indexer.index.workspace->copy();
         }
 
-        wnd.fill_running = false;
+        wnd.state = GOTO_SYMBOL_READY;
 
         if (wnd.fill_thread) {
-            auto t = wnd.fill_thread;
+            close_thread_handle(wnd.fill_thread);
             wnd.fill_thread = NULL;
-            close_thread_handle(t);
         }
     };
 
@@ -2144,9 +2149,14 @@ void init_goto_symbol() {
     wnd.fill_thread_pool.init();
 
     wnd.fill_time_started_ms = current_time_milli();
-    wnd.fill_running = true;
     wnd.fill_thread = create_thread(worker, NULL);
-    wnd.show = true;
+
+    if (!wnd.fill_thread) {
+        world.indexer.release_lock(IND_READING);
+        wnd.state = GOTO_SYMBOL_ERROR;
+    } else {
+        wnd.state = GOTO_SYMBOL_RUNNING;
+    }
 }
 
 void do_find_implementations() {
