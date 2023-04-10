@@ -373,7 +373,6 @@ struct Editor {
     void ensure_cursor_on_screen_by_moving_view(Ensure_Cursor_Mode mode = ECM_NONE);
     void insert_text_in_insert_mode(ccstr s);
     ccstr get_autoindent(int for_y);
-    void add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end);
     bool cur_is_inside_comment_or_string();
     bool ask_user_about_unsaved_changes();
     void delete_selection();

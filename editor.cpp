@@ -698,144 +698,141 @@ void Editor::perform_autocomplete(AC_Result *result) {
             return NULL;
         };
 
-        SCOPED_BATCH_CHANGE(buf);
+        ccstr import_to_add = NULL;
 
-        auto import_to_add = see_if_we_need_autoimport();
-        if (import_to_add) {
-            auto iter = new_object(Parser_It);
-            iter->init(buf);
-            auto root = new_ast_node(ts_tree_root_node(buf->tree), iter);
+        {
+            SCOPED_BATCH_CHANGE(buf);
 
-            Ast_Node *package_node = NULL;
-            auto import_nodes = new_list(Ast_Node*);
+            import_to_add = see_if_we_need_autoimport();
+            if (import_to_add) {
+                auto iter = new_object(Parser_It);
+                iter->init(buf);
+                auto root = new_ast_node(ts_tree_root_node(buf->tree), iter);
 
-            FOR_NODE_CHILDREN (root) {
-                if (it->type() == TS_PACKAGE_CLAUSE) {
-                    package_node = it;
-                } else if (it->type() == TS_IMPORT_DECLARATION) {
-                    import_nodes->append(it);
+                Ast_Node *package_node = NULL;
+                auto import_nodes = new_list(Ast_Node*);
+
+                FOR_NODE_CHILDREN (root) {
+                    if (it->type() == TS_PACKAGE_CLAUSE) {
+                        package_node = it;
+                    } else if (it->type() == TS_IMPORT_DECLARATION) {
+                        import_nodes->append(it);
+                    }
                 }
+
+                do {
+                    if (!import_nodes->len && !package_node) break;
+
+                    auto already_exists = [&]() {
+                        For (import_nodes) {
+                            auto imports = new_list(Go_Import);
+                            world.indexer.import_decl_to_goimports(it, imports);
+
+                            auto imp = imports->find([&](auto it) { return streq(it->import_path, import_to_add); });
+                            if (imp) return true;
+                        }
+                        return false;
+                    };
+
+                    if (already_exists()) break;
+
+                    // we need to import, just insert it into the first import. format on save will fix the multiple imports
+
+                    Ast_Node *firstnode = import_nodes->len ? import_nodes->at(0) : NULL;
+
+                    Text_Renderer rend; rend.init();
+                    rend.write("import (\n");
+                    rend.write("\"%s\"\n", import_to_add);
+                    {
+                        if (firstnode && cur > firstnode->end()) {
+                            auto imports = new_list(Go_Import);
+                            world.indexer.import_decl_to_goimports(firstnode, imports);
+
+                            For (imports) {
+                                switch (it.package_name_type) {
+                                case GPN_IMPLICIT:  rend.write("\"%s\"", it.import_path);                       break;
+                                case GPN_EXPLICIT:  rend.write("%s \"%s\"", it.package_name, it.import_path);   break;
+                                case GPN_BLANK:     rend.write("_ \"%s\"", it.import_path);                     break;
+                                case GPN_DOT:       rend.write(". \"%s\"", it.import_path);                     break;
+                                }
+                                rend.write("\n");
+                            }
+                        }
+                    }
+                    rend.write(")");
+
+                    GHFmtStart();
+                    GHFmtAddLine(rend.finish());
+                    GHFmtAddLine("");
+
+                    auto new_contents = gh_fmt_finish(false);
+                    if (!new_contents) break;
+                    defer { GHFree(new_contents); };
+
+                    auto new_contents_len = strlen(new_contents);
+                    if (!new_contents_len) break;
+
+                    if (new_contents[new_contents_len-1] == '\n') {
+                        new_contents[new_contents_len-1] = '\0';
+                        new_contents_len--;
+                    }
+
+                    cur2 start, old_end, new_end;
+                    if (firstnode) {
+                        start = firstnode->start();
+                        old_end = firstnode->end();
+                    } else {
+                        start = package_node->end();
+                        old_end = package_node->end();
+                    }
+                    new_end = start;
+
+                    auto chars = new_list(uchar);
+                    if (!firstnode) {
+                        // add two newlines, it's going after the package decl
+                        chars->append('\n');
+                        chars->append('\n');
+                        new_end.x = 0;
+                        new_end.y += 2;
+                    }
+
+                    {
+                        auto ustr = cstr_to_ustr(new_contents);
+                        For (ustr) {
+                            chars->append(it);
+                            if (it == '\n') {
+                                new_end.x = 0;
+                                new_end.y++;
+                            } else {
+                                new_end.x++;
+                            }
+                        }
+                    }
+
+                    // perform the edit
+                    {
+                        if (start != old_end)
+                            buf->remove(start, old_end);
+                        buf->insert(start, chars->items, chars->len);
+                    }
+
+                    move_cursor(new_cur2(cur.x, cur.y + new_end.y - old_end.y));
+                } while (0);
             }
 
-            do {
-                if (!import_nodes->len && !package_node) break;
+            auto name = cstr_to_ustr(modify_string(result->name));
 
-                auto already_exists = [&]() {
-                    For (import_nodes) {
-                        auto imports = new_list(Go_Import);
-                        world.indexer.import_decl_to_goimports(it, imports);
+            auto ac_start = cur;
+            ac_start.x -= strlen(ac.prefix); // what if the prefix contains unicode?
 
-                        auto imp = imports->find([&](auto it) { return streq(it->import_path, import_to_add); });
-                        if (imp) return true;
-                    }
-                    return false;
-                };
+            // perform the edit
+            // i don't think we need to create a batch here? as long as it follows the flow of normal text editing
+            buf->remove(ac_start, cur);
+            auto newcur = buf->insert(ac_start, name->items, name->len);
 
-                if (already_exists()) break;
-
-                // we need to import, just insert it into the first import. format on save will fix the multiple imports
-
-                Ast_Node *firstnode = import_nodes->len ? import_nodes->at(0) : NULL;
-
-                Text_Renderer rend; rend.init();
-                rend.write("import (\n");
-                rend.write("\"%s\"\n", import_to_add);
-                {
-                    if (firstnode && cur > firstnode->end()) {
-                        auto imports = new_list(Go_Import);
-                        world.indexer.import_decl_to_goimports(firstnode, imports);
-
-                        For (imports) {
-                            switch (it.package_name_type) {
-                            case GPN_IMPLICIT:  rend.write("\"%s\"", it.import_path);                       break;
-                            case GPN_EXPLICIT:  rend.write("%s \"%s\"", it.package_name, it.import_path);   break;
-                            case GPN_BLANK:     rend.write("_ \"%s\"", it.import_path);                     break;
-                            case GPN_DOT:       rend.write(". \"%s\"", it.import_path);                     break;
-                            }
-                            rend.write("\n");
-                        }
-                    }
-                }
-                rend.write(")");
-
-                GHFmtStart();
-                GHFmtAddLine(rend.finish());
-                GHFmtAddLine("");
-
-                auto new_contents = gh_fmt_finish(false);
-                if (!new_contents) break;
-                defer { GHFree(new_contents); };
-
-                auto new_contents_len = strlen(new_contents);
-                if (!new_contents_len) break;
-
-                if (new_contents[new_contents_len-1] == '\n') {
-                    new_contents[new_contents_len-1] = '\0';
-                    new_contents_len--;
-                }
-
-                cur2 start, old_end, new_end;
-                if (firstnode) {
-                    start = firstnode->start();
-                    old_end = firstnode->end();
-                } else {
-                    start = package_node->end();
-                    old_end = package_node->end();
-                }
-                new_end = start;
-
-                auto chars = new_list(uchar);
-                if (!firstnode) {
-                    // add two newlines, it's going after the package decl
-                    chars->append('\n');
-                    chars->append('\n');
-                    new_end.x = 0;
-                    new_end.y += 2;
-                }
-
-                {
-                    auto ustr = cstr_to_ustr(new_contents);
-                    For (ustr) {
-                        chars->append(it);
-                        if (it == '\n') {
-                            new_end.x = 0;
-                            new_end.y++;
-                        } else {
-                            new_end.x++;
-                        }
-                    }
-                }
-
-                // perform the edit
-                {
-                    if (start != old_end)
-                        buf->remove(start, old_end);
-                    buf->insert(start, chars->items, chars->len);
-                }
-
-                add_change_in_insert_mode(start, old_end, new_end);
-
-                // do something with new_contents
-            } while (0);
+            // move cursor forward
+            move_cursor(newcur);
         }
-
-        // this whole section is basically, like, "how do we replace text
-        // and make sure nvim/ts are in sync"
-        //
-        // refactor this out somehow, we're already starting to copy paste
-
-        auto name = cstr_to_ustr(modify_string(result->name));
-
-        auto ac_start = cur;
-        ac_start.x -= strlen(ac.prefix); // what if the prefix contains unicode?
-
-        // perform the edit
-        // i don't think we need to create a batch here? as long as it follows the flow of normal text editing
-        buf->remove(ac_start, cur);
-        auto newcur = buf->insert(ac_start, name->items, name->len);
-
-        // move cursor forward
-        move_cursor(newcur);
 
         // clear out last_closed_autocomplete
         last_closed_autocomplete = NULL_CUR;
@@ -851,11 +848,6 @@ void Editor::perform_autocomplete(AC_Result *result) {
         break;
     }
     }
-}
-
-void Editor::add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end) {
-    auto dy = new_end.y - old_end.y;
-    move_cursor(new_cur2(cur.x, cur.y + dy));
 }
 
 bool Editor::is_current_editor() {
