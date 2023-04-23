@@ -3300,10 +3300,14 @@ void handle_command(Command cmd, bool from_menu) {
         find_nodes_containing_pos(root, editor->cur, true, [&](auto it) -> Walk_Action {
             if (it->type() == TS_SOURCE_FILE) return WALK_CONTINUE;
 
-            if (node)
+            if (node) {
                 if (it->start() == node->start())
                     if (it->end() == node->end())
                         return WALK_CONTINUE;
+            } else {
+                if (!it->prev() && !it->next())
+                    return WALK_CONTINUE;
+            }
 
             node = it->dup();
             return WALK_CONTINUE;
