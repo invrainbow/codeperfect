@@ -786,6 +786,7 @@ void handle_window_event(Window_Event *it) {
 
         auto editor = get_current_editor();
         if (!editor) break;
+        if (editor->ast_navigation.on) break;
 
         // when vim is on, it takes over insert mode completely
         if (world.vim.on) {
