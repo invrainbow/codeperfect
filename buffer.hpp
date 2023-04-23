@@ -230,7 +230,6 @@ struct Buffer {
 
     TSParser *parser;
     char tsinput_buffer[1024];
-    TSInputEdit tsedit;
     List<uchar> edit_buffer_old;
     List<uchar> edit_buffer_new;
     bool editable_from_main_thread_only;
@@ -294,12 +293,13 @@ struct Buffer {
     void internal_append_line(uchar* text, s32 len);
     void internal_delete_lines(u32 y1, u32 y2);
     void internal_insert_line(u32 y, uchar* text, s32 len);
-    void internal_start_edit(cur2 start, cur2 end);
-    void internal_finish_edit(cur2 new_end);
-    void internal_update_mark_tree();
+    void internal_update_mark_tree(TSInputEdit *edit);
     int internal_distance_between(cur2 a, cur2 b);
 
+    cur2 edit_text(cur2 start, cur2 old_end, uchar *text, s32 len, bool applying_change = false);
     cur2 insert(cur2 start, uchar* text, s32 len, bool applying_change = false);
+    void internal_do_actual_insert(cur2 start, uchar* text, s32 len);
+    void internal_do_actual_remove(cur2 start, cur2 end);
     void remove(cur2 start, cur2 end, bool applying_change = false);
     void remove_lines(u32 y1, u32 y2);
 

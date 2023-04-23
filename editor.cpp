@@ -810,11 +810,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                     }
 
                     // perform the edit
-                    {
-                        if (start != old_end)
-                            buf->remove(start, old_end);
-                        buf->insert(start, chars->items, chars->len);
-                    }
+                    buf->edit_text(start, old_end, chars->items, chars->len);
 
                     move_cursor(new_cur2(cur.x, cur.y + new_end.y - old_end.y));
                 } while (0);
@@ -825,12 +821,8 @@ void Editor::perform_autocomplete(AC_Result *result) {
             auto ac_start = cur;
             ac_start.x -= strlen(ac.prefix); // what if the prefix contains unicode?
 
-            // perform the edit
-            // i don't think we need to create a batch here? as long as it follows the flow of normal text editing
-            buf->remove(ac_start, cur);
-            auto newcur = buf->insert(ac_start, name->items, name->len);
-
-            // move cursor forward
+            // perform the edit & move cursor
+            auto newcur = buf->edit_text(ac_start, cur, name->items, name->len);
             move_cursor(newcur);
         }
 
@@ -2007,11 +1999,7 @@ void Editor::type_char(uchar ch, Type_Char_Opts *opts) {
         // remove the indentation without calling backspace (don't set
         // insert_start or replace_start or update edit_backspaced_graphemes)
         auto start = new_cur2(0, pos.y);
-        buf->remove(start, pos);
-        pos = start;
-
-        // insert indentation
-        pos = buf->insert(pos, indentation->items, indentation->len);
+        pos = buf->edit_text(start, pos, indentation->items, indentation->len);
 
         // set this as the new insert_start/replace_start, don't call edit_backspaced_graphemes
         // honestly this is a huge hack and i hate it
@@ -2262,12 +2250,7 @@ bool Editor::optimize_imports() {
 
         chars->concat(cstr_to_ustr(new_contents));
 
-        {
-            SCOPED_BATCH_CHANGE(buf);
-            if (start != old_end)
-                buf->remove(start, old_end);
-            buf->insert(start, chars->items, chars->len);
-        }
+        buf->edit_text(start, old_end, chars->items, chars->len);
 
         {
             auto c = cur;
@@ -2317,13 +2300,7 @@ void Editor::format_on_save() {
     auto uchars = cstr_to_ustr(new_contents);
     cp_assert(uchars);
 
-    {
-        SCOPED_BATCH_CHANGE(buf);
-
-        auto start = new_cur2(0, 0);
-        buf->remove(start, buf->end_pos());
-        buf->insert(start, uchars->items, uchars->len);
-    }
+    buf->edit_text(new_cur2(0, 0), buf->end_pos(), uchars->items, uchars->len);
 
     // we need to adjust cursor manually
     if (cur.y >= buf->lines.len)
@@ -2605,11 +2582,12 @@ cur2 Editor::vim_handle_J(Vim_Command *cmd, bool add_spaces) {
             auto start = new_cur2(lines[y].len, y);
             auto x = first_nonspace_cp(y+1);
             auto end = new_cur2(x, y+1);
-            bool add_space = add_spaces && x < lines[y+1].len && lines[y+1][x] != ')';
 
-            buf->remove(start, end);
-            if (add_space)
-                buf->insert(start, ' ');
+            auto new_text = new_list(uchar);
+            if (add_spaces && x < lines[y+1].len && lines[y+1][x] != ')')
+                new_text->append(' ');
+
+            buf->edit_text(start, end, new_text->items, new_text->len);
             last_start = start;
         }
 
@@ -2629,15 +2607,15 @@ void Editor::indent_block(int y1, int y2, int indents) {
         auto x = first_nonspace_cp(y);
         int vx = buf->idx_cp_to_vcp(y, x);
 
-        buf->remove(new_cur2(0, y), new_cur2(x, y));
-
         int new_vx = vx + max(options.tabsize * indents, 0);
+
         auto chars = new_list(uchar);
         for (int i = 0; i < new_vx / options.tabsize; i++)
             chars->append('\t');
         for (int i = 0; i < new_vx % options.tabsize; i++)
             chars->append(' ');
-        buf->insert(new_cur2(0, y), chars->items, chars->len);
+
+        buf->edit_text(new_cur2(0, y), new_cur2(x, y), chars->items, chars->len);
     }
 }
 
@@ -4737,8 +4715,7 @@ void Editor::vim_transform_text(uchar command, cur2 a, cur2 b) {
     auto it = iter(a);
     while (!it.eof() && it.pos != b)
         new_chars->append(transform_char(it.next()));
-    buf->remove(a, b);
-    buf->insert(a, new_chars->items, new_chars->len);
+    buf->edit_text(a, b, new_chars->items, new_chars->len);
 }
 
 cur2 Editor::vim_handle_text_transform_command(char command, Motion_Result *motion_result) {
@@ -5663,11 +5640,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                         for (int i = 0, count = x1 - x0; i < count; i++)
                             chars->append(arg);
 
-                        auto p0 = new_cur2(x0, y);
-                        auto p1 = new_cur2(x1, y);
-
-                        buf->remove(p0, p1);
-                        buf->insert(p0, chars->items, chars->len);
+                        buf->edit_text(new_cur2(x0, y), new_cur2(x1, y), chars->items, chars->len);
                     }
 
                     move_cursor_normal(start);
@@ -5690,10 +5663,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
 
                 auto end = it.pos;
 
-                SCOPED_BATCH_CHANGE(buf);
-
-                buf->remove(start, end);
-                buf->insert(start, new_text->items, new_text->len);
+                buf->edit_text(start, end, new_text->items, new_text->len);
 
                 move_cursor_normal(new_cur2(start.x + new_text->len - 1, start.y));
                 *can_dotrepeat = true;

@@ -2425,8 +2425,7 @@ void handle_command(Command cmd, bool from_menu) {
                     if (start.y < miny) miny = start.y;
                     if (end.y > maxy) maxy = end.y;
 
-                    editor->buf->remove(start, end);
-                    editor->buf->insert(start, utext->items, utext->len);
+                    editor->buf->edit_text(start, end, utext->items, utext->len);
                 }
             }
 
@@ -3823,9 +3822,7 @@ done_writing:
             }
         }
 
-        if (start != old_end)
-            buf.remove(start, old_end);
-        buf.insert(start, chars->items, chars->len);
+        buf.edit_text(start, old_end, chars->items, chars->len);
         cursor_offset = lines_in_new - (old_end.y - start.y);
     }
 

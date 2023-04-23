@@ -291,9 +291,7 @@ void Buffer::hist_apply_change(Change *change, bool undo) {
         new_text = &change->new_text;
     }
 
-    if (start != old_end) remove(start, old_end, true);
-
-    insert(start, new_text->items, new_text->len, true);
+    edit_text(start, old_end, new_text->items, new_text->len, true);
 }
 
 void Buffer::tree_batch_start() {
@@ -623,10 +621,77 @@ void Buffer::internal_append_line(uchar* text, s32 len) {
     dirty = true;
 }
 
-cur2 Buffer::insert(cur2 start, uchar* text, s32 len, bool applying_change) {
-    i32 x = start.x, y = start.y;
+cur2 Buffer::edit_text(cur2 start, cur2 old_end, uchar *text, s32 len, bool applying_change) {
+    cp_assert(!editable_from_main_thread_only || is_main_thread);
 
-    internal_start_edit(start, start);
+    SCOPED_BATCH_CHANGE(this);
+
+    TSInputEdit edit;
+    edit.start_byte = cur_to_offset(start);
+    edit.start_point = cur_to_tspoint(start);
+    edit.old_end_byte = cur_to_offset(old_end);
+    edit.old_end_point = cur_to_tspoint(old_end);
+
+    edit_buffer_old.len = 0;
+    edit_buffer_old.concat(get_uchars(start, old_end));
+
+    // do the remove
+    if (start != old_end) {
+        if (use_history && !applying_change)
+            internal_commit_remove_to_history(start, old_end);
+        internal_do_actual_remove(start, old_end);
+    }
+
+    // do the insert
+    cur2 new_end = start;
+    if (text && len) {
+        internal_do_actual_insert(start, text, len);
+
+        // easier/better way to calculate this?
+        new_end = start;
+        for (int i = 0; i < len; i++) {
+            if (text[i] == '\n') {
+                new_end.x = 0;
+                new_end.y++;
+            } else {
+                new_end.x++;
+            }
+        }
+
+        if (use_history && !applying_change)
+            internal_commit_insert_to_history(start, new_end);
+    }
+
+    edit.new_end_byte = cur_to_offset(new_end);
+    edit.new_end_point = cur_to_tspoint(new_end);
+
+    if (lang != LANG_NONE) {
+        if (!tree_batch_mode) {
+            ts_tree_edit(tree, &edit);
+            update_tree();
+        } else {
+            tree_batch_edits.append(&edit);
+        }
+    }
+
+    internal_update_mark_tree(&edit);
+
+    // set this here or in .remove() and .insert()?
+    buf_version++;
+    dirty = true;
+    return new_end;
+}
+
+cur2 Buffer::insert(cur2 start, uchar* text, s32 len, bool applying_change) {
+    return edit_text(start, start, text, len, applying_change);
+}
+
+void Buffer::remove(cur2 start, cur2 end, bool applying_change) {
+    edit_text(start, end, NULL, 0, applying_change);
+}
+
+void Buffer::internal_do_actual_insert(cur2 start, uchar* text, s32 len) {
+    i32 x = start.x, y = start.y;
 
     bool has_newline = false;
     for (u32 i = 0; i < len; i++) {
@@ -676,24 +741,6 @@ cur2 Buffer::insert(cur2 start, uchar* text, s32 len, bool applying_change) {
 
         bctree.set(y, bctree.get(y) + bc);
     }
-
-    // easier/better way to calculate this?
-    auto end = start;
-    for (int i = 0; i < len; i++) {
-        if (text[i] == '\n') {
-            end.x = 0;
-            end.y++;
-        } else {
-            end.x++;
-        }
-    }
-
-    if (use_history && !applying_change)
-        internal_commit_insert_to_history(start, end);
-
-    internal_finish_edit(end);
-    dirty = true;
-    return end;
 }
 
 void Buffer::update_tree() {
@@ -734,49 +781,14 @@ void Buffer::update_tree() {
     tree_version++;
 }
 
-void Buffer::internal_start_edit(cur2 start, cur2 end) {
-    cp_assert(!editable_from_main_thread_only || is_main_thread);
-
-    // we use the tsedit for other things, right now for mark tree calculations.
-    // so create it even if lang == LANG_NONE, it's not only used for the tree.
-    ptr0(&tsedit);
-    tsedit.start_byte = cur_to_offset(start);
-    tsedit.start_point = cur_to_tspoint(start);
-    tsedit.old_end_byte = cur_to_offset(end);
-    tsedit.old_end_point = cur_to_tspoint(end);
-
-    edit_buffer_old.len = 0;
-    edit_buffer_old.concat(get_uchars(start, end));
-}
-
-void Buffer::internal_finish_edit(cur2 new_end) {
-    cp_assert(!editable_from_main_thread_only || is_main_thread);
-
-    tsedit.new_end_byte = cur_to_offset(new_end);
-    tsedit.new_end_point = cur_to_tspoint(new_end);
-
-    if (lang != LANG_NONE) {
-        if (!tree_batch_mode) {
-            ts_tree_edit(tree, &tsedit);
-            update_tree();
-        } else {
-            tree_batch_edits.append(&tsedit);
-        }
-    }
-
-    // set this here or in .remove() and .insert()?
-    buf_version++;
-    internal_update_mark_tree();
-}
-
-void Buffer::internal_update_mark_tree() {
+void Buffer::internal_update_mark_tree(TSInputEdit *edit) {
     cp_assert(!editable_from_main_thread_only || is_main_thread);
 
     if (!mark_tree.root) return;
 
     {
-        auto start = tspoint_to_cur(tsedit.start_point);
-        auto end = tspoint_to_cur(tsedit.new_end_point);
+        auto start = tspoint_to_cur(edit->start_point);
+        auto end = tspoint_to_cur(edit->new_end_point);
 
         edit_buffer_new.len = 0;
         edit_buffer_new.concat(get_uchars(start, end));
@@ -785,9 +797,9 @@ void Buffer::internal_update_mark_tree() {
     auto a = new_dstr(&edit_buffer_old);
     auto b = new_dstr(&edit_buffer_new);
 
-    auto start = tspoint_to_cur(tsedit.start_point);
-    auto oldend = tspoint_to_cur(tsedit.old_end_point);
-    auto newend = tspoint_to_cur(tsedit.new_end_point);
+    auto start = tspoint_to_cur(edit->start_point);
+    auto oldend = tspoint_to_cur(edit->old_end_point);
+    auto newend = tspoint_to_cur(edit->new_end_point);
 
     auto diffs = diff_main(a, b);
     if (!diffs) {
@@ -1002,13 +1014,8 @@ void Buffer::internal_commit_remove_to_history(cur2 start, cur2 end) {
     }
 }
 
-void Buffer::remove(cur2 start, cur2 end, bool applying_change) {
+void Buffer::internal_do_actual_remove(cur2 start, cur2 end) {
     if (start == end) return;
-
-    internal_start_edit(start, end);
-
-    if (use_history && !applying_change)
-        internal_commit_remove_to_history(start, end);
 
     i32 x1 = start.x, y1 = start.y;
     i32 x2 = end.x, y2 = end.y;
@@ -1026,9 +1033,6 @@ void Buffer::remove(cur2 start, cur2 end, bool applying_change) {
         internal_delete_lines(y1 + 1, min(lines.len, y2 + 1));
     }
     bctree.set(y1, get_bytecount(&lines[y1]));
-    dirty = true;
-
-    internal_finish_edit(start);
 }
 
 Buffer_It Buffer::iter(cur2 c) {

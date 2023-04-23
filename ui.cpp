@@ -5114,11 +5114,10 @@ void UI::draw_everything() {
                         for (auto p = newstr; *p; p++) chars->append(*p);
                     }
 
-                    editor->buf->remove(m.start, m.end);
 
                     chars->append('\0');
                     auto uchars = cstr_to_ustr(chars->items);
-                    editor->buf->insert(m.start, uchars->items, uchars->len);
+                    editor->buf->edit_text(m.start, m.end, uchars->items, uchars->len);
                 }
 
                 wnd.show = false;
