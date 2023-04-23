@@ -136,7 +136,7 @@ struct Mark_Tree {
     Mark_Node *find_node(Mark_Node *root, cur2 pos);
     Mark_Node *insert_node(cur2 pos);
     void delete_node(cur2 pos);
-    Mark_Node *succ(Mark_Node *node);
+    Mark_Node *successor(Mark_Node *node);
     int get_height(Mark_Node *root);
     int get_balance(Mark_Node *root);
     void recalc_height(Mark_Node *root);

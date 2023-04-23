@@ -1237,7 +1237,7 @@ int Mark_Tree::get_balance(Mark_Node *root) {
     return !root ? 0 : (get_height(root->left) - get_height(root->right));
 }
 
-Mark_Node *Mark_Tree::succ(Mark_Node *node) {
+Mark_Node *Mark_Tree::successor(Mark_Node *node) {
     if (node->right) {
         auto ret = node->right;
         while (ret->left)
@@ -1507,7 +1507,7 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
     if (!nstart) return;
 
     auto it = nstart;
-    if (it->pos < start) it = succ(it);
+    if (it->pos < start) it = successor(it);
 
     Mark *orphan_marks = NULL;
 
@@ -1515,7 +1515,7 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
 
     while (it && it->pos < old_end) {
         if (it->pos < new_end) {
-            it = succ(it);
+            it = successor(it);
         } else {
             for (auto mark = it->marks; mark; mark = mark->next)
                 if (mark == mark->next)
@@ -1548,13 +1548,13 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
             // after deleting the node, go to the next node
             it = find_node(root, curr);
             if (it && it->pos < curr)
-                it = succ(it);
+                it = successor(it);
         }
     }
 
     check_tree_integrity();
 
-    for (; it; it = succ(it)) {
+    for (; it; it = successor(it)) {
         if (it->pos.y == old_end.y) {
             it->pos.y = new_end.y;
             it->pos.x = it->pos.x + new_end.x - old_end.x;
@@ -1630,7 +1630,7 @@ void Mark_Tree::check_ordering() {
 
     // o(n). we need this for now, don't have this in final ver.
     cur2 last = {-1, -1};
-    for (auto it = min; it; it = succ(it)) {
+    for (auto it = min; it; it = successor(it)) {
         if (last.x != -1) {
             if (last >= it->pos) {
                 cp_panic("out of order (or duplicate)");
