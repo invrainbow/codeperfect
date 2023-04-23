@@ -1181,31 +1181,6 @@ void goto_error(int index) {
     b.scroll_to = index;
 }
 
-void goto_next_error(int direction) {
-    auto &b = world.build;
-
-    bool has_valid = false;
-    For (&b.errors) {
-        if (it.valid) {
-            has_valid = true;
-            break;
-        }
-    }
-
-    if (!b.ready() || !has_valid) return;
-
-    auto old = b.current_error;
-    do {
-        b.current_error += direction;
-        if (b.current_error < 0)
-            b.current_error = b.errors.len - 1;
-        if (b.current_error >= b.errors.len)
-            b.current_error = 0;
-    } while (b.current_error != old && !b.errors[b.current_error].valid);
-
-    goto_error(b.current_error);
-}
-
 void reload_file_subtree(ccstr relpath) {
     // TODO: if the file tree is busy, add the path to a queue of subtrees to reload
     // and pull the stuff underneath into like actually_reload_file_subtree()
@@ -2715,12 +2690,31 @@ void handle_command(Command cmd, bool from_menu) {
         break;
 
     case CMD_GO_TO_NEXT_ERROR:
-        goto_next_error(1);
-        break;
+    case CMD_GO_TO_PREVIOUS_ERROR: {
+        auto &b = world.build;
 
-    case CMD_GO_TO_PREVIOUS_ERROR:
-        goto_next_error(-1);
+        bool has_valid = false;
+        For (&b.errors) {
+            if (it.valid) {
+                has_valid = true;
+                break;
+            }
+        }
+
+        if (!b.ready() || !has_valid) break;
+
+        auto old = b.current_error;
+        do {
+            b.current_error += (cmd == CMD_GO_TO_NEXT_ERROR ? 1 : -1);
+            if (b.current_error < 0)
+                b.current_error = b.errors.len - 1;
+            if (b.current_error >= b.errors.len)
+                b.current_error = 0;
+        } while (b.current_error != old && !b.errors[b.current_error].valid);
+
+        goto_error(b.current_error);
         break;
+    }
 
     case CMD_GO_TO_DEFINITION:
         handle_goto_definition();

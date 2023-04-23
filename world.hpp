@@ -902,7 +902,6 @@ void handle_goto_definition(cur2 pos = {-1, -1});
 void save_all_unsaved_files();
 void start_search_job(ccstr query);
 void goto_error(int index);
-void goto_next_error(int direction);
 void reload_file_subtree(ccstr path);
 void open_rename_identifier();
 void kick_off_rename_identifier();
