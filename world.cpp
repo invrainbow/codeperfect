@@ -1354,8 +1354,8 @@ void reload_file_subtree(ccstr relpath) {
     // parent->children = sort_ft_nodes(parent->children);
 }
 
-bool move_autocomplete_cursor(Editor *ed, int direction) {
-    auto &ac = ed->autocomplete;
+bool move_autocomplete_cursor(Editor *editor, int direction) {
+    auto &ac = editor->autocomplete;
     if (!ac.ac.results) return false;
 
     if (!ac.filtered_results->len) {
@@ -3392,16 +3392,16 @@ void do_generate_function() {
             return;
         }
 
-        auto ed = find_editor_by_filepath(result->insert_filepath);
+        auto editor = find_editor_by_filepath(result->insert_filepath);
 
-        if (ed) {
+        if (editor) {
             // if it's already open, just make the change
             auto uchars = cstr_to_ustr(result->insert_code);
 
             if (result->insert_pos == NULL_CUR)
-                ed->buf->insert(ed->buf->end_pos(), uchars->items, uchars->len);
+                editor->buf->insert(editor->buf->end_pos(), uchars->items, uchars->len);
             else
-                ed->buf->insert(result->insert_pos, uchars->items, uchars->len);
+                editor->buf->insert(result->insert_pos, uchars->items, uchars->len);
         } else {
             // otherwise, make the change on disk
             File_Replacer fr;
@@ -3423,8 +3423,8 @@ void do_generate_function() {
 
         {
             // open and go to the editor
-            auto ed = goto_file_and_pos(result->insert_filepath, result->jump_to_pos, true, ECM_GOTO_DEF); // new ECM_*?
-            ed->highlight_snippet(result->highlight_start, result->highlight_end);
+            auto editor = goto_file_and_pos(result->insert_filepath, result->jump_to_pos, true, ECM_GOTO_DEF); // new ECM_*?
+            editor->highlight_snippet(result->highlight_start, result->highlight_end);
         }
 
         // TODO: add imports

@@ -5010,8 +5010,8 @@ void UI::draw_everything() {
     do {
         if (!world.wnd_current_file_search.show) break;
 
-        auto ed = get_current_editor();
-        if (!ed) break;
+        auto editor = get_current_editor();
+        if (!editor) break;
 
         auto &wnd = world.wnd_current_file_search;
 
@@ -5025,10 +5025,10 @@ void UI::draw_everything() {
             | ImGuiWindowFlags_NoScrollWithMouse
             | ImGuiWindowFlags_NoDecoration;
 
-        if (!ed->ui_rect_set) break;
+        if (!editor->ui_rect_set) break;
 
         {
-            auto &r = ed->ui_rect;
+            auto &r = editor->ui_rect;
             im::SetNextWindowPos(ImVec2(r.x + r.w - 10, r.y - 1), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
         }
 
@@ -5038,7 +5038,7 @@ void UI::draw_everything() {
 
         bool search_again = false;
 
-        auto &fs = ed->file_search;
+        auto &fs = editor->file_search;
         auto &matches = fs.results;
 
         ccstr label = NULL;
@@ -5057,10 +5057,10 @@ void UI::draw_everything() {
                 im::SetWindowFocus(NULL);
             } else {
                 im::SetKeyboardFocusHere(-1);
-                auto idx = ed->move_file_search_result(!(im_get_keymods() & CP_MOD_SHIFT), 1);
+                auto idx = editor->move_file_search_result(!(im_get_keymods() & CP_MOD_SHIFT), 1);
                 if (idx != -1) {
                     fs.current_idx = idx;
-                    ed->move_cursor(matches[idx].start);
+                    editor->move_cursor(matches[idx].start);
                 }
             }
         }
@@ -5085,7 +5085,7 @@ void UI::draw_everything() {
             im_small_newline();
 
             if (im_input_text_fixbuf("Replace:", wnd.replace_str, ImGuiInputTextFlags_EnterReturnsTrue)) {
-                SCOPED_BATCH_CHANGE(ed->buf);
+                SCOPED_BATCH_CHANGE(editor->buf);
 
                 auto repl_parts = parse_search_replacement(wnd.replace_str);
                 For (&matches) {
@@ -5102,9 +5102,9 @@ void UI::draw_everything() {
                         ccstr newstr = NULL;
                         if (it.dollar) {
                             if (!it.group)
-                                newstr = ed->buf->get_text(m.start, m.end);
+                                newstr = editor->buf->get_text(m.start, m.end);
                             else if (it.group-1 < m.group_starts->len)
-                                newstr = ed->buf->get_text(m.group_starts->at(it.group-1), m.group_ends->at(it.group-1));
+                                newstr = editor->buf->get_text(m.group_starts->at(it.group-1), m.group_ends->at(it.group-1));
                             else
                                 newstr = it.string;
                         } else {
@@ -5114,11 +5114,11 @@ void UI::draw_everything() {
                         for (auto p = newstr; *p; p++) chars->append(*p);
                     }
 
-                    ed->buf->remove(m.start, m.end);
+                    editor->buf->remove(m.start, m.end);
 
                     chars->append('\0');
                     auto uchars = cstr_to_ustr(chars->items);
-                    ed->buf->insert(m.start, uchars->items, uchars->len);
+                    editor->buf->insert(m.start, uchars->items, uchars->len);
                 }
 
                 wnd.show = false;
@@ -5132,23 +5132,23 @@ void UI::draw_everything() {
         */
 
         if (search_again && wnd.show) {
-            ed->trigger_file_search();
+            editor->trigger_file_search();
             if (matches.len) {
                 bool in_match = false;
-                auto idx = ed->find_current_or_next_match(ed->cur, &in_match);
+                auto idx = editor->find_current_or_next_match(editor->cur, &in_match);
 
                 // if we're in match and it's first char, just stay there
                 // otherwise, go to next one
                 if (in_match) {
-                    if (matches[idx].start != ed->cur) {
+                    if (matches[idx].start != editor->cur) {
                         idx = (idx+1) % matches.len;
-                        ed->move_cursor(matches[idx].start);
+                        editor->move_cursor(matches[idx].start);
                     } else {
                         // do nothing
                     }
                 } else {
                     // idx already points to the next result
-                    ed->move_cursor(matches[idx].start);
+                    editor->move_cursor(matches[idx].start);
                 }
             }
         }

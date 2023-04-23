@@ -44,9 +44,9 @@ void Jblow_Tests::skip_frame() {
 }
 
 bool is_editor_selected(ccstr relative_filepath) {
-    auto ed = get_current_editor();
-    if (ed) {
-        auto relpath = get_path_relative_to(ed->filepath, world.current_path);
+    auto editor = get_current_editor();
+    if (editor) {
+        auto relpath = get_path_relative_to(editor->filepath, world.current_path);
         return streq(relpath, relative_filepath);
     }
     return false;

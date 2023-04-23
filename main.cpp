@@ -784,23 +784,23 @@ void handle_window_event(Window_Event *it) {
         if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) break;
         if (!uni_isprint(ch)) break;
 
-        auto ed = get_current_editor();
-        if (!ed) break;
+        auto editor = get_current_editor();
+        if (!editor) break;
 
         // when vim is on, it takes over insert mode completely
         if (world.vim.on) {
-            ed->vim_handle_char(ch);
+            editor->vim_handle_char(ch);
             break;
         }
 
-        if (!ed->is_modifiable()) break;
+        if (!editor->is_modifiable()) break;
 
         if (!world.vim.on)
-            ed->delete_selection();
+            editor->delete_selection();
 
         Type_Char_Opts opts; ptr0(&opts);
         opts.replace_mode = world.vim_mode() == VI_REPLACE;
-        ed->type_char(ch, &opts);
+        editor->type_char(ch, &opts);
         break;
     }
     }

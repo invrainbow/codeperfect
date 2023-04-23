@@ -916,7 +916,7 @@ bool exclude_from_file_tree(ccstr path);
 
 extern u64 post_insert_dotrepeat_time;
 
-bool move_autocomplete_cursor(Editor *ed, int direction);
+bool move_autocomplete_cursor(Editor *editor, int direction);
 Jump_To_Definition_Result *get_current_definition(ccstr *filepath = NULL, bool display_error = false, cur2 pos = {-1, -1});
 
 extern int gargc;

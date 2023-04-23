@@ -1131,11 +1131,11 @@ Editor* Pane::open_empty_editor() {
     if (handle_auth_error())
         return NULL;
 
-    auto ed = editors.append();
-    ed->init();
+    auto editor = editors.append();
+    editor->init();
 
-    if (!ed->load_file(NULL)) {
-        ed->cleanup();
+    if (!editor->load_file(NULL)) {
+        editor->cleanup();
         editors.len--;
         return NULL;
     }
@@ -1196,10 +1196,10 @@ Editor* Pane::focus_editor(ccstr path, cur2 pos, bool pos_in_byte_format) {
     if (handle_auth_error())
         return NULL;
 
-    auto ed = editors.append();
-    ed->init();
-    if (!ed->load_file(path)) {
-        ed->cleanup();
+    auto editor = editors.append();
+    editor->init();
+    if (!editor->load_file(path)) {
+        editor->cleanup();
         editors.len--;
         return NULL;
     }
@@ -1287,11 +1287,11 @@ void Pane::set_current_editor(u32 idx) {
 
     if (world.file_tree_busy) return;
 
-    auto ed = get_current_editor();
-    if (!ed) return;
-    if (ed->is_untitled) return;
+    auto editor = get_current_editor();
+    if (!editor) return;
+    if (editor->is_untitled) return;
 
-    auto edpath = get_path_relative_to(ed->filepath, world.current_path);
+    auto edpath = get_path_relative_to(editor->filepath, world.current_path);
     auto node = find_ft_node(edpath);
     if (!node) return;
 
@@ -5058,10 +5058,10 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             Mark *mark = NULL;
             Editor *editor = NULL;
 
-            auto try_editor = [&](Editor *ed, Mark **marks, int idx) {
+            auto try_editor = [&](Editor *it, Mark **marks, int idx) {
                 if (marks[idx]) {
                     mark = marks[idx];
-                    editor = ed;
+                    editor = it;
                     return true;
                 }
                 return false;
@@ -6298,12 +6298,12 @@ void Editor::trigger_file_search(int limit_start, int limit_end) {
     if (wnd.search_in_selection) {
         wnd.sess.limit_to_range = true;
 
-        auto a = ed->select_start;
-        auto b = ed->cur;
+        auto a = select_start;
+        auto b = cur;
         ORDER(a, b);
 
-        wnd.sess.limit_start = ed->cur_to_offset(a);
-        wnd.sess.limit_end = ed->cur_to_offset(b);
+        wnd.sess.limit_start = cur_to_offset(a);
+        wnd.sess.limit_end = cur_to_offset(b);
     }
     */
 
@@ -6380,7 +6380,7 @@ int Editor::move_file_search_result(bool forward, int count) {
         idx += matches.len - (count % matches.len);
     }
     return idx % matches.len;
-    // ed->move_cursor(matches[idx].start);
+    // move_cursor(matches[idx].start);
 }
 
 int Editor::find_current_or_next_match(cur2 pos, bool *in_match) {
