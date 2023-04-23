@@ -3681,12 +3681,8 @@ void do_generate_implementation() {
         if (!isempty(sig.result)) {
             if (sig.result->len > 1) rend.write("(");
 
-            bool first = true;
-            For (sig.result) {
-                if (first)
-                    first = false;
-                else
-                    rend.write(", ");
+            Fori (sig.result) {
+                if (i > 0) rend.write(", ");
 
                 auto typestr = render_type(make_goresult(it.gotype, method_ctx), it.name);
                 if (!typestr) {
@@ -3698,9 +3694,11 @@ void do_generate_implementation() {
             }
 
             if (sig.result->len > 1) rend.write(")");
+
+            rend.write(" ");
         }
 
-        rend.write(" {\n\tpanic(\"not implemented\")\n}");
+        rend.write("{\n\tpanic(\"not implemented\")\n}");
     }
 
 done_writing:
