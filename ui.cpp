@@ -7172,7 +7172,7 @@ void UI::draw_everything() {
 
                 auto node = nav.node;
                 if (!node) break;
-                if (isastnull(node)) break;
+                if (!node) break;
 
                 auto &out = ast_navigation;
                 out.start = node->start();

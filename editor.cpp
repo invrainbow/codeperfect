@@ -1370,7 +1370,7 @@ void Editor::update_selected_ast_node(Ast_Node *node) {
     auto &nav = ast_navigation;
 
     auto prev_siblings = new_list(Ast_Node*);
-    for (auto curr = node->prev(); !isastnull(curr); curr = curr->prev())
+    for (auto curr = node->prev(); curr; curr = curr->prev())
         prev_siblings->append(curr);
 
     {
@@ -1381,7 +1381,7 @@ void Editor::update_selected_ast_node(Ast_Node *node) {
 
         for (int i = prev_siblings->len-1; i >= 0; i--)
             nav.siblings->append(prev_siblings->at(i)->dup());
-        for (auto curr = node->next(); !isastnull(curr); curr = curr->next())
+        for (auto curr = node->next(); curr; curr = curr->next())
             nav.siblings->append(curr);
     }
 }
@@ -1397,7 +1397,7 @@ void Editor::update_ast_navigate(fn<Ast_Node*(Ast_Node*)> cb) {
 
     node = cb(node);
     if (!node) return;
-    if (isastnull(node)) return;
+    if (!node) return;
 
     update_selected_ast_node(node);
     move_cursor(node->start());
@@ -1410,18 +1410,18 @@ void Editor::update_ast_navigate(fn<Ast_Node*(Ast_Node*)> cb) {
 void Editor::ast_navigate_in() {
     update_ast_navigate([&](auto node) -> Ast_Node* {
         auto child = node->child();
-        if (isastnull(child)) return NULL;
+        if (!child) return NULL;
 
         // skip the children that have no siblings
-        while (!isastnull(child) && isastnull(child->prev()) && isastnull(child->next())) // no siblings
+        while (child && !child->prev() && !child->next()) // no siblings
             child = child->child();
 
         // no children with siblings, just grab the innermost child
-        if (isastnull(child)) {
+        if (!child) {
             child = node->child();
             while (true) {
                 auto next = child->child();
-                if (isastnull(next)) break;
+                if (!next) break;
                 child = next;
             }
 
@@ -1437,18 +1437,18 @@ void Editor::ast_navigate_in() {
 void Editor::ast_navigate_out() {
     update_ast_navigate([&](auto node) -> Ast_Node* {
         auto parent = node->parent();
-        if (isastnull(parent)) return NULL;
+        if (!parent) return NULL;
         if (parent->type() == TS_SOURCE_FILE) return NULL;
 
         // skip the children that have no siblings
-        while (!isastnull(parent) && isastnull(parent->prev()) && isastnull(parent->next())) // no siblings
+        while (parent && !parent->prev() && !parent->next()) // no siblings
             parent = parent->parent();
 
-        if (isastnull(parent)) {
+        if (!parent) {
             parent = node->parent();
             while (true) {
                 auto next = parent->parent();
-                if (isastnull(next)) break;
+                if (!next) break;
                 if (next->type() == TS_SOURCE_FILE) break;
                 parent = next;
             }
@@ -5880,11 +5880,11 @@ Find_Matching_Brace_Result Editor::find_matching_brace_with_ast(uchar ch, cur2 p
         while (true) {
             // try to get sibling
             auto sib = forward ? curr->next_all() : curr->prev_all();
-            if (!isastnull(sib)) return sib;
+            if (sib) return sib;
 
             // unable to? get parent, try again
             curr = curr->parent();
-            if (isastnull(curr)) return NULL;
+            if (!curr) return NULL;
         }
     };
 
@@ -5919,7 +5919,7 @@ Find_Matching_Brace_Result Editor::find_matching_brace_with_ast(uchar ch, cur2 p
         }
     };
 
-    for (; !isastnull(curr) && ret == NULL_CUR; curr = walk_upwards(curr))
+    for (; curr && ret == NULL_CUR; curr = walk_upwards(curr))
         process_node(curr);
 
     if (ret == NULL_CUR)

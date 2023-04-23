@@ -1810,7 +1810,7 @@ bool is_command_enabled(Command cmd) {
 
             if (it->type() == TS_FUNCTION_DECLARATION) {
                 auto name = it->field(TSF_NAME);
-                if (!isastnull(name))
+                if (name)
                     ret = str_starts_with(name->string(), "Test");
             }
 

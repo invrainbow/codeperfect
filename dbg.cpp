@@ -913,7 +913,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
 
                         if (it->type() == TS_FUNCTION_DECLARATION) {
                             auto name = it->field(TSF_NAME);
-                            if (!isastnull(name)) {
+                            if (name) {
                                 auto func_name = name->string();
                                 if (str_starts_with(func_name, "Test"))
                                     test_function_name = func_name;

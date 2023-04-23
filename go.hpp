@@ -1342,8 +1342,8 @@ void find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<
 
 Ast_Node *new_ast_node(TSNode node, Parser_It *it);
 
-#define FOR_NODE_CHILDREN(node) for (auto it = (node)->child(); !isastnull(it); it = it->next())
-#define FOR_ALL_NODE_CHILDREN(node) for (auto it = (node)->child_all(); !isastnull(it); it = it->next_all())
+#define FOR_NODE_CHILDREN(node) for (auto it = (node)->child(); it; it = it->next())
+#define FOR_ALL_NODE_CHILDREN(node) for (auto it = (node)->child_all(); it; it = it->next_all())
 
 Goresult *make_goresult(Gotype *gotype, Go_Ctx *ctx);
 Goresult *make_goresult(Godecl *decl, Go_Ctx *ctx);
@@ -1450,8 +1450,6 @@ void walk_gotype(Gotype *gotype, walk_gotype_cb cb);
 
 Gotype *new_gotype(Gotype_Type type);
 Gotype *new_primitive_type(ccstr name);
-
-bool isastnull(Ast_Node* x);
 
 bool is_type_ident(Gotype *x);
 cur2 offset_to_cur(int off, ccstr filepath);
