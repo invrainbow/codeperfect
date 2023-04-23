@@ -298,7 +298,8 @@ void Buffer::tree_batch_start() {
     if (lang == LANG_NONE) return;
 
     tree_batch_mode = true;
-    tree_batch_edits.len = 0;
+    if (!tree_batch_refs)
+        tree_batch_edits.len = 0;
     tree_batch_refs++;
 }
 

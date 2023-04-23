@@ -256,8 +256,9 @@ struct Buffer {
     int hist_batch_refs;
 
     void hist_batch_start() {
-        hist_force_push_next_change = true;
         hist_batch_mode = true;
+        if (!hist_batch_refs)
+            hist_force_push_next_change = true;
         hist_batch_refs++;
     }
 
