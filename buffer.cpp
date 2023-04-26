@@ -631,7 +631,10 @@ void Buffer::internal_append_line(uchar* text, s32 len) {
 cur2 Buffer::edit_text(cur2 start, cur2 old_end, uchar *text, s32 len, bool applying_change) {
     cp_assert(!editable_from_main_thread_only || is_main_thread);
 
-    SCOPED_BATCH_CHANGE(this);
+    // Only batch tree, don't batch history. History changes will automatically be batched
+    // for a delete followed by insert at cursor, but we don't want to force a new history push.
+    tree_batch_start();
+    defer { tree_batch_end(); };
 
     TSInputEdit edit;
     edit.start_byte = cur_to_offset(start);
@@ -950,7 +953,9 @@ void Buffer::internal_commit_remove_to_history(cur2 start, cur2 end) {
 
     auto c = hist_get_latest_change_for_append();
     if (c) {
-        if (c->new_end == end || hist_batch_mode)
+        bool is_continued_backspace = c->new_end == end && c->start > start;
+
+        if (is_continued_backspace || hist_batch_mode)
             change = c;
 
         // Up here in the next block is where we do various forms of
@@ -958,31 +963,22 @@ void Buffer::internal_commit_remove_to_history(cur2 start, cur2 end) {
         // find a reason to break out in this block here, below we will
         // only be adding on to change->next.
 
-        if (c->new_end == end) {
-            if (c->start <= start) {
-                c->new_end = start;
-                c->new_text.len -= internal_distance_between(start, end);
-                return;
-            }
+        if (is_continued_backspace && internal_distance_between(start, end) + c->old_text.len < CHUNKMAX) {
+            // we have an existing change and we're deleting past the start,
+            // this means we're completing wiping out any text we've written
+            auto new_end = c->start;
 
-            // handle the "backspace repeatedly" optimization
-            if (internal_distance_between(start, end) + c->old_text.len < CHUNKMAX) {
-                // we have an existing change and we're deleting past the start,
-                // this means we're completing wiping out any text we've written
-                auto new_end = c->start;
+            c->new_text.len = 0;
+            c->start = start;
+            c->new_end = start;
 
-                c->new_text.len = 0;
-                c->start = start;
-                c->new_end = start;
-
-                // basically, prepend to old_text
-                auto tmp = new_list(uchar);
-                tmp->concat(&c->old_text);
-                c->old_text.len = 0;
-                c->old_text.concat(get_uchars(start, new_end));
-                c->old_text.concat(tmp);
-                return;
-            }
+            // basically, prepend to old_text
+            auto tmp = new_list(uchar);
+            tmp->concat(&c->old_text);
+            c->old_text.len = 0;
+            c->old_text.concat(get_uchars(start, new_end));
+            c->old_text.concat(tmp);
+            return;
         }
     }
 
