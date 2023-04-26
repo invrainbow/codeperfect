@@ -550,11 +550,11 @@ void Buffer::write(File *f) {
 }
 
 // This function basically produces the result internal_delete_lines() does,
-// except it mimics the outcome through remove(). All changes
-// must happen through .insert() and .remove(), or a whole bunch of shit
-// breaks, including history and tree handling.
+// except it mimics the outcome through remove() so that we get history and
+// tree handling.
 //
-// Note: here y1 and y2 are inclusive, whereas internal_delete_lines() is exclusive.
+// Note: here y1 and y2 are inclusive, whereas internal_delete_lines() is
+// exclusive.
 void Buffer::remove_lines(u32 y1, u32 y2) {
     auto start = new_cur2(0, y1);
     auto end = new_cur2(0, y2+1);
