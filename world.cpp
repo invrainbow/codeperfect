@@ -2558,9 +2558,9 @@ void handle_command(Command cmd, bool from_menu) {
         if (world.vim.on && world.vim_mode() != VI_NORMAL)
             editor->vim_return_to_normal_mode(); // should we call this or trigger_escape()?
 
-        auto pos = (cmd == CMD_UNDO ? buf->hist_undo() : buf->hist_redo());
+        cur2 undo_end = NULL_CUR;
+        auto pos = (cmd == CMD_UNDO ? buf->hist_undo(&undo_end) : buf->hist_redo());
         if (pos == NULL_CUR) break;
-
 
         // should we make this part of move_cursor?
         // this code basically says, if we are in normal mode, don't put the cursor at eol
@@ -2571,7 +2571,18 @@ void handle_command(Command cmd, bool from_menu) {
 
         auto opts = default_move_cursor_opts();
         opts->is_user_movement = true;
-        editor->move_cursor(pos, opts);
+
+        if (undo_end != NULL_CUR && !world.vim.on) {
+            auto a = pos;
+            auto b = undo_end;
+            ORDER(a, b);
+
+            editor->selecting = true;
+            editor->select_start = a;
+            editor->move_cursor(b, opts);
+        } else {
+            editor->move_cursor(pos, opts);
+        }
         break;
     }
 

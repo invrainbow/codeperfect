@@ -342,7 +342,9 @@ void Buffer::tree_batch_end() {
     t.log("call update_tree");
 }
 
-cur2 Buffer::hist_undo() {
+cur2 Buffer::hist_undo(cur2 *end) {
+    if (end != NULL) *end = NULL_CUR;
+
     if (hist_curr == hist_start) return NULL_CUR;
 
     tree_batch_start();
@@ -360,7 +362,11 @@ cur2 Buffer::hist_undo() {
         auto it = arr->at(arr->len - i - 1);
         hist_apply_change(it, true);
 
-        if (i == arr->len-1) ret = it->start;
+        if (i == arr->len-1) {
+            ret = it->start;
+            if (arr->len == 1 && end != NULL)
+                *end = it->old_end;
+        }
     }
 
     return ret;

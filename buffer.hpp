@@ -276,7 +276,7 @@ struct Buffer {
     void hist_free(int i);
     Change* hist_push();
     Change* hist_get_latest_change_for_append();
-    cur2 hist_undo();
+    cur2 hist_undo(cur2 *end = NULL);
     cur2 hist_redo();
     void hist_apply_change(Change *change, bool undo);
 
