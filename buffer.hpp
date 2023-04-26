@@ -299,8 +299,6 @@ struct Buffer {
 
     cur2 edit_text(cur2 start, cur2 old_end, uchar *text, s32 len, bool applying_change = false);
     cur2 insert(cur2 start, uchar* text, s32 len, bool applying_change = false);
-    void internal_do_actual_insert(cur2 start, uchar* text, s32 len);
-    void internal_do_actual_remove(cur2 start, cur2 end);
     void remove(cur2 start, cur2 end, bool applying_change = false);
     void remove_lines(u32 y1, u32 y2);
 

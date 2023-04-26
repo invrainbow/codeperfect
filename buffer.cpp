@@ -649,13 +649,77 @@ cur2 Buffer::edit_text(cur2 start, cur2 old_end, uchar *text, s32 len, bool appl
     if (start != old_end) {
         if (use_history && !applying_change)
             internal_commit_remove_to_history(start, old_end);
-        internal_do_actual_remove(start, old_end);
+
+        i32 x1 = start.x, y1 = start.y;
+        i32 x2 = old_end.x, y2 = old_end.y;
+        if (y1 == y2) {
+            // TODO: If we can shrink the line, should we?
+            if (lines[y1].len > x2)
+                memcpy(lines[y1].items + x1, lines[y1].items + x2, sizeof(uchar) * (lines[y1].len - x2));
+            lines[y1].len -= (x2 - x1);
+        } else {
+            s32 new_len = x1 + (y2 < lines.len ? lines[y2].len : 0) - x2;
+            lines[y1].ensure_cap(new_len);
+            lines[y1].len = new_len;
+            if (y2 < lines.len)
+                memcpy(lines[y1].items + x1, lines[y2].items + x2, sizeof(uchar) * (lines[y2].len - x2));
+            internal_delete_lines(y1 + 1, min(lines.len, y2 + 1));
+        }
+        bctree.set(y1, get_bytecount(&lines[y1]));
     }
 
     // do the insert
     cur2 new_end = start;
     if (text && len) {
-        internal_do_actual_insert(start, text, len);
+        i32 x = start.x, y = start.y;
+
+        bool has_newline = false;
+        for (u32 i = 0; i < len; i++) {
+            if (text[i] == '\n') {
+                has_newline = true;
+                break;
+            }
+        }
+
+        if (y == lines.len) internal_append_line(NULL, 0);
+
+        auto line = &lines[y];
+        s32 total_len = line->len + len;
+
+        // honestly this routine is probably pretty slow, i've been hesitant to
+        // fuck with it because it's been reliable but some good perf gains to be
+        // had here, especially with large undos etc
+        if (has_newline) {
+            uchar* buf = alloc_temp_array(total_len);
+            defer { free_temp_array(buf, total_len); };
+
+            if (x)
+                memcpy(buf, line->items, sizeof(uchar) * x);
+            memcpy(&buf[x], text, sizeof(uchar) * len);
+            if (line->len > x)
+                memcpy(&buf[x+len], &line->items[x], sizeof(uchar) * (line->len - x));
+
+            internal_delete_lines(y, y + 1);
+
+            u32 last = 0;
+            for (u32 i = 0; i <= total_len; i++) {
+                if (i == total_len || buf[i] == '\n') {
+                    internal_insert_line(y++, buf + last, i - last);
+                    last = i + 1;
+                }
+            }
+        } else {
+            line->ensure_cap(total_len);
+            memmove(&line->items[x + len], &line->items[x], sizeof(uchar) * (line->len - x));
+            memcpy(&line->items[x], text, sizeof(uchar) * len);
+            line->len = total_len;
+
+            u32 bc = 0;
+            for (u32 i = 0; i < len; i++)
+                bc += uchar_size(text[i]);
+
+            bctree.set(y, bctree.get(y) + bc);
+        }
 
         // easier/better way to calculate this?
         new_end = start;
@@ -698,59 +762,6 @@ cur2 Buffer::insert(cur2 start, uchar* text, s32 len, bool applying_change) {
 
 void Buffer::remove(cur2 start, cur2 end, bool applying_change) {
     edit_text(start, end, NULL, 0, applying_change);
-}
-
-void Buffer::internal_do_actual_insert(cur2 start, uchar* text, s32 len) {
-    i32 x = start.x, y = start.y;
-
-    bool has_newline = false;
-    for (u32 i = 0; i < len; i++) {
-        if (text[i] == '\n') {
-            has_newline = true;
-            break;
-        }
-    }
-
-    if (y == lines.len)
-        internal_append_line(NULL, 0);
-
-    auto line = &lines[y];
-    s32 total_len = line->len + len;
-
-    // honestly this routine is probably pretty slow, i've been hesitant to
-    // fuck with it because it's been reliable but some good perf gains to be
-    // had here, especially with large undos etc
-    if (has_newline) {
-        uchar* buf = alloc_temp_array(total_len);
-        defer { free_temp_array(buf, total_len); };
-
-        if (x)
-            memcpy(buf, line->items, sizeof(uchar) * x);
-        memcpy(&buf[x], text, sizeof(uchar) * len);
-        if (line->len > x)
-            memcpy(&buf[x+len], &line->items[x], sizeof(uchar) * (line->len - x));
-
-        internal_delete_lines(y, y + 1);
-
-        u32 last = 0;
-        for (u32 i = 0; i <= total_len; i++) {
-            if (i == total_len || buf[i] == '\n') {
-                internal_insert_line(y++, buf + last, i - last);
-                last = i + 1;
-            }
-        }
-    } else {
-        line->ensure_cap(total_len);
-        memmove(&line->items[x + len], &line->items[x], sizeof(uchar) * (line->len - x));
-        memcpy(&line->items[x], text, sizeof(uchar) * len);
-        line->len = total_len;
-
-        u32 bc = 0;
-        for (u32 i = 0; i < len; i++)
-            bc += uchar_size(text[i]);
-
-        bctree.set(y, bctree.get(y) + bc);
-    }
 }
 
 void Buffer::update_tree() {
@@ -1015,27 +1026,6 @@ void Buffer::internal_commit_remove_to_history(cur2 start, cur2 end) {
 
         start = real_end;
     }
-}
-
-void Buffer::internal_do_actual_remove(cur2 start, cur2 end) {
-    if (start == end) return;
-
-    i32 x1 = start.x, y1 = start.y;
-    i32 x2 = end.x, y2 = end.y;
-    if (y1 == y2) {
-        // TODO: If we can shrink the line, should we?
-        if (lines[y1].len > x2)
-            memcpy(lines[y1].items + x1, lines[y1].items + x2, sizeof(uchar) * (lines[y1].len - x2));
-        lines[y1].len -= (x2 - x1);
-    } else {
-        s32 new_len = x1 + (y2 < lines.len ? lines[y2].len : 0) - x2;
-        lines[y1].ensure_cap(new_len);
-        lines[y1].len = new_len;
-        if (y2 < lines.len)
-            memcpy(lines[y1].items + x1, lines[y2].items + x2, sizeof(uchar) * (lines[y2].len - x2));
-        internal_delete_lines(y1 + 1, min(lines.len, y2 + 1));
-    }
-    bctree.set(y1, get_bytecount(&lines[y1]));
 }
 
 Buffer_It Buffer::iter(cur2 c) {
