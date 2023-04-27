@@ -291,7 +291,7 @@ void Buffer::hist_apply_change(Change *change, bool undo) {
         new_text = &change->new_text;
     }
 
-    edit_text(start, old_end, new_text->items, new_text->len, true);
+    apply_edit(start, old_end, new_text->items, new_text->len, true);
 }
 
 void Buffer::tree_batch_start() {
@@ -628,7 +628,7 @@ void Buffer::internal_append_line(uchar* text, s32 len) {
     dirty = true;
 }
 
-cur2 Buffer::edit_text(cur2 start, cur2 old_end, uchar *text, s32 len, bool applying_change) {
+cur2 Buffer::apply_edit(cur2 start, cur2 old_end, uchar *text, s32 len, bool applying_change) {
     cp_assert(!editable_from_main_thread_only || is_main_thread);
 
     // Only batch tree, don't batch history. History changes will automatically be batched
@@ -757,11 +757,11 @@ cur2 Buffer::edit_text(cur2 start, cur2 old_end, uchar *text, s32 len, bool appl
 }
 
 cur2 Buffer::insert(cur2 start, uchar* text, s32 len, bool applying_change) {
-    return edit_text(start, start, text, len, applying_change);
+    return apply_edit(start, start, text, len, applying_change);
 }
 
 void Buffer::remove(cur2 start, cur2 end, bool applying_change) {
-    edit_text(start, end, NULL, 0, applying_change);
+    apply_edit(start, end, NULL, 0, applying_change);
 }
 
 void Buffer::update_tree() {

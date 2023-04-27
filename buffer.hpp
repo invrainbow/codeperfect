@@ -297,7 +297,7 @@ struct Buffer {
     void internal_update_mark_tree(TSInputEdit *edit);
     int internal_distance_between(cur2 a, cur2 b);
 
-    cur2 edit_text(cur2 start, cur2 old_end, uchar *text, s32 len, bool applying_change = false);
+    cur2 apply_edit(cur2 start, cur2 old_end, uchar *text, s32 len, bool applying_change = false);
     cur2 insert(cur2 start, uchar* text, s32 len, bool applying_change = false);
     void remove(cur2 start, cur2 end, bool applying_change = false);
     void remove_lines(u32 y1, u32 y2);

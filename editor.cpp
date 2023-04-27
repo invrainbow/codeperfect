@@ -810,7 +810,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                     }
 
                     // perform the edit
-                    buf->edit_text(start, old_end, chars->items, chars->len);
+                    buf->apply_edit(start, old_end, chars->items, chars->len);
 
                     move_cursor(new_cur2(cur.x, cur.y + new_end.y - old_end.y));
                 } while (0);
@@ -822,7 +822,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
             ac_start.x -= strlen(ac.prefix); // what if the prefix contains unicode?
 
             // perform the edit & move cursor
-            auto newcur = buf->edit_text(ac_start, cur, name->items, name->len);
+            auto newcur = buf->apply_edit(ac_start, cur, name->items, name->len);
             move_cursor(newcur);
         }
 
@@ -1999,7 +1999,7 @@ void Editor::type_char(uchar ch, Type_Char_Opts *opts) {
         // remove the indentation without calling backspace (don't set
         // insert_start or replace_start or update edit_backspaced_graphemes)
         auto start = new_cur2(0, pos.y);
-        pos = buf->edit_text(start, pos, indentation->items, indentation->len);
+        pos = buf->apply_edit(start, pos, indentation->items, indentation->len);
 
         // set this as the new insert_start/replace_start, don't call edit_backspaced_graphemes
         // honestly this is a huge hack and i hate it
@@ -2250,7 +2250,7 @@ bool Editor::optimize_imports() {
 
         chars->concat(cstr_to_ustr(new_contents));
 
-        buf->edit_text(start, old_end, chars->items, chars->len);
+        buf->apply_edit(start, old_end, chars->items, chars->len);
 
         {
             auto c = cur;
@@ -2300,7 +2300,7 @@ void Editor::format_on_save() {
     auto uchars = cstr_to_ustr(new_contents);
     cp_assert(uchars);
 
-    buf->edit_text(new_cur2(0, 0), buf->end_pos(), uchars->items, uchars->len);
+    buf->apply_edit(new_cur2(0, 0), buf->end_pos(), uchars->items, uchars->len);
 
     // we need to adjust cursor manually
     if (cur.y >= buf->lines.len)
@@ -2587,7 +2587,7 @@ cur2 Editor::vim_handle_J(Vim_Command *cmd, bool add_spaces) {
             if (add_spaces && x < lines[y+1].len && lines[y+1][x] != ')')
                 new_text->append(' ');
 
-            buf->edit_text(start, end, new_text->items, new_text->len);
+            buf->apply_edit(start, end, new_text->items, new_text->len);
             last_start = start;
         }
 
@@ -2615,7 +2615,7 @@ void Editor::indent_block(int y1, int y2, int indents) {
         for (int i = 0; i < new_vx % options.tabsize; i++)
             chars->append(' ');
 
-        buf->edit_text(new_cur2(0, y), new_cur2(x, y), chars->items, chars->len);
+        buf->apply_edit(new_cur2(0, y), new_cur2(x, y), chars->items, chars->len);
     }
 }
 
@@ -4715,7 +4715,7 @@ void Editor::vim_transform_text(uchar command, cur2 a, cur2 b) {
     auto it = iter(a);
     while (!it.eof() && it.pos != b)
         new_chars->append(transform_char(it.next()));
-    buf->edit_text(a, b, new_chars->items, new_chars->len);
+    buf->apply_edit(a, b, new_chars->items, new_chars->len);
 }
 
 cur2 Editor::vim_handle_text_transform_command(char command, Motion_Result *motion_result) {
@@ -5640,7 +5640,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                         for (int i = 0, count = x1 - x0; i < count; i++)
                             chars->append(arg);
 
-                        buf->edit_text(new_cur2(x0, y), new_cur2(x1, y), chars->items, chars->len);
+                        buf->apply_edit(new_cur2(x0, y), new_cur2(x1, y), chars->items, chars->len);
                     }
 
                     move_cursor_normal(start);
@@ -5663,7 +5663,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
 
                 auto end = it.pos;
 
-                buf->edit_text(start, end, new_text->items, new_text->len);
+                buf->apply_edit(start, end, new_text->items, new_text->len);
 
                 move_cursor_normal(new_cur2(start.x + new_text->len - 1, start.y));
                 *can_dotrepeat = true;

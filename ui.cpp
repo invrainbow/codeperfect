@@ -5117,7 +5117,7 @@ void UI::draw_everything() {
 
                     chars->append('\0');
                     auto uchars = cstr_to_ustr(chars->items);
-                    editor->buf->edit_text(m.start, m.end, uchars->items, uchars->len);
+                    editor->buf->apply_edit(m.start, m.end, uchars->items, uchars->len);
                 }
 
                 wnd.show = false;
