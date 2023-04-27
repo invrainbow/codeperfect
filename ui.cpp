@@ -5020,11 +5020,6 @@ void UI::draw_everything() {
         im::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
         defer { im::PopStyleVar(); };
 
-        int flags = ImGuiWindowFlags_NoDocking
-            | ImGuiWindowFlags_NoMove
-            | ImGuiWindowFlags_NoScrollWithMouse
-            | ImGuiWindowFlags_NoDecoration;
-
         if (!editor->ui_rect_set) break;
 
         {
@@ -5032,6 +5027,10 @@ void UI::draw_everything() {
             im::SetNextWindowPos(ImVec2(r.x + r.w - 10, r.y - 1), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
         }
 
+        int flags = ImGuiWindowFlags_NoDocking
+            | ImGuiWindowFlags_NoMove
+            | ImGuiWindowFlags_NoScrollWithMouse
+            | ImGuiWindowFlags_NoDecoration;
         begin_window("Search", &wnd, flags, true, false);
 
         focus_keyboard_here(&wnd);
