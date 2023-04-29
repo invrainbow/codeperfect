@@ -933,7 +933,7 @@ void Buffer::apply_edit_to_trees(cur2 start, cur2 oldend, cur2 newend) {
         int len = 0;
         auto chars = get_text(lookbehind, lookahead, &len);
         auto matches = new_list(Search_Match);
-        sess.search(chars, len, matches, 1000); // TODO: make limit a setting, or remove
+        sess.search(chars, len, matches, -1);
 
         auto starting_offset = cur_to_offset(lookbehind);
 

@@ -6288,7 +6288,7 @@ void Editor::trigger_file_search(int limit_start, int limit_end) {
         int len;
         auto text = buf->get_text(new_cur2(0, 0), buf->end_pos(), &len);
         auto matches = new_list(Search_Match);
-        sess.search((char*)text, len, matches, 1000); // TODO: make limit a setting, or remove
+        sess.search((char*)text, len, matches, -1);
 
         auto tree = editor->buf->search_tree;
 

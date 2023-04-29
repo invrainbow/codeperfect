@@ -77,7 +77,7 @@ void Searcher::search_worker() {
         if (is_binary(buf, buflen)) continue;
 
         matches->len = 0;
-        sess.search(buf, buflen, matches, 1000);
+        sess.search(buf, buflen, matches, 10000);
         if (!matches->len) continue;
 
         int curr_match = 0;
@@ -413,7 +413,7 @@ void Search_Session::search(ccstr buf, u32 buflen, List<Search_Match> *out, int 
     int startlen = out->len;
 
     auto add_match = [&](int start, int end) -> Search_Match* {
-        if (out->len - startlen > limit) return NULL;
+        if (limit != -1 && out->len - startlen > limit) return NULL;
 
         auto m = out->append();
         m->start = start;
