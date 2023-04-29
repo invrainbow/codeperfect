@@ -915,13 +915,13 @@ void Buffer::apply_edit_to_trees(cur2 start, cur2 oldend, cur2 newend) {
 
         // clear out everything between lookbehind and lookahead
         auto node = search_tree->find_node(search_tree->root, lookbehind);
-        if (node->pos < lookbehind)
+        if (node && node->pos < lookbehind)
             node = search_tree->successor(node);
-        do {
+        while (node && node->pos < lookahead) {
             auto next = search_tree->successor(node);
             search_tree->delete_node(node->pos);
             node = next;
-        } while (node && node->pos < lookahead);
+        }
 
         Search_Session sess; ptr0(&sess);
         sess.case_sensitive = wnd.case_sensitive;

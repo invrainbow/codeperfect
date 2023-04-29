@@ -5134,6 +5134,8 @@ void UI::draw_everything() {
 
         if (search_again && wnd.show) {
             editor->trigger_file_search();
+
+            num_results = buf->search_tree->get_size();
             if (num_results) {
                 bool in_match = false;
                 auto idx = editor->find_current_or_next_match(editor->cur, &in_match);
