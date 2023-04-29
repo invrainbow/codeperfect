@@ -5008,12 +5008,12 @@ void UI::draw_everything() {
     }
 
     do {
-        if (!world.wnd_current_file_search.show) break;
+        if (!world.wnd_local_search.show) break;
 
         auto editor = get_current_editor();
         if (!editor) break;
 
-        auto &wnd = world.wnd_current_file_search;
+        auto &wnd = world.wnd_local_search;
 
         im::SetNextWindowSize(ImVec2(300, -1));
 
@@ -5038,15 +5038,18 @@ void UI::draw_everything() {
         bool search_again = false;
 
         auto &fs = editor->file_search;
-        auto &matches = fs.results;
+        auto buf = editor->buf;
+        auto tree = buf->search_tree;
+
+        int num_results = tree->get_size();
 
         ccstr label = NULL;
-        if (!matches.len)
+        if (!num_results)
             label = "No results";
         else if (fs.current_idx == -1)
-            label = cp_sprintf("%d result%s", matches.len, matches.len == 1 ? "" : "s");
+            label = cp_sprintf("%d result%s", num_results, num_results == 1 ? "" : "s");
         else
-            label = cp_sprintf("%d of %d", fs.current_idx + 1, matches.len);
+            label = cp_sprintf("%d of %d", fs.current_idx + 1, num_results);
 
         auto text_input_id = "current_file_search_search";
 
@@ -5059,7 +5062,7 @@ void UI::draw_everything() {
                 auto idx = editor->move_file_search_result(!(im_get_keymods() & CP_MOD_SHIFT), 1);
                 if (idx != -1) {
                     fs.current_idx = idx;
-                    editor->move_cursor(matches[idx].start);
+                    editor->move_cursor(tree->get_node(idx)->pos);
                 }
             }
         }
@@ -5087,23 +5090,24 @@ void UI::draw_everything() {
                 SCOPED_BATCH_CHANGE(editor->buf);
 
                 auto repl_parts = parse_search_replacement(wnd.replace_str);
-                For (&matches) {
-                    auto chars = new_list(char);
-                    auto &m = it;
 
-                    if (m.group_starts || m.group_ends) {
-                        cp_assert(m.group_starts);
-                        cp_assert(m.group_ends);
-                        cp_assert(m.group_starts->len == m.group_ends->len);
+                for (auto it = tree->get_min(); it; it = tree->successor(it)) {
+                    auto chars = new_list(char);
+                    auto m = it;
+
+                    if (m->search_result.group_starts || m->search_result.group_ends) {
+                        cp_assert(m->search_result.group_starts);
+                        cp_assert(m->search_result.group_ends);
+                        cp_assert(m->search_result.group_starts->len == m->search_result.group_ends->len);
                     }
 
                     For (repl_parts) {
                         ccstr newstr = NULL;
                         if (it.dollar) {
                             if (!it.group)
-                                newstr = editor->buf->get_text(m.start, m.end);
-                            else if (it.group-1 < m.group_starts->len)
-                                newstr = editor->buf->get_text(m.group_starts->at(it.group-1), m.group_ends->at(it.group-1));
+                                newstr = editor->buf->get_text(m->pos, m->search_result.end);
+                            else if (it.group-1 < m->search_result.group_starts->len)
+                                newstr = editor->buf->get_text(m->search_result.group_starts->at(it.group-1), m->search_result.group_ends->at(it.group-1));
                             else
                                 newstr = it.string;
                         } else {
@@ -5113,10 +5117,9 @@ void UI::draw_everything() {
                         for (auto p = newstr; *p; p++) chars->append(*p);
                     }
 
-
                     chars->append('\0');
                     auto uchars = cstr_to_ustr(chars->items);
-                    editor->buf->apply_edit(m.start, m.end, uchars->items, uchars->len);
+                    editor->buf->apply_edit(m->pos, m->search_result.end, uchars->items, uchars->len);
                 }
 
                 wnd.show = false;
@@ -5131,28 +5134,30 @@ void UI::draw_everything() {
 
         if (search_again && wnd.show) {
             editor->trigger_file_search();
-            if (matches.len) {
+            if (num_results) {
                 bool in_match = false;
                 auto idx = editor->find_current_or_next_match(editor->cur, &in_match);
+
+                auto match = tree->get_node(idx);
 
                 // if we're in match and it's first char, just stay there
                 // otherwise, go to next one
                 if (in_match) {
-                    if (matches[idx].start != editor->cur) {
-                        idx = (idx+1) % matches.len;
-                        editor->move_cursor(matches[idx].start);
+                    if (match->pos != editor->cur) {
+                        idx = (idx+1) % num_results;
+                        editor->move_cursor(match->pos);
                     } else {
                         // do nothing
                     }
                 } else {
                     // idx already points to the next result
-                    editor->move_cursor(matches[idx].start);
+                    editor->move_cursor(match->pos);
                 }
             }
         }
 
         im::End();
-        fstlog("wnd_current_file_search");
+        fstlog("wnd_local_search");
     } while (0);
 
     if (world.wnd_command.show) {
@@ -7074,9 +7079,11 @@ void UI::draw_everything() {
             int next_hl = (highlights.len ? 0 : -1);
 
             int next_search_match = -1;
-            if (world.wnd_current_file_search.show)
-                if (editor->file_search.results.len)
+            if (world.wnd_local_search.show) {
+                auto tree = editor->buf->search_tree;
+                if (tree->get_size(tree->root))
                     next_search_match = 0;
+            }
 
             auto goroutines_hit = new_list(Dlv_Goroutine*);
             u32 current_goroutine_id = 0;
@@ -7365,16 +7372,18 @@ void UI::draw_everything() {
 
                     if (next_search_match != -1) {
                         auto curr = new_cur2(curr_byte_idx, y);
-                        auto &wnd = world.wnd_current_file_search;
-                        auto &matches = editor->file_search.results;
+                        auto &wnd = world.wnd_local_search;
 
-                        while (next_search_match != -1 && curr >= matches[next_search_match].end)
-                            if (++next_search_match >= matches.len)
+                        auto tree = editor->buf->search_tree;
+                        auto total = tree->get_size();
+
+                        while (next_search_match != -1 && curr >= tree->get_node(next_search_match)->search_result.end)
+                            if (++next_search_match >= total)
                                 next_search_match = -1;
 
                         if (next_search_match != -1) {
-                            auto& match = matches[next_search_match];
-                            if (match.start <= curr && curr < match.end) {
+                            auto match = tree->get_node(next_search_match);
+                            if (match->pos <= curr && curr < match->search_result.end) {
                                 if (next_search_match == editor->file_search.current_idx) {
                                     draw_highlight(rgba("#ffffdd", 0.4), glyph_width);
                                     text_color = rgba("#ffffdd", 1.0);

@@ -1013,7 +1013,7 @@ bool Editor::load_file(ccstr new_filepath) {
         buf->cleanup();
 
     lang = determine_lang(new_filepath);
-    buf->init(&mem, lang, true);
+    buf->init(&mem, lang, true, true);
     buf->editable_from_main_thread_only = true;
 
     if (new_filepath) {
@@ -1063,7 +1063,7 @@ bool Editor::load_file(ccstr new_filepath) {
 
             // create mark
             auto pos = new_cur2(it.col - 1, it.row - 1);
-            buf->mark_tree.insert_mark(MARK_BUILD_ERROR, pos, it.mark);
+            buf->insert_mark(MARK_BUILD_ERROR, pos, it.mark);
         }
     }
 
@@ -1079,8 +1079,8 @@ bool Editor::load_file(ccstr new_filepath) {
                 if (it.mark_start->valid) cp_panic("this shouldn't be happening");
                 if (it.mark_end->valid) cp_panic("this shouldn't be happening");
 
-                buf->mark_tree.insert_mark(MARK_SEARCH_RESULT, it.match_start, it.mark_start);
-                buf->mark_tree.insert_mark(MARK_SEARCH_RESULT, it.match_end, it.mark_end);
+                buf->insert_mark(MARK_SEARCH_RESULT, it.match_start, it.mark_start);
+                buf->insert_mark(MARK_SEARCH_RESULT, it.match_end, it.mark_end);
             }
         }
     }
@@ -1355,7 +1355,6 @@ void Editor::init() {
     }
 
     ast_navigation.mem.init("ast_navigation mem");
-    file_search.mem.init("file_search mem");
 }
 
 void Editor::update_selected_ast_node(Ast_Node *node) {
@@ -4158,7 +4157,7 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                     }
                 }
 
-                auto &wnd = world.wnd_current_file_search;
+                auto &wnd = world.wnd_local_search;
 
                 if (chars->len + 2 > _countof(wnd.query)) {
                     ret->interrupted = true;
@@ -4176,14 +4175,21 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                 trigger_file_search();
             }
 
+            // TODO: move new search result
             auto idx = move_file_search_result(inp.ch == 'n' || inp.ch == '*', count);
             if (idx == -1) {
                 ret->interrupted = true;
                 break;
             }
 
+            auto node = buf->search_tree->get_node(idx);
+            if (!node) {
+                ret->interrupted = true;
+                break;
+            }
+
             file_search.current_idx = idx;
-            ret->dest = file_search.results[idx].start;
+            ret->dest = node->pos;
             ret->type = MOTION_CHAR_EXCL;
             return ret;
         }
@@ -5005,7 +5011,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             if (!isalnum(arg)) break;
 
             auto mark = world.mark_fridge.alloc();
-            buf->mark_tree.insert_mark(MARK_VIM_MARK, cur, mark);
+            buf->insert_mark(MARK_VIM_MARK, cur, mark);
 
             auto clear_marks = [&](Mark** marks, int idx) {
                 if (marks[idx]) {
@@ -6249,11 +6255,23 @@ void Editor::trigger_escape() {
 }
 
 void Editor::trigger_file_search(int limit_start, int limit_end) {
-    auto &wnd = world.wnd_current_file_search;
-    if (!wnd.query[0]) return;
-
     auto editors = get_all_editors();
-    if (isempty(editors)) return; // can't actually happen right?
+    if (isempty(editors)) return;
+
+    // clear out results in all editors
+    For (editors) {
+        auto editor = it;
+        auto buf = editor->buf;
+        auto tree = buf->search_tree;
+        cp_assert(tree);
+
+        tree->cleanup();
+        tree->init();
+        buf->search_mem.reset();
+    }
+
+    auto &wnd = world.wnd_local_search;
+    if (!wnd.query[0]) return;
 
     Search_Session sess; ptr0(&sess);
     sess.case_sensitive = wnd.case_sensitive;
@@ -6262,83 +6280,49 @@ void Editor::trigger_file_search(int limit_start, int limit_end) {
     sess.qlen = strlen(wnd.query);
     if (!sess.init()) return;
 
-    file_search.current_idx = -1;
-
-    /*
-    if (wnd.search_in_selection) {
-        wnd.sess.limit_to_range = true;
-
-        auto a = select_start;
-        auto b = cur;
-        ORDER(a, b);
-
-        wnd.sess.limit_start = cur_to_offset(a);
-        wnd.sess.limit_end = cur_to_offset(b);
-    }
-    */
-
     For (editors) {
         auto editor = it;
-        auto &fs = editor->file_search;
-
-        fs.mem.reset();
-        {
-            SCOPED_MEM(&fs.mem);
-            fs.results.init();
-        }
-
-        auto chars = new_list(char);
-        char buf[4];
+        auto buf = editor->buf;
 
         // this is so stupid, why doesn't pcre take a custom iterator?
-        For (&it->buf->lines) {
-            For (&it) {
-                int k = uchar_to_cstr(it, buf);
-                chars->concat(buf, k);
-            }
-            chars->append('\n');
-        }
+        int len;
+        auto text = buf->get_text(new_cur2(0, 0), buf->end_pos(), &len);
+        auto matches = new_list(Search_Match);
+        sess.search((char*)text, len, matches, 1000); // TODO: make limit a setting, or remove
 
-        auto tmp = new_list(Search_Match);
+        auto tree = editor->buf->search_tree;
 
-        // TODO: make max # results customizable?
-        sess.search(chars->items, chars->len, tmp, 1000);
+        For (matches) {
+            auto start = editor->offset_to_cur(it.start);
+            auto end = editor->offset_to_cur(it.end);
 
-        // is o(n*m) gonna fuck us? (n = number lines, m = number matches)
-        // n is at most 65k
-        // m is... i guess a lot :joy:
-        /// TODO: this offset_to_cur seems horribly inefficient too...
-        For (tmp) {
-            File_Search_Match match; ptr0(&match);
-            match.start = editor->offset_to_cur(it.start);
-            match.end = editor->offset_to_cur(it.end);
+            auto convert_groups = [&](List<int> *arr) -> List<cur2> * {
+                if (!arr) return NULL;
 
-            if (it.group_starts) {
+                List<cur2> *ret;
                 {
-                    SCOPED_MEM(&fs.mem);
-                    match.group_starts = new_list(cur2);
+                    SCOPED_MEM(&buf->search_mem);
+                    ret = new_list(cur2);
                 }
-                For (it.group_starts)
-                    match.group_starts->append(editor->offset_to_cur(it));
-            }
+                For (arr) ret->append(editor->offset_to_cur(it));
+                return ret;
+            };
 
-            if (it.group_ends) {
-                {
-                    SCOPED_MEM(&fs.mem);
-                    match.group_ends = new_list(cur2);
-                }
-                For (it.group_ends)
-                    match.group_ends->append(editor->offset_to_cur(it));
-            }
+            auto node = tree->insert_node(start);
+            node->search_result.end = end;
+            node->search_result.group_starts = convert_groups(it.group_starts);
+            node->search_result.group_ends = convert_groups(it.group_ends);
 
-            editor->file_search.results.append(&match);
+            tree->check_tree_integrity();
         }
     }
 }
 
 int Editor::move_file_search_result(bool forward, int count) {
-    auto &matches = file_search.results;
-    if (!matches.len) return -1;
+    auto tree = buf->search_tree;
+
+    auto total = tree->get_size();
+    if (!total) return -1;
 
     bool in_match = false;
     auto idx = find_current_or_next_match(cur, &in_match);
@@ -6347,32 +6331,40 @@ int Editor::move_file_search_result(bool forward, int count) {
         if (!in_match) count--;
         idx += count;
     } else {
-        idx += matches.len - (count % matches.len);
+        idx += total - (count % total);
     }
-    return idx % matches.len;
-    // move_cursor(matches[idx].start);
+    return idx % total;
 }
 
 int Editor::find_current_or_next_match(cur2 pos, bool *in_match) {
-    auto &matches = file_search.results;
+    auto tree = buf->search_tree;
 
-    int lo = 0, hi = matches.len-1;
-    while (lo <= hi) {
-        int mid = (lo+hi)/2;
-        auto &it = matches[mid];
-        if (it.start <= pos && pos < it.end) {
+    auto total = tree->get_size();
+    if (!total) return -1;
+
+    int idx = 0;
+    auto curr = tree->root;
+    Avl_Node *prev = NULL;
+
+    while (curr) {
+        if (curr->pos <= pos && pos < curr->search_result.end) {
             *in_match = true;
-            return mid;
+            return idx + tree->get_size(curr->left);
         }
-
-        if (pos < it.start)
-            hi = mid-1;
-        else
-            lo = mid+1;
+        prev = curr;
+        if (pos < curr->pos) {
+            curr = curr->left;
+        } else {
+            idx += tree->get_size(curr->left) + 1;
+            curr = curr->right;
+        }
     }
 
     *in_match = false;
-    return lo % matches.len;
+    int ret = idx;
+    if (prev->search_result.end <= pos)
+        ret = (ret + 1) % total;
+    return ret;
 }
 
 char* gh_fmt_finish() {

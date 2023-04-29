@@ -31,7 +31,7 @@ void History::actually_push(int editor_id, cur2 pos) {
     ring[curr].editor_id = editor_id;
     ring[curr].pos = pos; // do we even need this anymore?
     ring[curr].mark = world.mark_fridge.alloc();
-    editor->buf->mark_tree.insert_mark(MARK_HISTORY, pos, ring[curr].mark);
+    editor->buf->insert_mark(MARK_HISTORY, pos, ring[curr].mark);
 
     top = curr = inc(curr);
     if (curr == start) {
@@ -136,7 +136,7 @@ void History::check_marks(int upper) {
         while (node->parent)
             node = node->parent;
 
-        if (it->tree->root != node) cp_panic("mark node is detached from root!");
+        if (it->buf->mark_tree->root != node) cp_panic("mark node is detached from root!");
     }
 #endif
 }
@@ -366,7 +366,7 @@ void World::init() {
     global_mark_tree_lock.init();
 
     mark_fridge.init(512);
-    mark_node_fridge.init(512);
+    avl_node_fridge.init(512);
     change_fridge.init(512);
     treap_fridge.init(512);
 
@@ -861,7 +861,7 @@ void kick_off_build(Build_Profile *build_profile) {
                     if (!are_filepaths_equal(path, it.file)) continue;
 
                     auto pos = new_cur2(it.col - 1, it.row - 1);
-                    editor->buf->mark_tree.insert_mark(MARK_BUILD_ERROR, pos, it.mark);
+                    editor->buf->insert_mark(MARK_BUILD_ERROR, pos, it.mark);
                 }
             }
             break;
@@ -1596,7 +1596,7 @@ bool is_command_enabled(Command cmd) {
     case CMD_GO_TO_NEXT_FILE_SEARCH_RESULT:
     case CMD_GO_TO_PREVIOUS_FILE_SEARCH_RESULT: {
         auto editor = get_current_editor();
-        return editor && editor->file_search.results.len;
+        return editor && editor->buf->search_tree->get_size();
     }
 
     case CMD_GO_TO_NEXT_SEARCH_RESULT:
@@ -2734,13 +2734,18 @@ void handle_command(Command cmd, bool from_menu) {
     case CMD_GO_TO_PREVIOUS_FILE_SEARCH_RESULT: {
         auto editor = get_current_editor();
         if (!editor) break;
-        if (!editor->file_search.results.len) break;
+
+        auto tree = editor->buf->search_tree;
+        if (!tree->get_size()) break;
 
         auto idx = editor->move_file_search_result(cmd == CMD_GO_TO_NEXT_FILE_SEARCH_RESULT, 1);
         if (idx == -1) break;
 
+        auto node = tree->get_node(idx);
+        if (!node) break;
+
         editor->file_search.current_idx = idx;
-        editor->move_cursor(editor->file_search.results[idx].start);
+        editor->move_cursor(node->pos);
         break;
     }
 
@@ -3720,7 +3725,7 @@ done_writing:
 
     // we now know that src and dest accurately reflect what's on disk
 
-    Buffer buf; buf.init(MEM, true, false);
+    Buffer buf; buf.init(MEM, 0, false, false);
     defer { buf.cleanup(); };
 
     auto filepath = ind.ctx_to_filepath(dest->ctx);
@@ -4034,7 +4039,7 @@ void reset_everything_when_switching_editors(Editor *old_editor) {
 }
 
 void open_current_file_search(bool replace, bool from_vim) {
-    auto &wnd = world.wnd_current_file_search;
+    auto &wnd = world.wnd_local_search;
     wnd.replace = replace;
     wnd.opened_from_vim = from_vim;
     if (from_vim) wnd.use_regex = true;

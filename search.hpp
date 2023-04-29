@@ -45,7 +45,7 @@ struct Search_Session {
     bool init() { return precompute(); }
     bool precompute();
     void cleanup();
-    void search(char *buf, u32 buflen, List<Search_Match> *out, int limit);
+    void search(ccstr buf, u32 buflen, List<Search_Match> *out, int limit);
 
     inline bool chars_eq(char a, char b) {
         if (!case_sensitive) {

@@ -264,7 +264,6 @@ struct Editor {
 
     struct {
         Pool mem;
-        List<File_Search_Match> results;
         int current_idx;
     } file_search;
 

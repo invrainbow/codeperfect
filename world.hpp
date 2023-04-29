@@ -372,7 +372,7 @@ struct World {
     bool which_workspace_mem;
 
     Fridge<Mark> mark_fridge;
-    Fridge<Mark_Node> mark_node_fridge;
+    Fridge<Avl_Node> avl_node_fridge;
     Fridge<Treap> treap_fridge;
     Fridge<Change> change_fridge;
     Fridge<Chunk0> chunk0_fridge;
@@ -555,7 +555,7 @@ struct World {
         ccstr token;
     } editor_context_menu;
 
-    struct Wnd_Current_File_Search : Wnd {
+    struct Wnd_Local_Search : Wnd {
         char query[256];
         char permanent_query[256];
         char replace_str[256];
@@ -564,7 +564,7 @@ struct World {
         bool use_regex;
         // bool search_in_selection;
         bool opened_from_vim;
-    } wnd_current_file_search;
+    } wnd_local_search;
 
     struct Wnd_Enter_License : Wnd {
         char email[256];

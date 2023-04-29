@@ -424,7 +424,7 @@ List<uchar>* Buffer::get_uchars(cur2 start, cur2 end, int limit, cur2 *actual_en
     return ret;
 }
 
-ccstr Buffer::get_text(cur2 start, cur2 end) {
+ccstr Buffer::get_text(cur2 start, cur2 end, int *len) {
     auto ret = new_list(char);
 
     For (get_uchars(start, end)) {
@@ -434,6 +434,7 @@ ccstr Buffer::get_text(cur2 start, cur2 end) {
     }
 
     ret->append('\0');
+    if (len) *len = ret->len;
     return ret->items;
 }
 
@@ -453,7 +454,7 @@ cur2 Buffer::fix_cur(cur2 c) {
     return c;
 }
 
-void Buffer::init(Pool *_mem, int _lang, bool _use_history) {
+void Buffer::init(Pool *_mem, int _lang, bool _use_history, bool use_search) {
     ptr0(this);
 
     mem = _mem;
@@ -465,6 +466,22 @@ void Buffer::init(Pool *_mem, int _lang, bool _use_history) {
         edit_buffer_old.init();
         edit_buffer_new.init();
         tree_batch_edits.init();
+        mark_tree = new_object(Avl_Tree);
+    }
+
+    if (use_search) {
+        // allocate the tree itself on the main mem, since the search_mem gets
+        // wiped in between searches
+        //
+        // alternative would be to reinitialize search_tree between searches
+        // too
+        SCOPED_MEM(mem);
+        search_tree = new_object(Avl_Tree);
+        search_tree->init();
+        search_tree->type = AVL_SEARCH_RESULT;
+
+        // now initialize search_mem
+        search_mem.init();
     }
 
     initialized = true;
@@ -473,7 +490,8 @@ void Buffer::init(Pool *_mem, int _lang, bool _use_history) {
     if (_lang != LANG_NONE)
         enable_tree(_lang);
 
-    mark_tree.init(this);
+    mark_tree->init();
+    mark_tree->type = AVL_MARKS;
 }
 
 void Buffer::enable_tree(int _lang) {
@@ -492,7 +510,10 @@ void Buffer::cleanup() {
     if (parser) ts_parser_delete(parser);
     if (tree) ts_tree_delete(tree);
 
-    mark_tree.cleanup();
+    mark_tree->cleanup();
+
+    if (search_tree)
+        search_tree->cleanup();
 
     for (int i = hist_start; i != hist_top; i = hist_inc(i))
         hist_free(i);
@@ -748,7 +769,69 @@ cur2 Buffer::apply_edit(cur2 start, cur2 old_end, uchar *text, s32 len, bool app
         }
     }
 
-    internal_update_mark_tree(&edit);
+    do {
+        cp_assert(!editable_from_main_thread_only || is_main_thread);
+
+        auto have_tree_to_edit = [&]() {
+            if (mark_tree->root) return true;
+            if (search_tree && search_tree->root) return true;
+            return false;
+        };
+
+        if (!have_tree_to_edit()) break;
+
+        {
+            auto start = tspoint_to_cur(edit.start_point);
+            auto end = tspoint_to_cur(edit.new_end_point);
+
+            edit_buffer_new.len = 0;
+            edit_buffer_new.concat(get_uchars(start, end));
+        }
+
+        auto a = new_dstr(&edit_buffer_old);
+        auto b = new_dstr(&edit_buffer_new);
+
+        auto start = tspoint_to_cur(edit.start_point);
+        auto oldend = tspoint_to_cur(edit.old_end_point);
+        auto newend = tspoint_to_cur(edit.new_end_point);
+
+        auto diffs = diff_main(a, b);
+        if (!diffs) {
+            apply_edit_to_trees(start, oldend, newend);
+            break;
+        }
+
+        auto advance_cur = [&](cur2 c, DString s) -> cur2 {
+            for (int i = 0, len = s.len(); i < len; i++) {
+                if (s.get(i) == '\n') {
+                    c.y++;
+                    c.x = 0;
+                } else {
+                    c.x++;
+                }
+            }
+            return c;
+        };
+
+        auto cur = start;
+
+        For (diffs) {
+            switch (it.type) {
+            case DIFF_DELETE:
+                apply_edit_to_trees(cur, advance_cur(cur, it.s), cur);
+                break;
+            case DIFF_INSERT: {
+                auto end = advance_cur(cur, it.s);
+                apply_edit_to_trees(cur, cur, end);
+                cur = end;
+                break;
+            }
+            case DIFF_SAME:
+                cur = advance_cur(cur, it.s);
+                break;
+            }
+        }
+    } while (0);
 
     // set this here or in .remove() and .insert()?
     buf_version++;
@@ -802,62 +885,82 @@ void Buffer::update_tree() {
     tree_version++;
 }
 
-void Buffer::internal_update_mark_tree(TSInputEdit *edit) {
-    cp_assert(!editable_from_main_thread_only || is_main_thread);
+void Buffer::apply_edit_to_trees(cur2 start, cur2 oldend, cur2 newend) {
+    apply_edit_avl_tree(mark_tree, start, oldend, newend);
 
-    if (!mark_tree.root) return;
+    do {
+        if (!search_tree) break;
+        apply_edit_avl_tree(search_tree, start, oldend, newend);
 
-    {
-        auto start = tspoint_to_cur(edit->start_point);
-        auto end = tspoint_to_cur(edit->new_end_point);
+        auto &wnd = world.wnd_local_search;
+        if (!wnd.query[0]) break;
 
-        edit_buffer_new.len = 0;
-        edit_buffer_new.concat(get_uchars(start, end));
-    }
-
-    auto a = new_dstr(&edit_buffer_old);
-    auto b = new_dstr(&edit_buffer_new);
-
-    auto start = tspoint_to_cur(edit->start_point);
-    auto oldend = tspoint_to_cur(edit->old_end_point);
-    auto newend = tspoint_to_cur(edit->new_end_point);
-
-    auto diffs = diff_main(a, b);
-    if (!diffs) {
-        mark_tree.apply_edit(start, oldend, newend);
-        return;
-    }
-
-    auto advance_cur = [&](cur2 c, DString s) -> cur2 {
-        for (int i = 0, len = s.len(); i < len; i++) {
-            if (s.get(i) == '\n') {
-                c.y++;
-                c.x = 0;
-            } else {
-                c.x++;
-            }
+        cur2 lookbehind = start;
+        cur2 lookahead = newend;
+        if (wnd.use_regex) {
+            lookbehind.x = 0;
+            lookbehind.y = relu_sub(lookbehind.y, 200);
+            lookahead.x = 0;
+            lookahead.y = min(lines.len-1, lookahead.y + 200 + 1);
+        } else {
+            int newlines = 0;
+            for (auto p = wnd.query; *p; p++)
+                if (*p == '\n')
+                    newlines++;
+            lookbehind.x = 0;
+            lookbehind.y = relu_sub(lookahead.y, newlines);
+            lookahead.x = 0;
+            lookahead.y = min(lines.len-1, lookahead.y + newlines + 1);
         }
-        return c;
-    };
 
-    auto cur = start;
+        // clear out everything between lookbehind and lookahead
+        auto node = search_tree->find_node(search_tree->root, lookbehind);
+        if (node->pos < lookbehind)
+            node = search_tree->successor(node);
+        do {
+            auto next = search_tree->successor(node);
+            search_tree->delete_node(node->pos);
+            node = next;
+        } while (node && node->pos < lookahead);
 
-    For (diffs) {
-        switch (it.type) {
-        case DIFF_DELETE:
-            mark_tree.apply_edit(cur, advance_cur(cur, it.s), cur);
-            break;
-        case DIFF_INSERT: {
-            auto end = advance_cur(cur, it.s);
-            mark_tree.apply_edit(cur, cur, end);
-            cur = end;
-            break;
+        Search_Session sess; ptr0(&sess);
+        sess.case_sensitive = wnd.case_sensitive;
+        sess.literal = !wnd.use_regex;
+        sess.query = wnd.query;
+        sess.qlen = strlen(wnd.query);
+        if (!sess.init()) return;
+
+        int len = 0;
+        auto chars = get_text(lookbehind, lookahead, &len);
+        auto matches = new_list(Search_Match);
+        sess.search(chars, len, matches, 1000); // TODO: make limit a setting, or remove
+
+        auto starting_offset = cur_to_offset(lookbehind);
+
+        For (matches) {
+            auto start = offset_to_cur(it.start + starting_offset);
+            auto end = offset_to_cur(it.end + starting_offset);
+
+            auto convert_groups = [&](List<int> *arr) -> List<cur2> * {
+                if (!arr) return NULL;
+
+                List<cur2> *ret;
+                {
+                    SCOPED_MEM(&search_mem);
+                    ret = new_list(cur2);
+                }
+                For (arr) ret->append(offset_to_cur(it + starting_offset));
+                return ret;
+            };
+
+            auto node = search_tree->insert_node(start);
+            node->search_result.end = end;
+            node->search_result.group_starts = convert_groups(it.group_starts);
+            node->search_result.group_ends = convert_groups(it.group_ends);
+
+            search_tree->check_tree_integrity();
         }
-        case DIFF_SAME:
-            cur = advance_cur(cur, it.s);
-            break;
-        }
-    }
+    } while (0);
 }
 
 Change* Buffer::hist_alloc() {
@@ -1206,35 +1309,49 @@ cur2 Buffer::offset_to_cur(i32 off, bool *overflow) {
 // if this gets to be too slow, switch to per-tree lock
 Lock global_mark_tree_lock;
 
-void cleanup_mark_node(Mark_Node *node) {
-    if (!node) return;
+Avl_Node *Avl_Tree::get_node(int i, Avl_Node *r) {
+    if (!r) r = root;
 
-    cleanup_mark_node(node->left);
-    cleanup_mark_node(node->right);
-
-    for (auto it = node->marks; it; it = it->next) {
-        if (it == it->next)
-            cp_panic("infinite loop");
-        it->valid = false;
-    }
-
-    world.mark_node_fridge.free(node);
+    int lsize = get_size(r->left);
+    if (i == lsize) return r;
+    if (i < lsize) return get_node(i, r->left);
+    return get_node(i - lsize - 1, r->right);
 }
 
-void Mark_Tree::cleanup() {
-    cleanup_mark_node(root);
-    // mem.cleanup();
+void Avl_Tree::cleanup() {
+    fn<void(Avl_Node*)> helper = [&](Avl_Node *node) {
+        if (!node) return;
+
+        helper(node->left);
+        helper(node->right);
+
+        if (type == AVL_MARKS) {
+            for (auto it = node->marks; it; it = it->next) {
+                if (it == it->next)
+                    cp_panic("infinite loop");
+                it->valid = false;
+            }
+        }
+
+        world.avl_node_fridge.free(node);
+    };
+
+    helper(root);
 }
 
-int Mark_Tree::get_height(Mark_Node *root) {
-    return !root ? 0 : root->height;
+int Avl_Tree::get_height(Avl_Node *root) {
+    return root ? root->height : 0;
 }
 
-int Mark_Tree::get_balance(Mark_Node *root) {
-    return !root ? 0 : (get_height(root->left) - get_height(root->right));
+int Avl_Tree::get_size(Avl_Node *root) {
+    return root ? root->size : 0;
 }
 
-Mark_Node *Mark_Tree::successor(Mark_Node *node) {
+int Avl_Tree::get_balance(Avl_Node *root) {
+    return root ? (get_height(root->left) - get_height(root->right)) : 0;
+}
+
+Avl_Node *Avl_Tree::successor(Avl_Node *node) {
     if (node->right) {
         auto ret = node->right;
         while (ret->left)
@@ -1248,7 +1365,7 @@ Mark_Node *Mark_Tree::successor(Mark_Node *node) {
     return NULL;
 }
 
-Mark_Node *Mark_Tree::find_node(Mark_Node *root, cur2 pos) {
+Avl_Node *Avl_Tree::find_node(Avl_Node *root, cur2 pos) {
     if (!root) return NULL;
     if (root->pos == pos) return root;
 
@@ -1258,12 +1375,12 @@ Mark_Node *Mark_Tree::find_node(Mark_Node *root, cur2 pos) {
     return find_node(child, pos);
 }
 
-Mark_Node *Mark_Tree::insert_node(cur2 pos) {
+Avl_Node *Avl_Tree::insert_node(cur2 pos) {
     auto node = find_node(root, pos);
     if (node && node->pos == pos)
         return node;
 
-    node = world.mark_node_fridge.alloc();
+    node = world.avl_node_fridge.alloc();
     node->pos = pos;
     root = internal_insert_node(root, pos, node);
 
@@ -1272,34 +1389,37 @@ Mark_Node *Mark_Tree::insert_node(cur2 pos) {
     return node;
 }
 
-void Mark_Tree::insert_mark(Mark_Type type, cur2 pos, Mark *mark) {
+void Buffer::insert_mark(Mark_Type type, cur2 pos, Mark *mark) {
     world.global_mark_tree_lock.enter();
     defer { world.global_mark_tree_lock.leave(); };
 
     mark->type = type;
-    mark->tree = this;
+    mark->buf = this;
     mark->valid = true;
 
-    check_tree_integrity();
+    mark_tree->check_tree_integrity();
 
-    auto node = insert_node(pos);
+    auto node = mark_tree->insert_node(pos);
     mark->node = node;
     mark->next = node->marks;
     if (mark->next == mark) cp_panic("infinite loop");
     node->marks = mark;
 
-    check_tree_integrity();
+    mark_tree->check_tree_integrity();
 }
 
-void Mark_Tree::recalc_height(Mark_Node *root) {
+void Avl_Tree::recalc_height(Avl_Node *root) {
     root->height = 1 + max(get_height(root->left), get_height(root->right));
 }
 
-Mark_Node* Mark_Tree::rotate_right(Mark_Node *root) {
+Avl_Node* Avl_Tree::rotate_right(Avl_Node *root) {
     auto y = root->left;
 
     y->parent = root->parent;
     y->isleft = root->isleft;
+
+    root->size -= get_size(root->left);
+    root->size += get_size(y->right);
 
     root->left = y->right;
     if (root->left) {
@@ -1307,26 +1427,35 @@ Mark_Node* Mark_Tree::rotate_right(Mark_Node *root) {
         root->left->isleft = true;
     }
 
+    y->size -= get_size(y->right);
+    y->size += get_size(root);
+
     y->right = root;
-    y->right->parent = y;
-    y->right->isleft = false;
+    root->parent = y;
+    root->isleft = false;
 
     recalc_height(root);
     recalc_height(y);
     return y;
 }
 
-Mark_Node* Mark_Tree::rotate_left(Mark_Node *root) {
+Avl_Node* Avl_Tree::rotate_left(Avl_Node *root) {
     auto y = root->right;
 
     y->parent = root->parent;
     y->isleft = root->isleft;
+
+    root->size -= get_size(root->right);
+    root->size += get_size(y->left);
 
     root->right = y->left;
     if (root->right) {
         root->right->parent = root;
         root->right->isleft = false;
     }
+
+    y->size -= get_size(y->left);
+    y->size += get_size(root);
 
     y->left = root;
     y->left->parent = y;
@@ -1338,13 +1467,14 @@ Mark_Node* Mark_Tree::rotate_left(Mark_Node *root) {
 }
 
 // precond: pos doesn't exist in root
-Mark_Node *Mark_Tree::internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node *node) {
+Avl_Node *Avl_Tree::internal_insert_node(Avl_Node *root, cur2 pos, Avl_Node *node) {
     if (!root) {
         recalc_height(node);
+        node->size = 1;
         return node;
     }
 
-    if (root->pos == pos) cp_panic("trying to insert duplicate pos");
+    cp_assert(root->pos != pos);
 
     if (pos < root->pos) {
         auto old = root->left;
@@ -1362,6 +1492,9 @@ Mark_Node *Mark_Tree::internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node 
         }
     }
 
+    // we just added node to one of the sides
+    root->size++;
+
     recalc_height(root);
 
     auto balance = get_balance(root);
@@ -1378,14 +1511,14 @@ Mark_Node *Mark_Tree::internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node 
     return root;
 }
 
-void Mark_Tree::delete_mark(Mark *mark) {
+void Buffer::delete_mark(Mark *mark) {
     world.global_mark_tree_lock.enter();
     defer { world.global_mark_tree_lock.leave(); };
 
     auto node = mark->node;
     bool found = false;
 
-    check_tree_integrity();
+    mark_tree->check_tree_integrity();
 
     // remove `mark` from `node->marks`
     Mark *last = NULL;
@@ -1403,38 +1536,40 @@ void Mark_Tree::delete_mark(Mark *mark) {
         last = it;
     }
 
-    check_tree_integrity();
+    mark_tree->check_tree_integrity();
 
     if (!found)
         cp_panic("trying to delete mark not found in its node");
 
     if (!node->marks)
-        delete_node(node->pos);
+        mark_tree->delete_node(node->pos);
 
     mark->valid = false;
     // ptr0(mark); // surface the error earlier
     // world.mark_fridge.free(mark);
 }
 
-void Mark_Tree::delete_node(cur2 pos) {
+void Avl_Tree::delete_node(cur2 pos) {
     check_tree_integrity();
     root = internal_delete_node(root, pos);
     check_tree_integrity();
 }
 
-Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
+Avl_Node *Avl_Tree::internal_delete_node(Avl_Node *root, cur2 pos) {
     if (!root) return root;
 
-    if (pos < root->pos)
+    if (pos < root->pos) {
         root->left = internal_delete_node(root->left, pos);
-    else if (pos > root->pos)
+        root->size--; // we just deleted an item
+    } else if (pos > root->pos) {
         root->right = internal_delete_node(root->right, pos);
-    else {
-        if (root->marks)
-            cp_panic("trying to delete a node that still has marks");
+        root->size--; // we just deleted an item
+    } else {
+        if (type == AVL_MARKS)
+            cp_assert(!root->marks);
 
         if (!root->left || !root->right) {
-            Mark_Node *ret = NULL;
+            Avl_Node *ret = NULL;
             bool isleft = false;
 
             if (!root->left) ret = root->right;
@@ -1445,7 +1580,7 @@ Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
                 ret->isleft = root->isleft;
             }
 
-            world.mark_node_fridge.free(root);
+            world.avl_node_fridge.free(root);
             return ret;
         }
 
@@ -1453,13 +1588,25 @@ Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
         while (min->left)
             min = min->left;
 
-        root->marks = min->marks;
-        for (auto it = root->marks; it; it = it->next)
-            it->node = root;
         root->pos = min->pos;
-        min->marks = NULL;
+
+        // basically "copy the external data over"
+        switch (type) {
+        case AVL_MARKS:
+            root->marks = min->marks;
+            for (auto it = root->marks; it; it = it->next)
+                it->node = root;
+            min->marks = NULL;
+            break;
+        case AVL_SEARCH_RESULT:
+            root->search_result.end = min->search_result.end;
+            root->search_result.group_starts = min->search_result.group_starts;
+            root->search_result.group_ends = min->search_result.group_ends;
+            break;
+        }
 
         root->right = internal_delete_node(root->right, min->pos);
+        root->size--;
     }
 
     recalc_height(root);
@@ -1478,7 +1625,7 @@ Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
     return root;
 }
 
-void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
+void Buffer::apply_edit_avl_tree(Avl_Tree *tree, cur2 start, cur2 old_end, cur2 new_end) {
     world.global_mark_tree_lock.enter();
     defer { world.global_mark_tree_lock.leave(); };
 
@@ -1500,58 +1647,46 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
      *         pos.y += (new_end.y - old_end.y)
      */
 
-    auto nstart = find_node(root, start);
+    auto nstart = tree->find_node(tree->root, start);
     if (!nstart) return;
 
     auto it = nstart;
-    if (it->pos < start) it = successor(it);
+    if (it->pos < start) it = tree->successor(it);
 
     Mark *orphan_marks = NULL;
 
-    check_tree_integrity();
+    tree->check_tree_integrity();
 
     while (it && it->pos < old_end) {
         if (it->pos < new_end) {
-            it = successor(it);
-        } else {
-            for (auto mark = it->marks; mark; mark = mark->next)
-                if (mark == mark->next)
-                    cp_panic("infinite loop");
+            it = tree->successor(it);
+            continue;
+        }
 
-            Mark *next = NULL;
+        Mark *next = NULL;
 
-            if (it->marks == orphan_marks)
-                cp_panic("why is this happening?");
-
-            int i = 0;
+        if (tree->type == AVL_MARKS) {
             for (auto mark = it->marks; mark; mark = next) {
-                if (orphan_marks == mark)
-                    cp_panic("why is this happening?");
-
                 mark->node = NULL;
                 next = mark->next;
-
                 mark->next = orphan_marks;
-                if (mark->next == mark) cp_panic("infinite loop");
-
                 orphan_marks = mark;
-                i++;
             }
             it->marks = NULL;
-
-            auto curr = it->pos;
-            delete_node(curr);
-
-            // after deleting the node, go to the next node
-            it = find_node(root, curr);
-            if (it && it->pos < curr)
-                it = successor(it);
         }
+
+        auto curr = it->pos;
+        tree->delete_node(curr);
+
+        // after deleting the node, go to the next node
+        it = tree->find_node(tree->root, curr);
+        if (it && it->pos < curr)
+            it = tree->successor(it);
     }
 
-    check_tree_integrity();
+    tree->check_tree_integrity();
 
-    for (; it; it = successor(it)) {
+    for (; it; it = tree->successor(it)) {
         if (it->pos.y == old_end.y) {
             it->pos.y = new_end.y;
             it->pos.x = it->pos.x + new_end.x - old_end.x;
@@ -1560,10 +1695,10 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
         }
     }
 
-    check_tree_integrity();
+    tree->check_tree_integrity();
 
-    if (orphan_marks) {
-        auto nend = insert_node(new_end);
+    if (tree->type == AVL_MARKS && orphan_marks) {
+        auto nend = tree->insert_node(new_end);
         Mark *next = NULL;
         for (auto mark = orphan_marks; mark; mark = next) {
             next = mark->next;
@@ -1574,11 +1709,12 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
         }
     }
 
-    check_tree_integrity();
+    tree->check_tree_integrity();
 }
 
-void Mark_Tree::check_mark_cycle(Mark_Node *root) {
+void Avl_Tree::check_mark_cycle(Avl_Node *root) {
     if (!root) return;
+    if (type != AVL_MARKS) return;
 
     for (auto mark = root->marks; mark; mark = mark->next)
         if (mark == mark->next)
@@ -1588,29 +1724,31 @@ void Mark_Tree::check_mark_cycle(Mark_Node *root) {
     check_mark_cycle(root->right);
 }
 
-void Mark_Tree::check_duplicate_marks_helper(Mark_Node *root, List<Mark*> *seen) {
-    if (!root) return;
-
-    check_duplicate_marks_helper(root->left, seen);
-    check_duplicate_marks_helper(root->right, seen);
-
-    for (auto m = root->marks; m; m = m->next) {
-        if (seen->find([&](auto it) { return *it == m; }))
-            cp_panic("duplicate mark");
-        seen->append(m);
-    }
-}
-
-void Mark_Tree::check_duplicate_marks() {
+void Avl_Tree::check_duplicate_marks() {
     SCOPED_FRAME();
+
+    if (type != AVL_MARKS) return;
 
     // if this gets too slow, use a set
     List<Mark*> seen; seen.init();
 
-    check_duplicate_marks_helper(root, &seen);
+    fn<void(Avl_Node*)> helper = [&](Avl_Node *root) {
+        if (!root) return;
+
+        helper(root->left);
+        helper(root->right);
+
+        for (auto m = root->marks; m; m = m->next) {
+            if (seen.find([&](auto it) { return *it == m; }))
+                cp_panic("duplicate mark");
+            seen.append(m);
+        }
+    };
+
+    helper(root);
 }
 
-void Mark_Tree::check_tree_integrity() {
+void Avl_Tree::check_tree_integrity() {
 #ifdef DEBUG_BUILD
     check_ordering();
     check_mark_cycle(root);
@@ -1618,7 +1756,7 @@ void Mark_Tree::check_tree_integrity() {
 #endif
 }
 
-void Mark_Tree::check_ordering() {
+void Avl_Tree::check_ordering() {
     auto min = root;
     if (!min) return;
 
@@ -1638,7 +1776,7 @@ void Mark_Tree::check_ordering() {
 }
 
 cur2 Mark::pos() { return node->pos; }
-void Mark::cleanup() { if (valid) tree->delete_mark(this); }
+void Mark::cleanup() { if (valid) buf->delete_mark(this); }
 
 bool is_mark_valid(Mark *mark) {
     return mark && mark->valid;

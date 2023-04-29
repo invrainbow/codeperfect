@@ -37,10 +37,8 @@ void test_diff() {
 
 void test_mark_tree() {
     Buffer buf;
-    buf.init(&world.frame_mem, false, false);
+    buf.init(&world.frame_mem, 0, false, true);
     buf.read("loldongs", -1);
-
-    Mark_Tree mt; mt.init(&buf);
 
     /*
     auto m1 = mt.insert_mark(MARK_BUILD_ERROR, new_cur2(2, 4));
@@ -85,7 +83,7 @@ const cur2 NOBOUND = {-1, -1};
 struct Mark_Tree_Fuzzer {
     List<Mark*> marks;
     List<Mtf_Action> actions;
-    Mark_Tree tree;
+    Buffer buf;
     bool print_flag;
 
     void init() {
@@ -93,11 +91,11 @@ struct Mark_Tree_Fuzzer {
 
         marks.init();
         actions.init();
-        tree.init(NULL);
+        buf.init(MEM, 0, false, true);
     }
 
     void cleanup() {
-        tree.cleanup();
+        buf.cleanup();
         For (&marks) world.mark_fridge.free(it);
     }
 
@@ -147,7 +145,7 @@ struct Mark_Tree_Fuzzer {
         switch (a->type) {
         case MTF_INSERT_MARK: {
             auto mark = world.mark_fridge.alloc();
-            tree.insert_mark(MARK_TEST, a->insert_mark_pos, mark);
+            buf.insert_mark(MARK_TEST, a->insert_mark_pos, mark);
             marks.append(mark);
             break;
         }
@@ -157,7 +155,7 @@ struct Mark_Tree_Fuzzer {
             marks.remove(a->delete_mark_index);
             break;
         case MTF_APPLY_EDIT:
-            tree.apply_edit(a->edit_start, a->edit_old_end, a->edit_new_end);
+            buf.apply_edit_to_trees(a->edit_start, a->edit_old_end, a->edit_new_end);
             break;
         }
     }

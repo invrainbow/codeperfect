@@ -73,13 +73,12 @@ enum Mark_Type {
     MARK_VIM_MARK,
 };
 
-struct Mark_Tree;
-struct Mark_Node;
+struct Avl_Node;
 
 struct Mark {
     Mark_Type type;
-    Mark_Tree *tree;
-    Mark_Node *node;
+    Buffer *buf;
+    Avl_Node *node;
     Mark *next;
     bool valid;
 
@@ -89,17 +88,27 @@ struct Mark {
 
 bool is_mark_valid(Mark *mark);
 
-struct Mark_Node {
-    // data assoc'd with each node
+struct Avl_Node {
+    // position of node
     cur2 pos;
-    Mark *marks; // linked list of mark pointers
+
+    // external data
+    union {
+        Mark *marks; // linked list of mark pointers
+        struct {
+            cur2 end;
+            List<cur2> *group_starts;
+            List<cur2> *group_ends;
+        } search_result;
+    };
 
     // internal
-    Mark_Node *left;
-    Mark_Node *right;
-    Mark_Node *parent;
+    Avl_Node *left;
+    Avl_Node *right;
+    Avl_Node *parent;
     bool isleft;
     int height;
+    int size;
 };
 
 struct Buffer;
@@ -109,47 +118,45 @@ struct Buffer;
 // build errors
 // search results
 
-// AVL tree for keeping track of marks.
-struct Mark_Tree {
-    Mark_Node *root;
-    Buffer *buf;
+enum Avl_Use_Case {
+    AVL_MARKS = 1,
+    AVL_SEARCH_RESULT,
+};
 
-    struct Edit {
-        cur2 start;
-        cur2 old_end;
-        cur2 new_end;
-    };
+struct Avl_Tree {
+    Avl_Node *root;
+    Avl_Use_Case type;
 
-    void init(Buffer *_buf) {
-        ptr0(this);
-        buf = _buf;
-    }
-
+    void init() { ptr0(this); }
     void cleanup();
 
-    // public api
-    void insert_mark(Mark_Type type, cur2 pos, Mark *out);
-    void delete_mark(Mark *mark);
-    void apply_edit(cur2 start, cur2 old_end, cur2 new_end);
-
-    // internal shit
-    Mark_Node *find_node(Mark_Node *root, cur2 pos);
-    Mark_Node *insert_node(cur2 pos);
+    Avl_Node *find_node(Avl_Node *root, cur2 pos);
+    Avl_Node *insert_node(cur2 pos);
     void delete_node(cur2 pos);
-    Mark_Node *successor(Mark_Node *node);
-    int get_height(Mark_Node *root);
-    int get_balance(Mark_Node *root);
-    void recalc_height(Mark_Node *root);
-    Mark_Node* rotate_right(Mark_Node *root);
-    Mark_Node* rotate_left(Mark_Node *root);
-    Mark_Node *internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node *node);
-    Mark_Node *internal_delete_node(Mark_Node *root, cur2 pos);
+    Avl_Node *successor(Avl_Node *node);
+    int get_size() { return get_size(root); }
+    int get_size(Avl_Node *it);
+    int get_height(Avl_Node *root);
+    int get_balance(Avl_Node *root);
+    void recalc_height(Avl_Node *root);
+    Avl_Node* rotate_right(Avl_Node *root);
+    Avl_Node* rotate_left(Avl_Node *root);
+    Avl_Node *internal_insert_node(Avl_Node *root, cur2 pos, Avl_Node *node);
+    Avl_Node *internal_delete_node(Avl_Node *root, cur2 pos);
+    Avl_Node *get_node(int i, Avl_Node *r = NULL);
 
+    void check_mark_cycle(Avl_Node *root);
     void check_ordering();
-    void check_mark_cycle(Mark_Node *root);
     void check_duplicate_marks();
     void check_tree_integrity();
-    void check_duplicate_marks_helper(Mark_Node *root, List<Mark*> *seen);
+
+    Avl_Node *get_min() {
+        if (!root) return NULL;
+
+        auto it = root;
+        while (it->left) it = it->left;
+        return it;
+    }
 };
 
 // to apply, remove start to old_end & insert what's in new_text
@@ -217,7 +224,10 @@ struct Buffer {
 
     List<Line> lines;
     Bytecounts_Tree bctree;
-    Mark_Tree mark_tree;
+    Avl_Tree *mark_tree;
+
+    Avl_Tree *search_tree;
+    Pool search_mem;
 
     bool initialized;
     bool dirty;
@@ -280,7 +290,7 @@ struct Buffer {
     cur2 hist_redo();
     void hist_apply_change(Change *change, bool undo);
 
-    void init(Pool *_mem, int _lang, bool use_history);
+    void init(Pool *_mem, int _lang, bool use_history, bool use_search);
     void cleanup();
     void read(char *data, int len);
     void read(File_Mapping* fm);
@@ -294,7 +304,6 @@ struct Buffer {
     void internal_append_line(uchar* text, s32 len);
     void internal_delete_lines(u32 y1, u32 y2);
     void internal_insert_line(u32 y, uchar* text, s32 len);
-    void internal_update_mark_tree(TSInputEdit *edit);
     int internal_distance_between(cur2 a, cur2 b);
 
     cur2 apply_edit(cur2 start, cur2 old_end, uchar *text, s32 len, bool applying_change = false);
@@ -328,8 +337,14 @@ struct Buffer {
     u32 idx_vcp_to_cp(int y, int off) { return internal_convert_x_vx(y, off, false); }
     u32 idx_cp_to_vcp(int y, int off) { return internal_convert_x_vx(y, off, true); }
 
-    ccstr get_text(cur2 start, cur2 end);
+    ccstr get_text(cur2 start, cur2 end, int *len = NULL);
     List<uchar>* get_uchars(cur2 start, cur2 end, int limit = -1, cur2 *actual_end = NULL);
+
+    void insert_mark(Mark_Type type, cur2 pos, Mark *out);
+    void delete_mark(Mark *mark);
+
+    void apply_edit_to_trees(cur2 start, cur2 oldend, cur2 newend);
+    void apply_edit_avl_tree(Avl_Tree *tree, cur2 start, cur2 old_end, cur2 new_end);
 
     bool is_valid(cur2 c);
     cur2 fix_cur(cur2 c);

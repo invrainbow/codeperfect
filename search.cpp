@@ -154,8 +154,8 @@ void Searcher::search_worker() {
 
                 if (editor) {
                     // what do we do here?
-                    editor->buf->mark_tree.insert_mark(MARK_SEARCH_RESULT, sr.match_start, sr.mark_start);
-                    editor->buf->mark_tree.insert_mark(MARK_SEARCH_RESULT, sr.match_end, sr.mark_end);
+                    editor->buf->insert_mark(MARK_SEARCH_RESULT, sr.match_start, sr.mark_start);
+                    editor->buf->insert_mark(MARK_SEARCH_RESULT, sr.match_end, sr.mark_end);
                 }
 
                 results->append(&sr);
@@ -409,7 +409,7 @@ void Searcher::replace_worker() {
 
 // ========================
 
-void Search_Session::search(char *buf, u32 buflen, List<Search_Match> *out, int limit) {
+void Search_Session::search(ccstr buf, u32 buflen, List<Search_Match> *out, int limit) {
     int startlen = out->len;
 
     auto add_match = [&](int start, int end) -> Search_Match* {
