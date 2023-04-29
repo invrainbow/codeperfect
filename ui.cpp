@@ -5127,11 +5127,6 @@ void UI::draw_everything() {
             // if (im::IsItemEdited()) { }
         }
 
-        /*
-        if (im::Checkbox("Search in selection", &wnd.search_in_selection))
-            search_again = true;
-        */
-
         if (search_again && wnd.show) {
             editor->trigger_file_search();
 

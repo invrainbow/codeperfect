@@ -562,7 +562,6 @@ struct World {
         bool replace;
         bool case_sensitive;
         bool use_regex;
-        // bool search_in_selection;
         bool opened_from_vim;
     } wnd_local_search;
 
