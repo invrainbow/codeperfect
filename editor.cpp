@@ -5850,6 +5850,7 @@ Find_Matching_Brace_Result Editor::find_matching_brace_with_ast(uchar ch, cur2 p
     });
 
     if (!brace_node) return FMB_AST_NOT_FOUND;
+    if (brace_node->is_missing()) return FMB_AST_NOT_FOUND;
 
     auto walk_upwards = [&](auto curr) -> Ast_Node * {
         while (true) {
