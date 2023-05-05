@@ -7489,6 +7489,8 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
     case TS_IMAGINARY_LITERAL: return new_primitive_type("complex128");
     case TS_RUNE_LITERAL: return new_primitive_type("rune");
 
+    case TS_IOTA_LITERAL: return new_primitive_type("int");
+
     case TS_RAW_STRING_LITERAL:
     case TS_INTERPRETED_STRING_LITERAL:
         return new_primitive_type("string");

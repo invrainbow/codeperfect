@@ -47,7 +47,8 @@ enum Parse_Lang {
 // version 38: allow embedding generic type inside struct
 // version 39: support type aliases
 // version 40: distinguish between null and empty lists
-#define GO_INDEX_VERSION 40
+// version 41: treat iota as int
+#define GO_INDEX_VERSION 41
 
 enum {
     CUSTOM_HASH_BUILTINS = 1,
