@@ -8,7 +8,7 @@ go to Help > Enter License.
 A few links that may be helpful:
 
  - Documentation: https://docs.codeperfect95.com
- - Manage billing: https://billing.stripe.com/p/login/9AQ5o60VDdYC2Zy144
+ - Manage billing: {{.BillingPortalLink}}
  - Follow our Substack: https://codeperfect95.substack.com
  - Join us on Discord: https://discord.gg/WkFY44BY7a
 

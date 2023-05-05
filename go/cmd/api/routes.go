@@ -329,87 +329,48 @@ func stripeEventWorker() {
 	}
 }
 
-func processStripeEvent(event stripe.Event) {
-	switch event.Type {
-	case "customer.subscription.created":
-	case "customer.subscription.updated":
-	case "customer.subscription.deleted":
-	default:
-		return
+var paymentLinkTypesDev = map[string]int{
+	"plink_1N3vNpBpL0Zd3zdOuDCwTfaR": models.LicenseAndSub,
+	"plink_1N3vNBBpL0Zd3zdO412WVvjR": models.LicenseAndSub,
+	// "plink_1N3vMWBpL0Zd3zdOho8Q0oPU": models.SubOnly,
+	// "plink_1N3vMOBpL0Zd3zdOHtyvGnlE": models.SubOnly,
+	"plink_1N3v85BpL0Zd3zdOtCHOLlYl": models.LicenseOnly,
+	// "plink_1N3v7uBpL0Zd3zdOOaU2UVIq": models.SubOnly,
+	// "plink_1N3v7ZBpL0Zd3zdO0JbYZunV": models.SubOnly,
+	"plink_1N3v7DBpL0Zd3zdOWUOCeXKf": models.LicenseOnly,
+	"plink_1N3v1gBpL0Zd3zdOrmBJGL8T": models.LicenseAndSub,
+	"plink_1N3v0RBpL0Zd3zdOSifnvyCs": models.LicenseAndSub,
+}
+
+var paymentLinkTypesProd = map[string]int{
+	"plink_1N3vNpBpL0Zd3zdOuDCwTfaR": models.LicenseAndSub,
+	"plink_1N3vNBBpL0Zd3zdO412WVvjR": models.LicenseAndSub,
+	// "plink_1N3vMWBpL0Zd3zdOho8Q0oPU": models.SubOnly,
+	// "plink_1N3vMOBpL0Zd3zdOHtyvGnlE": models.SubOnly,
+	"plink_1N3v85BpL0Zd3zdOtCHOLlYl": models.LicenseOnly,
+	// "plink_1N3v7uBpL0Zd3zdOOaU2UVIq": models.SubOnly,
+	// "plink_1N3v7ZBpL0Zd3zdO0JbYZunV": models.SubOnly,
+	"plink_1N3v7DBpL0Zd3zdOWUOCeXKf": models.LicenseOnly,
+	"plink_1N3v1gBpL0Zd3zdOrmBJGL8T": models.LicenseAndSub,
+	"plink_1N3v0RBpL0Zd3zdOSifnvyCs": models.LicenseAndSub,
+}
+
+func paymentLinkHasLicense(id string) bool {
+	var ok bool
+	if IsDevelMode {
+		_, ok = paymentLinkTypesDev[id]
+	} else {
+		_, ok = paymentLinkTypesDev[id]
 	}
+	return ok
+}
 
-	log.Printf("[EVENT] %s", event.Type)
-
-	var sub stripe.Subscription
-	if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
-		log.Printf("json.Unmarshal: %v", err)
-		return
-	}
-
-	log.Printf("=== subscription change: %v, %s ===", sub.ID, sub.Status)
-
-	cus, err := customer.Get(sub.Customer.ID, nil)
-	if err != nil {
-		log.Printf("customer.Get: %v", err)
-		return
-	}
-
-	// spew.Dump(cus)
-
-	newUser := false
-	active := (sub.Status == stripe.SubscriptionStatusActive)
-
-	var user models.User
-	res := db.DB.First(&user, "stripe_subscription_id = ?", sub.ID)
-	if res.Error != nil {
-		if !errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			log.Printf("error looking up user: %v", res.Error)
-			return
-		}
-
-		// new user. if not active, don't bother creating user yet.
-		if !active {
-			log.Printf("user doesn't exist for %s, status = %s, skipping...", cus.Email, sub.Status)
-			return
-		}
-
-		newUser = true
-		user.Email = cus.Email
-		user.LicenseKey = lib.GenerateLicenseKey()
-		user.StripeSubscriptionID = sub.ID
-	}
-
-	// if email changed, notify us via slack & let ops handle manually
-	if user.Email != cus.Email {
-		msg := fmt.Sprintf(
-			"[slack webhook] customer email changed, old = %s, new = %s",
-			user.Email,
-			cus.Email,
-		)
-		log.Printf("%s", msg)
-		SendSlackMessage("%s", msg)
-		return
-	}
-
-	old := user.Active
-	user.Active = active
-	user.Name = cus.Name
-	db.DB.Save(&user)
-
-	if old == user.Active {
-		return
-	}
-
-	PosthogCapture(user.ID, "user activation status changed", PosthogProps{
-		"active": user.Active,
-	})
-
-	PosthogIdentify(user.ID, PosthogProps{"active": user.Active})
-
+func sendUserEmail(user *User, newUser bool) {
 	type EmailParams struct {
-		Email      string
-		LicenseKey string
-		Greeting   string
+		Email             string
+		LicenseKey        string
+		Greeting          string
+		BillingPortalLink string
 	}
 
 	makeGreeting := func() string {
@@ -426,6 +387,12 @@ func processStripeEvent(event stripe.Event) {
 		Email:      user.Email,
 		LicenseKey: user.LicenseKey,
 		Greeting:   makeGreeting(),
+	}
+
+	if IsDevelMode {
+		params.BillingPortalLink = "https://billing.stripe.com/p/login/test_5kAcNMdzp6encGk4gg"
+	} else {
+		params.BillingPortalLink = "https://billing.stripe.com/p/login/9AQ5o60VDdYC2Zy144"
 	}
 
 	sendEmail := func(subject, txtTmpl, htmlTmpl string) {
@@ -453,5 +420,111 @@ func processStripeEvent(event stripe.Event) {
 	} else {
 		sendEmail("CodePerfect 95: License Deactivated", emails.EmailUserDisabledText, emails.EmailUserDisabledHtml)
 		go SendSlackMessage("user deactivated: %s", user.Email)
+	}
+}
+
+func getUserFromCustomer(cus *stripe.Customer) (*models.User, bool, error) {
+	var user models.User
+	newUser := false
+
+	res := db.DB.First(&user, "stripe_customer_id = ?", cus.ID)
+	if res.Error != nil {
+		if !errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("error looking up user: %v", res.Error)
+		}
+
+		/*
+			// new user. if not active, don't bother creating user yet.
+			if !active {
+				log.Printf("user doesn't exist for %s, status = %s, skipping...", cus.Email, sub.Status)
+				return
+			}
+		*/
+
+		newUser = true
+		user.LicenseKey = lib.GenerateLicenseKey()
+		user.StripeCustomerID = cus.ID
+		db.DB.Save(&user)
+	}
+	return user, newUser, nil
+}
+
+func processStripeEvent(event stripe.Event) {
+	log.Printf("[EVENT] %s", event.Type)
+
+	switch event.Type {
+	case "checkout.session.completed":
+		var sess stripe.CheckoutSession
+		if err := json.Unmarshal(event.Data.Raw, &sess); err != nil {
+			log.Printf("json.Unmarshal: %v", err)
+			return
+		}
+
+		cus, err := customer.Get(sub.Customer.ID, nil)
+		if err != nil {
+			log.Printf("customer.Get: %v", err)
+			return
+		}
+
+		hasLicense := paymentLinkHasLicense(sess.PaymentLink.ID)
+		if hasLicense {
+		}
+
+	case "customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted":
+		var sub stripe.Subscription
+		if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
+			log.Printf("json.Unmarshal: %v", err)
+			return
+		}
+
+		log.Printf("=== subscription change: %v, %s ===", sub.ID, sub.Status)
+
+		cus, err := customer.Get(sub.Customer.ID, nil)
+		if err != nil {
+			log.Printf("customer.Get: %v", err)
+			return
+		}
+		// spew.Dump(cus)
+
+		user, isNew, err := getUserFromCustomer(cus)
+		if err != nil {
+			log.Printf("getUserFromCustomer: %v", err)
+			return
+		}
+
+		// user should only be able to have one sub at a time
+		if user.StripeSubscriptionID != "" && user.StripeSubscriptionID != sub.ID {
+			msg := fmt.Sprintf(
+				"user subscription id changed, go investigate: user id = %v, old id = %v, new = %v",
+				user.ID,
+				user.StripeSubscriptionID,
+				sub.ID,
+			)
+			log.Printf("%s", msg)
+			SendSlackMessage("%s", msg)
+			return
+		}
+
+		old := user.HasSubscription
+
+		user.HasSubscription = (sub.Status == stripe.SubscriptionStatusActive)
+		user.StripeSubscriptionID = sub.ID
+		user.Email = cus.Email // TODO: check if email changed? (does it matter?)
+
+		old := user.Active
+		user.Active = active
+		user.Name = cus.Name
+		db.DB.Save(&user)
+
+		if old == user.Active {
+			return
+		}
+
+		PosthogCapture(user.ID, "user activation status changed", PosthogProps{
+			"active": user.Active,
+		})
+		PosthogIdentify(user.ID, PosthogProps{"active": user.Active})
+
+		sendUserEmail(&user, newUser)
 	}
 }

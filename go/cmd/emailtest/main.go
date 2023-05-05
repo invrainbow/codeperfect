@@ -11,15 +11,17 @@ const TestEmail = "bh@codeperfect95.com"
 
 func main() {
 	type EmailParams struct {
-		Email      string
-		LicenseKey string
-		Greeting   string
+		Email             string
+		LicenseKey        string
+		Greeting          string
+		BillingPortalLink string
 	}
 
 	params := &EmailParams{
-		Email:      TestEmail,
-		LicenseKey: lib.GenerateLicenseKey(),
-		Greeting:   "Hi Brandon,",
+		Email:             TestEmail,
+		LicenseKey:        lib.GenerateLicenseKey(),
+		Greeting:          "Hi Brandon,",
+		BillingPortalLink: "https://billing.stripe.com/p/login/test_5kAcNMdzp6encGk4gg",
 	}
 
 	type Email struct {
