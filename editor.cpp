@@ -5573,7 +5573,6 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         }
 
         case 'y': {
-            SCOPED_BATCH_CHANGE(buf);
             switch (mode) {
             case VI_VISUAL: {
                 auto sel = get_selection();

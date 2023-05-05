@@ -313,6 +313,8 @@ void Buffer::tree_batch_end() {
 
     tree_batch_mode = false;
 
+    if (!tree_batch_edits.len) return;
+
     if (tree) {
         TSInputEdit curr;
         memcpy(&curr, &tree_batch_edits[0], sizeof(TSInputEdit));
