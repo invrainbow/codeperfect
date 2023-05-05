@@ -1230,14 +1230,19 @@ Glyph *UI::lookup_glyph_for_grapheme(Grapheme gr) {
         cur_y += pos.y_advance;
     }
 
-    int leftmost = glyph_positions->at(0).x;
-    int topmost = glyph_positions->at(0).y;
-    For (glyph_positions) {
-        if (it.y < topmost) topmost = it.y;
-        if (it.x < leftmost) leftmost = it.x;
+    int leftmost = 0;
+    int topmost = 0;
+
+    if (glyph_positions->len) {
+        leftmost = glyph_positions->at(0).x;
+        topmost = glyph_positions->at(0).y;
+        For (glyph_positions) {
+            if (it.y < topmost) topmost = it.y;
+            if (it.x < leftmost) leftmost = it.x;
+        }
+        For (glyph_positions) it.y -= topmost;
+        For (glyph_positions) it.x -= leftmost;
     }
-    For (glyph_positions) it.y -= topmost;
-    For (glyph_positions) it.x -= leftmost;
 
     boxf bbox; ptr0(&bbox);
     bbox.x = (float)bx0;
@@ -1286,13 +1291,12 @@ Glyph *UI::lookup_glyph_for_grapheme(Grapheme gr) {
 
     glBindTexture(GL_TEXTURE_2D, atlas->gl_texture_id);
 
-    for (int i = 0; i < glyph_count; i++) {
-        auto b = glyph_positions->at(i);
+    Fori (glyph_positions) {
         auto ax = atlas->pos.x;
         auto ay = atlas->pos.y;
         auto bitmap_data = glyph_bitmaps->at(i);
 
-        glTexSubImage2D(GL_TEXTURE_2D, 0, b.x+ax, b.y+ay, b.w, b.h, GL_RED, GL_UNSIGNED_BYTE, bitmap_data);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, it.x+ax, it.y+ay, it.w, it.h, GL_RED, GL_UNSIGNED_BYTE, bitmap_data);
         stbtt_FreeBitmap(bitmap_data, NULL);
     }
 
@@ -7279,182 +7283,182 @@ void UI::draw_everything() {
                     cur_pos.x += settings.line_number_margin_right;
                 }
 
-                Grapheme_Clusterer gc;
-                gc.init();
+                if (line->len) {
+                    Grapheme_Clusterer gc;
+                    gc.init();
 
-                int cp_idx = 0;
-                int byte_idx = 0;
+                    int cp_idx = 0;
+                    int byte_idx = 0;
 
-                auto inc_cp_idx = [&]() {
-                    auto uch = line->at(cp_idx);
+                    auto inc_cp_idx = [&]() {
+                        auto uch = line->at(cp_idx);
 
-                    cp_idx++;
-                    byte_idx += uchar_size(uch);
-                };
+                        cp_idx++;
+                        byte_idx += uchar_size(uch);
+                    };
 
-                gc.feed(line->at(cp_idx)); // feed first character for GB1
+                    gc.feed(line->at(cp_idx)); // feed first character for GB1
 
-                // jump {view.x} clusters
-                int vx_start = 0;
-                {
-                    int vx = 0;
-                    while (vx < view.x && cp_idx < line->len) {
-                        if (line->at(cp_idx) == '\t') {
-                            vx += options.tabsize - (vx % options.tabsize);
-                            inc_cp_idx();
-                        } else {
-                            grapheme_codepoints->len = 0;
-                            do {
-                                auto codepoint = line->at(cp_idx);
-                                grapheme_codepoints->append(codepoint);
+                    // jump {view.x} clusters
+                    int vx_start = 0;
+                    {
+                        int vx = 0;
+                        while (vx < view.x && cp_idx < line->len) {
+                            if (line->at(cp_idx) == '\t') {
+                                vx += options.tabsize - (vx % options.tabsize);
                                 inc_cp_idx();
-                            } while (cp_idx < line->len && !gc.feed(line->at(cp_idx)));
+                            } else {
+                                grapheme_codepoints->len = 0;
+                                do {
+                                    auto codepoint = line->at(cp_idx);
+                                    grapheme_codepoints->append(codepoint);
+                                    inc_cp_idx();
+                                } while (cp_idx < line->len && !gc.feed(line->at(cp_idx)));
 
-                            auto width = cp_wcswidth(grapheme_codepoints->items, grapheme_codepoints->len);
-                            if (width == -1) width = 1;
-                            vx += width;
+                                auto width = cp_wcswidth(grapheme_codepoints->items, grapheme_codepoints->len);
+                                if (width == -1) width = 1;
+                                vx += width;
+                            }
                         }
+                        vx_start = vx;
                     }
-                    vx_start = vx;
-                }
 
-                if (vx_start > view.x)
-                    cur_pos.x += (vx_start - view.x) * base_font->width;
+                    if (vx_start > view.x)
+                        cur_pos.x += (vx_start - view.x) * base_font->width;
 
-                u32 x = buf->idx_cp_to_byte(y, cp_idx);
-                u32 vx = vx_start;
-                u32 newx = 0;
+                    u32 x = buf->idx_cp_to_byte(y, cp_idx);
+                    u32 vx = vx_start;
+                    u32 newx = 0;
 
-                for (; vx < view.x + view.w; x = newx) {
-                    newx = x;
+                    for (; vx < view.x + view.w; x = newx) {
+                        newx = x;
 
-                    if (cp_idx >= line->len) break;
+                        if (cp_idx >= line->len) break;
 
-                    auto curr_cp_idx = cp_idx;
-                    auto curr_byte_idx = byte_idx;
-                    int curr_cp = line->at(cp_idx);
+                        auto curr_cp_idx = cp_idx;
+                        auto curr_byte_idx = byte_idx;
+                        int curr_cp = line->at(cp_idx);
 
-                    grapheme_codepoints->len = 0;
+                        grapheme_codepoints->len = 0;
 
-                    do {
-                        auto codepoint = line->at(cp_idx);
-                        newx += uchar_size(codepoint);
-                        grapheme_codepoints->append(codepoint);
-                        inc_cp_idx();
-                    } while (cp_idx < line->len && !gc.feed(line->at(cp_idx)));
+                        do {
+                            auto codepoint = line->at(cp_idx);
+                            newx += uchar_size(codepoint);
+                            grapheme_codepoints->append(codepoint);
+                            inc_cp_idx();
+                        } while (cp_idx < line->len && !gc.feed(line->at(cp_idx)));
 
-                    int glyph_width = 0;
-                    if (grapheme_codepoints->len == 1 && curr_cp == '\t')
-                        glyph_width = options.tabsize - (vx % options.tabsize);
-                    else
-                        glyph_width = cp_wcswidth(grapheme_codepoints->items, grapheme_codepoints->len);
+                        int glyph_width = 0;
+                        if (grapheme_codepoints->len == 1 && curr_cp == '\t')
+                            glyph_width = options.tabsize - (vx % options.tabsize);
+                        else
+                            glyph_width = cp_wcswidth(grapheme_codepoints->items, grapheme_codepoints->len);
 
-                    if (glyph_width == -1) glyph_width = 1;
+                        if (glyph_width == -1) glyph_width = 1;
 
-                    vec4f text_color = rgba(global_colors.foreground);
-
-                    if (next_hl != -1) {
-                        auto curr = new_cur2(curr_byte_idx, y);
-
-                        while (next_hl != -1 && curr >= highlights[next_hl].end)
-                            if (++next_hl >= highlights.len)
-                                next_hl = -1;
+                        vec4f text_color = rgba(global_colors.foreground);
 
                         if (next_hl != -1) {
-                            auto& hl = highlights[next_hl];
-                            if (hl.start <= curr && curr < hl.end)
-                                text_color = hl.color;
+                            auto curr = new_cur2(curr_byte_idx, y);
+
+                            while (next_hl != -1 && curr >= highlights[next_hl].end)
+                                if (++next_hl >= highlights.len)
+                                    next_hl = -1;
+
+                            if (next_hl != -1) {
+                                auto& hl = highlights[next_hl];
+                                if (hl.start <= curr && curr < hl.end)
+                                    text_color = hl.color;
+                            }
                         }
-                    }
-
-                    if (next_search_match != -1) {
-                        auto curr = new_cur2(curr_byte_idx, y);
-                        auto &wnd = world.wnd_local_search;
-
-                        auto tree = editor->buf->search_tree;
-                        auto total = tree->get_size();
-
-                        while (next_search_match != -1 && curr >= tree->get_node(next_search_match)->search_result.end)
-                            if (++next_search_match >= total)
-                                next_search_match = -1;
 
                         if (next_search_match != -1) {
-                            auto match = tree->get_node(next_search_match);
-                            if (match->pos <= curr && curr < match->search_result.end) {
-                                if (next_search_match == editor->file_search.current_idx) {
-                                    draw_highlight(rgba("#ffffdd", 0.4), glyph_width);
-                                    text_color = rgba("#ffffdd", 1.0);
-                                } else {
-                                    draw_highlight(rgba("#ffffdd", 0.2), glyph_width);
-                                    text_color = rgba("#ffffdd", 0.8);
+                            auto curr = new_cur2(curr_byte_idx, y);
+                            auto &wnd = world.wnd_local_search;
+
+                            auto tree = editor->buf->search_tree;
+                            auto total = tree->get_size();
+
+                            while (next_search_match != -1 && curr >= tree->get_node(next_search_match)->search_result.end)
+                                if (++next_search_match >= total)
+                                    next_search_match = -1;
+
+                            if (next_search_match != -1) {
+                                auto match = tree->get_node(next_search_match);
+                                if (match->pos <= curr && curr < match->search_result.end) {
+                                    if (next_search_match == editor->file_search.current_idx) {
+                                        draw_highlight(rgba("#ffffdd", 0.4), glyph_width);
+                                        text_color = rgba("#ffffdd", 1.0);
+                                    } else {
+                                        draw_highlight(rgba("#ffffdd", 0.2), glyph_width);
+                                        text_color = rgba("#ffffdd", 0.8);
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    if (ast_navigation.on) {
-                        auto &ref = ast_navigation;
+                        if (ast_navigation.on) {
+                            auto &ref = ast_navigation;
 
-                        auto pos = new_cur2(curr_byte_idx, y);
-                        if (ref.start <= pos && pos < ref.end) {
-                            draw_highlight(rgba(global_colors.cursor), glyph_width, true);
-                            text_color = rgba(global_colors.cursor_foreground);
+                            auto pos = new_cur2(curr_byte_idx, y);
+                            if (ref.start <= pos && pos < ref.end) {
+                                draw_highlight(rgba(global_colors.cursor), glyph_width, true);
+                                text_color = rgba(global_colors.cursor_foreground);
+                            } else {
+                                while (ref.curr_sib < ref.siblings->len && pos >= ref.siblings->at(ref.curr_sib)->end())
+                                    ref.curr_sib++;
+
+                                if (ref.curr_sib < ref.siblings->len) {
+                                    auto node = ref.siblings->at(ref.curr_sib);
+                                    if (node->start() <= pos && pos < node->end())
+                                        draw_highlight(rgba("#ffffff", 0.1), glyph_width, true);
+                                }
+                            }
+                        }
+
+                        if (highlight_snippet.on) {
+                            auto pos = new_cur2(curr_byte_idx, y);
+                            if (highlight_snippet.start <= pos && pos < highlight_snippet.end)
+                                draw_highlight(highlight_snippet.color, glyph_width);
+                        }
+
+                        if (editor_selection) {
+                            auto pos = new_cur2(curr_cp_idx, y);
+
+                            auto ranges = editor_selection->ranges;
+                            if (editor_curr_range < ranges->len) {
+                                auto range = &ranges->at(editor_curr_range);
+                                while (pos > range->end) {
+                                    editor_curr_range++;
+                                    if (editor_curr_range >= ranges->len)
+                                        break;
+                                    range = &ranges->at(editor_curr_range);
+                                }
+
+                                if (range->start <= pos && pos < range->end) {
+                                    draw_highlight(rgba(global_colors.visual_background), glyph_width, true);
+                                    text_color = rgba(global_colors.visual_foreground);
+                                }
+                            }
+                        }
+
+                        if (editor->cur == new_cur2(curr_cp_idx, y))
+                            draw_cursor(glyph_width);
+
+                        if (hint.gotype)
+                            if (new_cur2(x, y) == hint.start)
+                                actual_parameter_hint_start = cur_pos;
+
+                        uchar uch = curr_cp;
+                        if (uch == '\t') {
+                            cur_pos.x += base_font->width * glyph_width;
                         } else {
-                            while (ref.curr_sib < ref.siblings->len && pos >= ref.siblings->at(ref.curr_sib)->end())
-                                ref.curr_sib++;
-
-                            if (ref.curr_sib < ref.siblings->len) {
-                                auto node = ref.siblings->at(ref.curr_sib);
-                                if (node->start() <= pos && pos < node->end())
-                                    draw_highlight(rgba("#ffffff", 0.1), glyph_width, true);
-                            }
+                            draw_char(&cur_pos, grapheme_codepoints, text_color);
                         }
+
+                        vx += glyph_width;
                     }
-
-                    if (highlight_snippet.on) {
-                        auto pos = new_cur2(curr_byte_idx, y);
-                        if (highlight_snippet.start <= pos && pos < highlight_snippet.end)
-                            draw_highlight(highlight_snippet.color, glyph_width);
-                    }
-
-                    if (editor_selection) {
-                        auto pos = new_cur2(curr_cp_idx, y);
-
-                        auto ranges = editor_selection->ranges;
-                        if (editor_curr_range < ranges->len) {
-                            auto range = &ranges->at(editor_curr_range);
-                            while (pos > range->end) {
-                                editor_curr_range++;
-                                if (editor_curr_range >= ranges->len)
-                                    break;
-                                range = &ranges->at(editor_curr_range);
-                            }
-
-                            if (range->start <= pos && pos < range->end) {
-                                draw_highlight(rgba(global_colors.visual_background), glyph_width, true);
-                                text_color = rgba(global_colors.visual_foreground);
-                            }
-                        }
-                    }
-
-                    if (editor->cur == new_cur2(curr_cp_idx, y))
-                        draw_cursor(glyph_width);
-
-                    if (hint.gotype)
-                        if (new_cur2(x, y) == hint.start)
-                            actual_parameter_hint_start = cur_pos;
-
-                    uchar uch = curr_cp;
-                    if (uch == '\t') {
-                        cur_pos.x += base_font->width * glyph_width;
-                    } else {
-                        draw_char(&cur_pos, grapheme_codepoints, text_color);
-                    }
-
-                    vx += glyph_width;
-                }
-
-                if (!line->len) {
+                } else {
                     if (ast_navigation.on) {
                         auto &ref = ast_navigation;
 

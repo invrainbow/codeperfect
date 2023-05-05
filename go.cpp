@@ -1906,7 +1906,7 @@ Go_Package *Go_Indexer::find_package_in_index(ccstr import_path) {
         return NULL;
     }
 
-    return index.packages->items + ret;
+    return &index.packages->at(ret);
 }
 
 Go_Package *Go_Indexer::find_up_to_date_package(ccstr import_path) {
@@ -3332,7 +3332,7 @@ Godecl *Go_Indexer::find_toplevel_containing(Go_File *file, cur2 start, cur2 end
     int lo = 0, hi = file->decls->len;
     while (lo <= hi) {
         auto mid = (lo+hi)/2;
-        auto it = file->decls->items + mid;
+        auto it = &file->decls->at(mid);
 
         if (start < it->decl_start)
             hi = mid-1;
@@ -7165,7 +7165,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                 auto old_len = results->len;
                 assignment_to_decls(lhs, rhs, new_godecl);
                 for (u32 i = old_len; i < results->len; i++) {
-                    auto it = results->items + i;
+                    auto it = &results->at(i);
                     save_decl(it);
                     if (should_save_iota_types)
                         saved_iota_types->append(it->gotype);
@@ -7200,7 +7200,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
         auto old_len = results->len;
         assignment_to_decls(lhs, rhs, new_godecl, true);
         for (u32 i = old_len; i < results->len; i++)
-            save_decl(results->items + i);
+            save_decl(&results->at(i));
         break;
     }
 
@@ -7260,7 +7260,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
         auto old_len = results->len;
         assignment_to_decls(lhs, rhs, new_godecl);
         for (u32 i = old_len; i < results->len; i++)
-            save_decl(results->items + i);
+            save_decl(&results->at(i));
 
         break;
     }

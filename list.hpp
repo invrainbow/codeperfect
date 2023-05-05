@@ -283,5 +283,9 @@ struct List {
     T& operator[](s32 index) { return at(index); }
 
     // used when we have a pointer to a list and can't do [].
-    T& at(s32 index) { return items[index]; }
+    T& at(s32 index) {
+        if (index >= len) panic_stub("out of bounds");
+
+        return items[index];
+    }
 };

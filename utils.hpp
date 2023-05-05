@@ -36,11 +36,9 @@ struct Text_Renderer {
         va_copy(args2, args);
 
         auto n = stbsp_vsnprintf(NULL, 0, fmt, args);
-        chars.ensure_cap(chars.len + n + 1);
-
-        auto buf = chars.items + chars.len;
-        stbsp_vsnprintf((char*)buf, n + 1, fmt, args2);
-        chars.len += n;
+        auto tmp = new_array(char, n+1);
+        stbsp_vsnprintf(tmp, n + 1, fmt, args2);
+        chars.concat(tmp, n+1);
 
         va_end(args);
         va_end(args2);

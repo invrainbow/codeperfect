@@ -868,34 +868,34 @@ void Editor::move_cursor(cur2 c, Move_Cursor_Opts *opts) {
     if (c.y < 0 || c.y >= buf->lines.len) return;
     if (c.x < 0) return;
 
-    auto line_len = buf->lines[c.y].len;
-    if (c.x > line_len) {
-        c.x = line_len;
-    }
+    auto& line = buf->lines[c.y];
+
+    if (c.x > line.len)
+        c.x = line.len;
 
     cur = c;
-
-    auto& line = buf->lines[c.y];
 
     u32 vx = 0;
     u32 i = 0;
 
-    Grapheme_Clusterer gc;
-    gc.init();
-    gc.feed(line[0]);
+    if (line.len) {
+        Grapheme_Clusterer gc;
+        gc.init();
+        gc.feed(line[0]);
 
-    while (i < c.x) {
-        if (line[i] == '\t') {
-            vx += options.tabsize - (vx % options.tabsize);
-            i++;
-        } else {
-            auto width = cp_wcwidth(line[i]);
-            if (width == -1) width = 1;
-            vx += width;
-
-            i++;
-            while (i < c.x && !gc.feed(line[i]))
+        while (i < c.x) {
+            if (line[i] == '\t') {
+                vx += options.tabsize - (vx % options.tabsize);
                 i++;
+            } else {
+                auto width = cp_wcwidth(line[i]);
+                if (width == -1) width = 1;
+                vx += width;
+
+                i++;
+                while (i < c.x && !gc.feed(line[i]))
+                    i++;
+            }
         }
     }
 

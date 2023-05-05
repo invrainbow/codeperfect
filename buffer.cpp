@@ -392,6 +392,14 @@ cur2 Buffer::hist_redo() {
 }
 
 List<uchar>* Buffer::get_uchars(cur2 start, cur2 end, int limit, cur2 *actual_end) {
+    if (!lines.len) {
+        cp_assert(start == end);
+        cp_assert(start == new_cur2(0, 0));
+        return new_list(uchar);
+    }
+
+    cp_assert(start.y < lines.len);
+
     // make sure start and end are valid
     if (start.x > lines[start.y].len) start.x = lines[start.y].len;
     if (end.y >= lines.len)           end.y = lines.len-1;
@@ -410,11 +418,16 @@ List<uchar>* Buffer::get_uchars(cur2 start, cur2 end, int limit, cur2 *actual_en
         if (y < end.y) count++; // '\n'
 
         if (limit != -1 && count > limit) {
-            ret->concat(lines[y].items + xstart, limit);
+            ret->concat(&lines[y].at(xstart), limit);
             *actual_end = new_cur2(xstart + limit, y);
             break;
         } else {
-            ret->concat(lines[y].items + xstart, xend - xstart);
+            if (xstart >= lines[y].len) {
+                cp_assert(xstart == lines[y].len);
+                cp_assert(xstart == xend);
+            } else {
+                ret->concat(&lines[y].at(xstart), xend - xstart);
+            }
             if (y < end.y)
                 ret->append('\n');
         }
@@ -530,7 +543,7 @@ void Buffer::read(char *data, int len) {
 
     auto start = new_cur2(0, 0);
 
-    if (lines.len > 1 || lines[0].len)
+    if (lines.len > 1 || (lines.len == 1 && lines[0].len))
         remove(start, end_pos());
 
     if (len == 0) {
@@ -628,12 +641,15 @@ s32 get_bytecount(Line *line) {
 void Buffer::internal_insert_line(u32 y, uchar* text, s32 len) {
     cp_assert(!editable_from_main_thread_only || is_main_thread);
 
-    lines.append();
-
-    if (y > lines.len)
+    if (y > lines.len) {
         y = lines.len;
-    else if (y < lines.len)
+        lines.append();
+    } else if (y == lines.len) {
+        lines.append();
+    } else {
+        lines.append();
         memmove(&lines[y + 1], &lines[y], sizeof(Line) * (lines.len - y));
+    }
 
     lines[y].init(LIST_CHUNK, len);
     lines[y].len = len;
@@ -1258,7 +1274,9 @@ u32 Buffer::internal_convert_x_vx(int y, int off, bool to_vx) {
 
     int x = 0;
     int vx = 0;
+
     auto &line = lines[y];
+    if (!line.len) return 0;
 
     Grapheme_Clusterer gc;
     gc.init();
