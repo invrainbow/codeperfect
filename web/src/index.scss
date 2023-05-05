@@ -97,7 +97,7 @@
     @apply inline-flex items-center;
     @apply text-base font-ui font-medium box-border;
 
-    &:not(:disabled):not(.disabled) {
+    &:not(:disabled):not(.disabled):not(.btn-no-hover) {
       @apply hover:scale-[1.015] active:top-[1px] active:scale-[.985] transition-transform duration-100;
     }
     &:disabled,

@@ -22,6 +22,13 @@ import {
   IconEdit,
   IconTools,
   IconBrain,
+  IconMessages,
+  IconCircleCheck,
+  IconCircleMinus,
+  IconArrowRight,
+  IconCalendarTime,
+  IconShoppingCart,
+  IconUsers,
 } from "@tabler/icons";
 
 import { AiFillApple } from "@react-icons/all-files/ai/AiFillApple";
@@ -417,131 +424,306 @@ function WithTooltip({ className, label, show, children, bottom }) {
   );
 }
 
+const BUYING_QUESTIONS = [
+  {
+    title: "Not sure yet?",
+    content: (
+      <>
+        <p>
+          You can try CodePerfect for free for 7 days, no restrictions. No
+          credit card required.
+        </p>
+        <p>
+          <A href="/download" className="btn btn1 btn-sm">
+            Visit Downloads
+          </A>
+        </p>
+      </>
+    ),
+  },
+  {
+    title: "Buying as a team?",
+    content: (
+      <>
+        <p>
+          If you need multiple licenses, bulk pricing, team management, or have
+          any other custom requests, please reach out.
+        </p>
+        <p>
+          <A href={`mailto:${SUPPORT_EMAIL}`} className="btn btn2 btn-sm">
+            Get in touch
+          </A>
+        </p>
+      </>
+    ),
+  },
+  {
+    title: "Have another question?",
+    content: (
+      <>
+        <p>
+          Please get in touch with us and we'll respond within 1 business day.
+        </p>
+        <p>
+          <A href={`mailto:${SUPPORT_EMAIL}`} className="btn btn2 btn-sm">
+            Contact us
+          </A>
+        </p>
+      </>
+    ),
+  },
+];
+
+function BuyLicenseSection({ label, description, children, icon }) {
+  return (
+    <div className="grid grid-cols-[250px,1fr] items-center">
+      <div className="font-bold pr-6">
+        <div className="flex gap-4 items-center">
+          <div className="opacity-60">
+            <Icon size={36} icon={icon} />
+          </div>
+          <div>{label}</div>
+        </div>
+        {description && null && (
+          <div className="mt-2 text-neutral-400 font-normal text-left">
+            {description}
+          </div>
+        )}
+      </div>
+      <div className="p-6 bg-white shadow rounded-lg">{children}</div>
+    </div>
+  );
+}
+
+function BuyLineItem({ label, value, total }) {
+  return (
+    <div
+      className={cx(
+        "flex justify-between py-2 first:pt-0 last:pb-0",
+        !total && "border-b border-neutral-600 last:border-0"
+      )}
+    >
+      <div className={cx(total && "font-bold")}>{label}</div>
+      <div className={cx(total && "font-bold text-xl")}>{value}</div>
+    </div>
+  );
+}
+
+function BuySummaryPoint({ good, text }) {
+  return (
+    <div
+      className={cx(
+        "flex items-center gap-2",
+        good ? "text-neutral-100" : "text-neutral-400"
+      )}
+    >
+      <span className="leading-none">
+        <Icon size={22} icon={good ? IconCircleCheck : IconCircleMinus} />
+      </span>
+      <span>{text}</span>
+    </div>
+  );
+}
+
+function BuySelectable({ selected, label, children, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cx(
+        "font-inherit rounded-lg text-left p-4 border relative flex flex-col",
+        {
+          "border-neutral-200 bg-neutral-50": !selected,
+          "border-neutral-700 shadow": selected,
+        }
+      )}
+    >
+      {selected && (
+        <div className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-neutral-800 text-white">
+          <Icon size={18} icon={IconCheck} />
+        </div>
+      )}
+      <div
+        className={cx("font-bold text-lg", {
+          "text-neutral-700": !selected,
+          "text-black": selected,
+        })}
+      >
+        {label}
+      </div>
+      {children && <div className={cx("mt-1")}>{children}</div>}
+    </button>
+  );
+}
+
 function BuyLicense() {
-  const plans = [
+  const PLAN_INFO = [
     {
-      name: "Personal",
-      price: 5,
-      features: [
-        { label: "Commercial use ok" },
-        { label: "All features available" },
-        { not: true, label: "Company can't pay" },
-        { not: true, label: "Purchase can't be expensed" },
-      ],
-      buttons: {
-        monthlyLink: LINKS.buyPersonalMonthly,
-        yearlyLink: LINKS.buyPersonalYearly,
-      },
+      key: "individual",
+      label: "Personal",
+      features: [{ label: "Commercial use ok" }],
     },
-
     {
-      name: "Pro",
-      price: 10,
+      key: "business",
+      label: "Business",
       features: [
-        { label: "Commercial use ok" },
-        { label: "All features available" },
-        { label: "Company can pay*" },
+        { label: <b>Everything in Personal</b> },
+        { label: "Company can pay" },
         { label: "Purchase can be expensed" },
-      ],
-      buttons: {
-        monthlyLink: LINKS.buyProMonthly,
-        yearlyLink: LINKS.buyProYearly,
-      },
-    },
-
-    {
-      name: "Enterprise",
-      price: "custom",
-      features: [
         { label: "Priority support" },
+      ],
+    },
+    {
+      key: "enterprise",
+      label: "Enterprise",
+      custom: true,
+      features: [
+        { label: <b>Everything in Business</b> },
         { label: "Custom billing & pricing" },
-        { label: "Team licensing & management" },
+        { label: "Team licensing" },
         { label: "Other custom requests" },
       ],
-      buttons: { enterprise: true },
     },
   ];
 
-  const help = [
+  const PRODUCT_INFO = [
     {
-      title: "Not sure yet?",
-      content: (
-        <>
-          <p>
-            You can try CodePerfect for free for 7 days, no restrictions. No
-            credit card required.
-          </p>
-          <p>
-            <A href="/download" className="btn btn1 btn-sm">
-              Visit Downloads
-            </A>
-          </p>
-        </>
-      ),
+      key: "license_only",
+      label: "License Only",
+      points: [
+        "Perpetual license",
+        "3 months of updates included",
+        "Locked to version at end of 3 months",
+      ],
     },
     {
-      title: "Buying as a team?",
-      content: (
-        <>
-          <p>
-            If you need multiple licenses, bulk pricing, team management, or
-            have any other custom requests, please reach out.
-          </p>
-          <p>
-            <A href={`mailto:${SUPPORT_EMAIL}`} className="btn btn2 btn-sm">
-              Get in touch
-            </A>
-          </p>
-        </>
-      ),
+      key: "license_and_sub",
+      label: "License + Subscription",
+      points: [
+        "Perpetual license",
+        "Automatic updates",
+        "Locked to version at end of subscription",
+      ],
     },
     {
-      title: "Have another question?",
-      content: (
-        <>
-          <p>
-            Please get in touch with us and we'll respond within 1 business day.
-          </p>
-          <p>
-            <A href={`mailto:${SUPPORT_EMAIL}`} className="btn btn2 btn-sm">
-              Contact us
-            </A>
-          </p>
-        </>
-      ),
+      key: "sub_only",
+      label: "Subscription Only",
+      points: [
+        '"Rent" the software',
+        "Automatic updates",
+        "Lose access when subscription ends",
+      ],
     },
   ];
 
-  const planOptions = (buttons) => [
-    [buttons.monthlyLink, "monthly", false],
-    [buttons.yearlyLink, "yearly", true],
+  const PERIOD_INFO = [
+    {
+      key: "monthly",
+      label: "Monthly Billing",
+    },
+    {
+      key: "annual",
+      label: "Annual Billing",
+      subtitle: "2 months off",
+    },
   ];
+
+  const [plan, setPlan] = React.useState("individual");
+  const [product, setProduct] = React.useState("license_and_sub");
+  const [period, setPeriod] = React.useState("monthly");
+
+  const planInfo = PLAN_INFO.filter((it) => it.key === plan)[0];
+  const productInfo = PRODUCT_INFO.filter((it) => it.key === product)[0];
+
+  const isLicense = product !== "sub_only";
+  const isSub = product !== "license_only";
+
+  const PAYMENT_LINKS = {
+    individual: {
+      license_only: "https://buy.stripe.com/test_cN2293fhg9KffiU4gt",
+      license_and_sub: {
+        monthly: "https://buy.stripe.com/test_dR64hbglke0vgmYeV5",
+        annual: "https://buy.stripe.com/test_6oEaFzfhg1dJc6IeVe",
+      },
+      sub_only: {
+        monthly: "https://buy.stripe.com/test_fZe6pjd987C7fiUdR4",
+        annual: "https://buy.stripe.com/test_00g2939WW4pV3Ac6oF",
+      },
+    },
+    business: {
+      license_only: "https://buy.stripe.com/test_bIYcNH3yy2hN0o07sI",
+      license_and_sub: {
+        monthly: "https://buy.stripe.com/test_aEU2933yy2hNb2E00c",
+        annual: "https://buy.stripe.com/test_aEU293fhg9Kfc6I6oH",
+      },
+      sub_only: {
+        monthly: "https://buy.stripe.com/test_7sI6pj7OOcWr8UwbIX",
+        annual: "https://buy.stripe.com/test_4gwcNH7OO3lR8Uw14m",
+      },
+    },
+  };
+
+  function getPaymentLink() {
+    if (plan === "enterprise") {
+      return null;
+    }
+    const ret = PAYMENT_LINKS[plan][product];
+    if (product === "license_only") {
+      return ret;
+    }
+    return ret[period];
+  }
+
+  const paymentLink = getPaymentLink();
+
+  function calcLicensePrice() {
+    if (!isLicense) return 0;
+    return plan === "individual" ? 39.99 : 119.99;
+  }
+
+  function calcSubPrice() {
+    if (!isSub) return 0;
+    if (period === "monthly") {
+      return plan === "individual" ? 4.99 : 14.99;
+    }
+    return plan === "individual" ? 49.99 : 149.99;
+  }
+
+  function formatMoney(amt) {
+    const formatter = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    });
+    return formatter.format(amt);
+  }
+
+  const licensePrice = calcLicensePrice();
+  const subPrice = calcSubPrice();
 
   return (
     <div className="mt-12 md:mt-24">
       <div className="title text-center text-3xl md:text-5xl mb-6 md:mb-12">
         Buy License
       </div>
-      <div className="md:max-w-screen-xl mx-auto">
-        <div className="mx-6 my-6 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 rounded">
-          {plans.map(({ name, price, features, buttons, recommended }) => {
-            return (
-              <div className="shadow rounded-lg bg-white">
-                <div className="p-5">
-                  <div className="text-neutral-300">
-                    <div className="font-title font-medium text-neutral-500">
-                      {name}
-                    </div>
-                    <div className="title text-xl">
-                      {price === "custom" ? "Custom pricing" : <>${price}/mo</>}
-                    </div>
-                  </div>
-                  <div className="my-5">
+      <div className="md:max-w-screen-xl mx-auto flex flex-col gap-12">
+        <div className="flex flex-col gap-10">
+          <BuyLicenseSection icon={IconUsers} label="Select plan">
+            <div className="grid grid-cols-3 gap-3">
+              {PLAN_INFO.map(({ label, features, key }) => (
+                <BuySelectable
+                  key={key}
+                  onClick={() => setPlan(key)}
+                  label={label}
+                  selected={plan === key}
+                >
+                  <div>
                     {features.map((it) => (
                       <div
                         className={cx(
-                          "flex items-center space-x-1.5 leading-6 mb-1 last:mb-0",
-                          it.not ? "text-red-400" : "text-neutral-600"
+                          "flex items-center space-x-1.5 leading-6 mb-0.5 last:mb-0 text-[95%]",
+                          {
+                            "text-red-400": it.not,
+                            "text-neutral-600": !it.not,
+                          }
                         )}
                       >
                         <Icon size={18} icon={it.not ? IconX : IconCheck} />
@@ -549,47 +731,171 @@ function BuyLicense() {
                       </div>
                     ))}
                   </div>
+                </BuySelectable>
+              ))}
+            </div>
+          </BuyLicenseSection>
+          {plan !== "enterprise" && (
+            <>
+              <BuyLicenseSection
+                icon={IconShoppingCart}
+                label="Select product"
+                description="Our licensing model has two parts: a one-time license, and subscription-based automatic updates."
+              >
+                <div className="grid grid-cols-3 gap-3">
+                  {PRODUCT_INFO.map(({ key, label, points }) => (
+                    <BuySelectable
+                      key={key}
+                      onClick={() => setProduct(key)}
+                      selected={product === key}
+                      label={label}
+                    >
+                      <ul style={{ marginTop: 0 }} className="pl-2 pt-1">
+                        {points.map((it) => (
+                          <li className="leading-tight mb-1 last:mb-0 text-[95%]">
+                            {it}
+                          </li>
+                        ))}
+                      </ul>
+                    </BuySelectable>
+                  ))}
+                </div>
+              </BuyLicenseSection>
+              {product !== "license_only" && (
+                <BuyLicenseSection
+                  icon={IconCalendarTime}
+                  label="Select billing period"
+                >
+                  <div className="grid grid-cols-2 gap-3">
+                    {PERIOD_INFO.map(({ key, label, subtitle }) => (
+                      <BuySelectable
+                        key={key}
+                        onClick={() => setPeriod(key)}
+                        selected={period === key}
+                        label={
+                          <div>
+                            {label}
+                            {subtitle && (
+                              <span className="font-light text-neutral-400 text-sm ml-2">
+                                ({subtitle})
+                              </span>
+                            )}
+                          </div>
+                        }
+                      />
+                    ))}
+                  </div>
+                </BuyLicenseSection>
+              )}
+            </>
+          )}
+        </div>
+        <div className="shadow rounded-lg bg-neutral-800 p-12">
+          <div className="max-w-screen-md mx-auto">
+            {plan === "enterprise" ? (
+              <div className="text-center py-16">
+                <div className="mb-6 text-white text-lg">
+                  Please reach out to us.
+                </div>
+                <div>
+                  <A
+                    className="btn btn2 text-center py-3 border border-neutral-200 shadow-sm inline-flex items-center gap-2"
+                    href={`mailto:${SUPPORT_EMAIL}`}
+                  >
+                    <Icon size={16} icon={IconMessages} />
+                    <span>Contact support</span>
+                  </A>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-12">
+                <div className="flex flex-col">
                   <div>
-                    {buttons.enterprise ? (
-                      <A
-                        className="btn btn2 block text-center py-3 border border-neutral-200 shadow-sm"
-                        href={`mailto:${SUPPORT_EMAIL}`}
-                      >
-                        Contact support
-                      </A>
+                    <span className="text-white font-bold text-xl leading-none">
+                      CodePerfect
+                    </span>
+                    <span className="text-neutral-300 text-lg ml-1.5">
+                      {planInfo.label}
+                    </span>
+                  </div>
+                  <div className="mb-6 text-emerald-400 font-bold">
+                    {productInfo.label}
+                  </div>
+                  <div className="flex flex-col gap-1 mb-4">
+                    {isLicense && (
+                      <BuySummaryPoint good text="Perpetual license" />
+                    )}
+                    {isSub ? (
+                      <>
+                        <BuySummaryPoint good text="Automatic updates" />
+                        <BuySummaryPoint
+                          good
+                          text={
+                            period === "monthly"
+                              ? "Monthly billing"
+                              : "Annual billing"
+                          }
+                        />
+                      </>
                     ) : (
-                      <div className="flex flex-col md:grid md:grid-cols-2 items-center gap-2">
-                        {planOptions(buttons).map(
-                          ([link, unit, yearly], index) => (
-                            <WithTooltip
-                              className="block w-full md:w-auto md:inline-block"
-                              label="2 months free!"
-                              show={yearly}
-                            >
-                              <A
-                                className="btn btn1 py-3 block text-center"
-                                href={link}
-                              >
-                                Buy {unit}
-                              </A>
-                            </WithTooltip>
-                          )
-                        )}
-                      </div>
+                      <BuySummaryPoint text="No updates after 3 months" />
+                    )}
+                    {!isLicense && (
+                      <BuySummaryPoint text="Lose access when subscription ends" />
+                    )}
+                    {plan === "individual" && (
+                      <BuySummaryPoint text="Cannot be paid for by company" />
                     )}
                   </div>
                 </div>
+                <div className="">
+                  <div className="text-white border-neutral-400 border rounded-lg p-4">
+                    {isLicense && (
+                      <BuyLineItem
+                        label="License"
+                        value={formatMoney(licensePrice)}
+                      />
+                    )}
+                    {isSub && (
+                      <BuyLineItem
+                        label={
+                          period === "monthly"
+                            ? "Monthly subscription"
+                            : "Annual subscription"
+                        }
+                        value={`${formatMoney(subPrice)}/${
+                          period === "monthly" ? "mo" : "yr"
+                        }`}
+                      />
+                    )}
+                    <BuyLineItem
+                      label="Due today"
+                      total
+                      value={formatMoney(licensePrice + subPrice)}
+                    />
+                  </div>
+                  <div className="mt-6 text-right">
+                    <A
+                      className="group btn btn2 btn-no-hover btn-lg inline-flex gap-2 items-center justify-center"
+                      style={{ paddingLeft: "40px", paddingRight: "40px" }}
+                      href={paymentLink}
+                    >
+                      Checkout
+                      <Icon
+                        className="group-hover:translate-x-1 transform transition-transform"
+                        icon={IconArrowRight}
+                      />
+                    </A>
+                  </div>
+                </div>
               </div>
-            );
-          })}
-        </div>
-        <div className="text-neutral-600 mt-4 mx-6 md:mx-0 md:text-center leading-tight text-base">
-          * Many users expense the purchase with their employer.
+            )}
+          </div>
         </div>
       </div>
       <div className="md:max-w-screen-xl mx-auto">
-        <div className="mx-6 grid grid-cols-1 md:grid-cols-3 my-12 md:mb-16 gap-12 md:gap-0">
-          {help.map((it) => (
+        <div className="grid grid-cols-1 md:grid-cols-3 my-12 md:mb-16 gap-12 md:gap-0">
+          {BUYING_QUESTIONS.map((it) => (
             <div className="md:border-y md:border-l md:border-r-0 md:last:border-r md:border-gray-200 md:first:border-l md:border-dashed md:p-8">
               <div className="text-neutral-700 text-lg font-semibold mb-2">
                 {it.title}
@@ -680,28 +986,6 @@ const faqs = [
     ),
   },
   {
-    q: "Why is it a recurring subscription?",
-    a: (
-      <>
-        <p>
-          The short answer is, because our rent is a recurring subscription.
-        </p>
-        <p>
-          CodePerfect is also in{" "}
-          <A href={LINKS.changelog}>active development</A> so technically you
-          are paying for constant new updates.
-        </p>
-        <p>
-          We understand some users adamantly oppose subscription models and
-          require a perpetual license. We sell one for the cost of four years:
-          $200 for individuals, $400 expensed.{" "}
-          <A href={`mailto:${SUPPORT_EMAIL}`}>Email us</A> to initiate this
-          process.
-        </p>
-      </>
-    ),
-  },
-  {
     q: "What does the name mean?",
     a: (
       <>
@@ -739,7 +1023,7 @@ function FAQ() {
                   size={20}
                   icon={IconChevronDown}
                   className={cx(
-                    "transition-transform origin-center",
+                    "transition/-transform origin-center",
                     states[i] && "rotate-180"
                   )}
                 />
