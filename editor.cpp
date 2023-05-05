@@ -3299,7 +3299,7 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
 
     auto handle_basic_left = [&]() {
         auto it = iter();
-        for (int i = 0; i < count; i++) {
+        for (int i = 0; i < count && !it.bol(); i++) {
             it.gr_prev();
             if (it.bol()) {
                 ret->interrupted = true;
