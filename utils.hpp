@@ -38,7 +38,7 @@ struct Text_Renderer {
         auto n = stbsp_vsnprintf(NULL, 0, fmt, args);
         auto tmp = new_array(char, n+1);
         stbsp_vsnprintf(tmp, n + 1, fmt, args2);
-        chars.concat(tmp, n+1);
+        chars.concat(tmp, n);
 
         va_end(args);
         va_end(args2);
