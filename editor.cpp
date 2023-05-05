@@ -5866,42 +5866,50 @@ Find_Matching_Brace_Result Editor::find_matching_brace_with_ast(uchar ch, cur2 p
 
     auto curr = walk_upwards(brace_node);
     int depth = 1;
-    cur2 ret = NULL_CUR;
+    Ast_Node *ret_node = NULL;
 
     fn<void(Ast_Node*)> process_node = [&](Ast_Node* node) {
-        if (ret != NULL_CUR) return;
-        if (node->is_missing()) return;
+        if (ret_node) return;
 
-        SCOPED_FRAME();
+        if (!node->is_missing()) {
+            SCOPED_FRAME();
 
-        auto children = new_list(Ast_Node*, node->all_child_count());
-        FOR_ALL_NODE_CHILDREN (node) children->append(it);
+            auto children = new_list(Ast_Node*, node->all_child_count());
+            FOR_ALL_NODE_CHILDREN (node) children->append(it);
 
-        if (forward) {
-            For (children)
-                process_node(it);
-        } else {
-            for (; children->len > 0; children->len--)
-                process_node(*children->last());
+            if (forward) {
+                For (children)
+                    process_node(it);
+            } else {
+                for (; children->len > 0; children->len--)
+                    process_node(*children->last());
+            }
         }
 
         if (node->type() == brace_type)
             depth++;
         if (node->type() == other_brace_type) {
             if (!(--depth)) {
-                ret = node->start();
+                ret_node = node->dup();
                 return;
             }
         }
     };
 
-    for (; curr && ret == NULL_CUR; curr = walk_upwards(curr))
+    for (; curr && !ret_node; curr = walk_upwards(curr))
         process_node(curr);
 
-    if (ret == NULL_CUR)
-        return FMB_MATCH_NOT_FOUND;
+    {
+        auto a = brace_node->start_byte();
+        auto b = ret_node->start_byte();
+        ORDER(a, b);
 
-    *out = ret;
+        auto common_parent = ts_node_descendant_for_byte_range(root_node->node, a, b);
+        if (ts_node_is_null(common_parent)) return FMB_AST_NOT_FOUND;
+        if (ts_node_has_error(common_parent)) return FMB_AST_NOT_FOUND;
+    }
+
+    *out = ret_node->start();
     return FMB_OK;
 }
 
