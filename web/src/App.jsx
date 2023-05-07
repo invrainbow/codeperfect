@@ -474,23 +474,16 @@ const BUYING_QUESTIONS = [
   },
 ];
 
-function BuyLicenseSection({ label, description, children, icon }) {
+function BuyLicenseSection({ label, children, icon }) {
   return (
-    <div className="grid grid-cols-[250px,1fr] items-center">
-      <div className="font-bold pr-6">
-        <div className="flex gap-4 items-center">
-          <div className="opacity-60">
-            <Icon size={36} icon={icon} />
-          </div>
-          <div>{label}</div>
+    <div>
+      <div className="flex gap-2 items-center mb-2 font-bold">
+        <div className="opacity-60 relative top-0.5">
+          <Icon size={24} icon={icon} />
         </div>
-        {description && null && (
-          <div className="mt-2 text-neutral-400 font-normal text-left">
-            {description}
-          </div>
-        )}
+        <div>{label}</div>
       </div>
-      <div className="p-6 bg-white shadow rounded-lg">{children}</div>
+      <div>{children}</div>
     </div>
   );
 }
@@ -530,26 +523,25 @@ function BuySelectable({ selected, label, children, onClick }) {
     <button
       onClick={onClick}
       className={cx(
-        "font-inherit rounded-lg text-left p-4 border relative flex flex-col",
+        "font-inherit rounded-lg text-left p-5 relative flex flex-col bg-white transition-colors",
         {
-          "border-neutral-200 bg-neutral-50": !selected,
-          "border-neutral-700 shadow": selected,
+          "border border-neutral-300": !selected,
+          "border border-neutral-500 shadow": selected,
         }
       )}
     >
-      {selected && (
-        <div className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-neutral-800 text-white">
-          <Icon size={18} icon={IconCheck} />
-        </div>
-      )}
       <div
-        className={cx("font-bold text-lg", {
-          "text-neutral-700": !selected,
-          "text-black": selected,
-        })}
+        className={cx(
+          "absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-neutral-500 text-white transition-opacity",
+          {
+            "opacity-100": selected,
+            "opacity-0": !selected,
+          }
+        )}
       >
-        {label}
+        <Icon size={18} icon={IconCheck} />
       </div>
+      <div className="font-bold transition-colors text-black">{label}</div>
       {children && <div className={cx("mt-1")}>{children}</div>}
     </button>
   );
@@ -578,7 +570,7 @@ function BuyLicense() {
       custom: true,
       features: [
         { label: <b>Everything in Business</b> },
-        { label: "Custom billing & pricing" },
+        { label: "Volume pricing" },
         { label: "Team licensing" },
         { label: "Other custom requests" },
       ],
@@ -704,97 +696,95 @@ function BuyLicense() {
       <div className="title text-center text-3xl md:text-5xl mb-6 md:mb-12">
         Buy License
       </div>
-      <div className="md:max-w-screen-xl mx-auto flex flex-col gap-12">
-        <div className="flex flex-col gap-10">
-          <BuyLicenseSection icon={IconUsers} label="Select plan">
-            <div className="grid grid-cols-3 gap-3">
-              {PLAN_INFO.map(({ label, features, key }) => (
-                <BuySelectable
-                  key={key}
-                  onClick={() => setPlan(key)}
-                  label={label}
-                  selected={plan === key}
-                >
-                  <div>
-                    {features.map((it) => (
-                      <div
-                        className={cx(
-                          "flex items-center space-x-1.5 leading-6 mb-0.5 last:mb-0 text-[95%]",
-                          {
-                            "text-red-400": it.not,
-                            "text-neutral-600": !it.not,
-                          }
-                        )}
-                      >
-                        <Icon size={18} icon={it.not ? IconX : IconCheck} />
-                        <span>{it.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </BuySelectable>
-              ))}
-            </div>
-          </BuyLicenseSection>
-          {plan !== "enterprise" && (
-            <>
-              <BuyLicenseSection
-                icon={IconShoppingCart}
-                label="Select product"
-                description="Our licensing model has two parts: a one-time license, and subscription-based automatic updates."
+      <div className="md:max-w-screen-lg mx-auto flex flex-col gap-10 p-10 bg-white shadow-lg rounded-lg">
+        <BuyLicenseSection icon={IconUsers} label="1. Select Plan">
+          <div className="grid grid-cols-3 gap-3">
+            {PLAN_INFO.map(({ label, features, key }) => (
+              <BuySelectable
+                key={key}
+                onClick={() => setPlan(key)}
+                label={label}
+                selected={plan === key}
               >
-                <div className="grid grid-cols-3 gap-3">
-                  {PRODUCT_INFO.map(({ key, label, points }) => (
+                <div>
+                  {features.map((it) => (
+                    <div
+                      className={cx(
+                        "flex items-center space-x-1.5 leading-6 mb-0.5 last:mb-0 text-[95%]",
+                        {
+                          "text-red-400": it.not,
+                          "text-neutral-600": !it.not,
+                        }
+                      )}
+                    >
+                      <Icon size={18} icon={it.not ? IconX : IconCheck} />
+                      <span>{it.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </BuySelectable>
+            ))}
+          </div>
+        </BuyLicenseSection>
+        {plan !== "enterprise" && (
+          <>
+            <BuyLicenseSection
+              icon={IconShoppingCart}
+              label="2. Select Product"
+              description="Our licensing model has two parts: a one-time license, and subscription-based automatic updates."
+            >
+              <div className="grid grid-cols-3 gap-3">
+                {PRODUCT_INFO.map(({ key, label, points }) => (
+                  <BuySelectable
+                    key={key}
+                    onClick={() => setProduct(key)}
+                    selected={product === key}
+                    label={label}
+                  >
+                    <ul style={{ marginTop: 0 }} className="pl-2 pt-1">
+                      {points.map((it) => (
+                        <li className="leading-tight mb-1 last:mb-0 text-[95%]">
+                          {it}
+                        </li>
+                      ))}
+                    </ul>
+                  </BuySelectable>
+                ))}
+              </div>
+            </BuyLicenseSection>
+            {product !== "license_only" && (
+              <BuyLicenseSection
+                icon={IconCalendarTime}
+                label="3. Select Billing Period"
+              >
+                <div className="grid grid-cols-2 gap-3">
+                  {PERIOD_INFO.map(({ key, label, subtitle }) => (
                     <BuySelectable
                       key={key}
-                      onClick={() => setProduct(key)}
-                      selected={product === key}
-                      label={label}
-                    >
-                      <ul style={{ marginTop: 0 }} className="pl-2 pt-1">
-                        {points.map((it) => (
-                          <li className="leading-tight mb-1 last:mb-0 text-[95%]">
-                            {it}
-                          </li>
-                        ))}
-                      </ul>
-                    </BuySelectable>
+                      onClick={() => setPeriod(key)}
+                      selected={period === key}
+                      label={
+                        <div>
+                          {label}
+                          {subtitle && (
+                            <span className="font-light text-neutral-400 text-sm ml-2">
+                              ({subtitle})
+                            </span>
+                          )}
+                        </div>
+                      }
+                    />
                   ))}
                 </div>
               </BuyLicenseSection>
-              {product !== "license_only" && (
-                <BuyLicenseSection
-                  icon={IconCalendarTime}
-                  label="Select billing period"
-                >
-                  <div className="grid grid-cols-2 gap-3">
-                    {PERIOD_INFO.map(({ key, label, subtitle }) => (
-                      <BuySelectable
-                        key={key}
-                        onClick={() => setPeriod(key)}
-                        selected={period === key}
-                        label={
-                          <div>
-                            {label}
-                            {subtitle && (
-                              <span className="font-light text-neutral-400 text-sm ml-2">
-                                ({subtitle})
-                              </span>
-                            )}
-                          </div>
-                        }
-                      />
-                    ))}
-                  </div>
-                </BuyLicenseSection>
-              )}
-            </>
-          )}
-        </div>
+            )}
+          </>
+        )}
         <div className="shadow rounded-lg bg-neutral-800 p-12">
           <div className="max-w-screen-md mx-auto">
             {plan === "enterprise" ? (
               <div className="text-center py-16">
-                <div className="mb-6 text-white text-lg">
+                <div className="mb-4 text-white text-lg">
                   Please reach out to us.
                 </div>
                 <div>
