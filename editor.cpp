@@ -892,10 +892,24 @@ void Editor::move_cursor(cur2 c, Move_Cursor_Opts *opts) {
         view.x = vx;
     if (vx >= view.x + view.w)
        view.x = vx - view.w + 1;
-    if (relu_sub(cur.y, options.scrolloff) < view.y)
-        view.y = relu_sub(cur.y, options.scrolloff);
-    if (cur.y + options.scrolloff >= view.y + view.h)
-        view.y = cur.y + options.scrolloff - view.h + 1;
+
+
+    int miny = relu_sub(cur.y, options.scrolloff);
+    int maxy = min(cur.y + options.scrolloff, buf->lines.len-1);
+
+    if (miny < view.y) {
+        if (view.y - miny < view.h / 2)
+            view.y = miny;
+        else
+            view.y = relu_sub(miny, view.h / 2);
+    }
+
+    if (maxy >= view.y + view.h) {
+        if (maxy - (view.y + view.h) < view.h / 2)
+            view.y = maxy - view.h + 1;
+        else
+            view.y = maxy - view.h / 2 + 1;
+    }
 
     // we're using this function to trigger
     // certain "on cursor move" actions
