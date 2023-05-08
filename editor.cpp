@@ -4694,16 +4694,24 @@ Motion_Range* Editor::vim_process_motion(Motion_Result *motion_result) {
         cur2 start = new_cur2(0, y1);
         cur2 end = new_cur2(0, y2+1);
 
-        bool at_end = (y2 == buf->lines.len-1);
-        if (at_end) {
-            start = buf->dec_cur(start);
+        bool dec_start = false;
+        bool dec_end = false;
+
+        if (y2 == buf->lines.len-1) {
             end = buf->end_pos();
+            dec_end = true;
+
+            if (y1 > 0) {
+                start = buf->dec_cur(start);
+                dec_start = true;
+            }
         }
 
         ret->start = start;
         ret->end = end;
         ret->is_line = true;
-        ret->line_info.at_end = at_end;
+        ret->line_info.decremented_start = dec_start;
+        ret->line_info.decremented_end = dec_end;
         ret->line_info.y1 = y1;
         ret->line_info.y2 = y2;
     }
@@ -5607,11 +5615,12 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                 auto res = vim_process_motion(motion_result);
                 if (res->is_line) {
                     auto real_start = res->start;
-                    if (res->line_info.at_end)
+                    if (res->line_info.decremented_start)
                         real_start = buf->inc_cur(real_start);
 
                     auto text = buf->get_text(real_start, res->end);
-                    if (res->line_info.at_end)
+
+                    if (res->line_info.decremented_end)
                         text = cp_strcat(text, "\n");
 
                     vim_yank_text(text);

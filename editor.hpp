@@ -150,7 +150,8 @@ struct Motion_Range {
 
     union {
         struct {
-            bool at_end;
+            bool decremented_start;
+            bool decremented_end;
             int y1;
             int y2;
         } line_info;
