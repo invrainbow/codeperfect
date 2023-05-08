@@ -5900,6 +5900,8 @@ Find_Matching_Brace_Result Editor::find_matching_brace_with_ast(uchar ch, cur2 p
     for (; curr && !ret_node; curr = walk_upwards(curr))
         process_node(curr);
 
+    if (!ret_node) return FMB_AST_NOT_FOUND;
+
     {
         auto a = brace_node->start_byte();
         auto b = ret_node->start_byte();
