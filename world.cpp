@@ -4037,7 +4037,7 @@ void reset_everything_when_switching_editors(Editor *old_editor) {
         cp_assert(world.vim_mode() == VI_NORMAL);
     }
 
-    // do this after triggering escape so the escape gets saved
+    // do this after triggering escape in the old editor so the escape gets saved
     if (world.vim.on) {
         if (world.vim.macro_state != MACRO_IDLE) {
             world.vim.macro_state = MACRO_IDLE;
