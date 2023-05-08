@@ -37,6 +37,12 @@ Selection *Editor::get_selection(Selection_Type sel_type) {
     if (world.vim.on) {
         if (world.vim_mode() != VI_VISUAL) return NULL;
 
+        {
+            auto curr = get_current_editor();
+            if (!curr || curr->id != id)
+                return NULL;
+        }
+
         ret->type = sel_type;
         switch (sel_type) {
         case SEL_CHAR: {
@@ -4379,6 +4385,8 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
 }
 
 void Editor::vim_enter_visual_mode(Selection_Type type) {
+    For (get_all_editors()) it->vim.visual_start = new_cur2(0, 0);
+
     world.vim_set_mode(VI_VISUAL);
     vim.visual_start = cur;
     vim.visual_type = type;
