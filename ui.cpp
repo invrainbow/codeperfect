@@ -5132,31 +5132,36 @@ void UI::draw_everything() {
             // if (im::IsItemEdited()) { }
         }
 
-        if (search_again && wnd.show) {
+        do {
+            if (!search_again) break;
+            if (!wnd.show) break; // if we closed
+
             editor->trigger_file_search();
 
+            if (wnd.replace) break; // don't jump while typing if we're replacing
+
             num_results = buf->search_tree->get_size();
-            if (num_results) {
-                bool in_match = false;
-                auto idx = editor->find_current_or_next_match(editor->cur, &in_match);
+            if (!num_results) break;
 
-                auto match = tree->get_node(idx);
+            bool in_match = false;
+            auto idx = editor->find_current_or_next_match(editor->cur, &in_match);
 
-                // if we're in match and it's first char, just stay there
-                // otherwise, go to next one
-                if (in_match) {
-                    if (match->pos != editor->cur) {
-                        idx = (idx+1) % num_results;
-                        editor->move_cursor(match->pos);
-                    } else {
-                        // do nothing
-                    }
-                } else {
-                    // idx already points to the next result
+            auto match = tree->get_node(idx);
+
+            // if we're in match and it's first char, just stay there
+            // otherwise, go to next one
+            if (in_match) {
+                if (match->pos != editor->cur) {
+                    idx = (idx+1) % num_results;
                     editor->move_cursor(match->pos);
+                } else {
+                    // do nothing
                 }
+            } else {
+                // idx already points to the next result
+                editor->move_cursor(match->pos);
             }
-        }
+        } while (0);
 
         im::End();
         fstlog("wnd_local_search");
