@@ -4979,6 +4979,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                         bool junk;
                         if (!vim_exec_command(&tmp, &junk))
                             return false;
+                        break;
                     }
 
                     case VDC_VISUAL_MOVE: {
