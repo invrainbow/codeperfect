@@ -17,13 +17,15 @@ import (
 	"github.com/btcsuite/btcutil/base58"
 )
 
-var s3Client *s3.S3
-var sesClient *ses.SES
+var (
+	s3Client  *s3.S3
+	sesClient *ses.SES
+)
 
 func init() {
 	sess := session.Must(session.NewSession(&aws.Config{
-		Region: aws.String("us-east-2")},
-	))
+		Region: aws.String("us-east-2"),
+	}))
 
 	// try to auth
 	stsClient := sts.New(sess)
