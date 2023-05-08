@@ -283,6 +283,7 @@ struct Command_Info {
     int mods;
     int key;
     ccstr name;
+    bool allow_shortcut_when_imgui_focused;
 };
 
 extern Command_Info command_info_table[_CMD_COUNT_];
@@ -960,3 +961,5 @@ bool close_pane(int idx);
 
 bool initiate_rename_identifier(cur2 pos);
 void initiate_find_references(cur2 pos);
+
+bool is_imgui_hogging_keyboard();

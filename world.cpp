@@ -1621,6 +1621,8 @@ bool is_command_enabled(Command cmd) {
         return options.zoom_level > ZOOM_LEVELS[0];
 
     case CMD_CLOSE_ALL_EDITORS: {
+        if (is_imgui_hogging_keyboard()) return false;
+
         if (world.panes.len > 1) return true;
         auto pane = get_current_pane();
         if (!pane) return false;
@@ -1628,10 +1630,12 @@ bool is_command_enabled(Command cmd) {
     }
 
     case CMD_CLOSE_EDITOR: {
+        if (is_imgui_hogging_keyboard()) return false;
+
         auto pane = get_current_pane();
         if (!pane) return false;
 
-        auto editor = pane->get_current_editor();
+        auto editor = get_current_editor();
         if (editor) return true;
 
         return world.panes.len > 1;
@@ -1828,6 +1832,8 @@ bool is_command_enabled(Command cmd) {
     case CMD_FIND_REFERENCES:
     case CMD_FIND_IMPLEMENTATIONS:
     case CMD_FIND_INTERFACES:
+    case CMD_VIEW_CALLER_HIERARCHY:
+    case CMD_GENERATE_FUNCTION:
         return get_current_editor();
     }
 
@@ -1839,10 +1845,7 @@ ccstr get_command_name(Command cmd) {
 
     switch (cmd) {
     case CMD_CLOSE_EDITOR: {
-        auto pane = get_current_pane();
-        if (!pane) break;
-
-        auto editor = pane->get_current_editor();
+        auto editor = get_current_editor();
         return editor ? "Close Editor" : "Close Pane";
     }
 
@@ -1918,11 +1921,12 @@ ccstr get_command_name(Command cmd) {
 }
 
 void init_command_info_table() {
-    auto k = [&](int mods, int key, ccstr name) {
+    auto k = [&](int mods, int key, ccstr name, bool allow_shortcut_when_imgui_focused = false) {
         Command_Info ret;
         ret.mods = mods;
         ret.key = key;
         ret.name = name;
+        ret.allow_shortcut_when_imgui_focused = allow_shortcut_when_imgui_focused;
         return ret;
     };
 
@@ -1936,11 +1940,11 @@ void init_command_info_table() {
     command_info_table[CMD_NEW_FILE] = k(CP_MOD_PRIMARY, CP_KEY_N, "New File");
     command_info_table[CMD_SAVE_FILE] = k(CP_MOD_PRIMARY, CP_KEY_S, "Save File");
     command_info_table[CMD_SAVE_ALL] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_S, "Save All");
-    command_info_table[CMD_SEARCH] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_F, "Search");
-    command_info_table[CMD_SEARCH_AND_REPLACE] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_H, "Search and Replace");
-    command_info_table[CMD_FILE_EXPLORER] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_E, "File Explorer");
-    command_info_table[CMD_GO_TO_FILE] = k(CP_MOD_PRIMARY, CP_KEY_P, "Go To File");
-    command_info_table[CMD_GO_TO_SYMBOL] = k(CP_MOD_PRIMARY, CP_KEY_T, "Go To Symbol");
+    command_info_table[CMD_SEARCH] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_F, "Search", true);
+    command_info_table[CMD_SEARCH_AND_REPLACE] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_H, "Search and Replace", true);
+    command_info_table[CMD_FILE_EXPLORER] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_E, "File Explorer", true);
+    command_info_table[CMD_GO_TO_FILE] = k(CP_MOD_PRIMARY, CP_KEY_P, "Go To File", true);
+    command_info_table[CMD_GO_TO_SYMBOL] = k(CP_MOD_PRIMARY, CP_KEY_T, "Go To Symbol", true);
     command_info_table[CMD_GO_TO_NEXT_ERROR] = k(CP_MOD_ALT, CP_KEY_RIGHT_BRACKET, "Go To Next Error");
     command_info_table[CMD_GO_TO_PREVIOUS_ERROR] = k(CP_MOD_ALT, CP_KEY_LEFT_BRACKET, "Go To Previous Error");
     command_info_table[CMD_GO_TO_DEFINITION] = k(CP_MOD_PRIMARY, CP_KEY_G, "Go To Definition");
@@ -1954,15 +1958,15 @@ void init_command_info_table() {
     command_info_table[CMD_FORMAT_FILE] = k(CP_MOD_ALT | CP_MOD_SHIFT, CP_KEY_F, "Format File");
     command_info_table[CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS] = k(CP_MOD_ALT | CP_MOD_SHIFT, CP_KEY_O, "Format File and Organize Imports");
     command_info_table[CMD_RENAME] = k(CP_MOD_NONE, CP_KEY_F12, "Rename");
-    command_info_table[CMD_BUILD] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_B, "Build");
-    command_info_table[CMD_CONTINUE] = k(CP_MOD_NONE, CP_KEY_F5, "Continue");
-    command_info_table[CMD_START_DEBUGGING] = k(CP_MOD_NONE, CP_KEY_F5, "Start Debugging");
-    command_info_table[CMD_STOP_DEBUGGING] = k(CP_MOD_SHIFT, CP_KEY_F5, "Stop Debugging");
+    command_info_table[CMD_BUILD] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_B, "Build", true);
+    command_info_table[CMD_CONTINUE] = k(CP_MOD_NONE, CP_KEY_F5, "Continue", true);
+    command_info_table[CMD_START_DEBUGGING] = k(CP_MOD_NONE, CP_KEY_F5, "Start Debugging", true);
+    command_info_table[CMD_STOP_DEBUGGING] = k(CP_MOD_SHIFT, CP_KEY_F5, "Stop Debugging", true);
     command_info_table[CMD_DEBUG_TEST_UNDER_CURSOR] = k(CP_MOD_NONE, CP_KEY_F6, "Debug Test Under Cursor");
-    command_info_table[CMD_STEP_OVER] = k(CP_MOD_NONE, CP_KEY_F10, "Step Over");
-    command_info_table[CMD_STEP_INTO] = k(CP_MOD_NONE, CP_KEY_F11, "Step Into");
-    command_info_table[CMD_STEP_OUT] = k(CP_MOD_SHIFT, CP_KEY_F11, "Step Out");
-    command_info_table[CMD_RUN_TO_CURSOR] = k(CP_MOD_SHIFT, CP_KEY_F10, "Run To Cursor");
+    command_info_table[CMD_STEP_OVER] = k(CP_MOD_NONE, CP_KEY_F10, "Step Over", true);
+    command_info_table[CMD_STEP_INTO] = k(CP_MOD_NONE, CP_KEY_F11, "Step Into", true);
+    command_info_table[CMD_STEP_OUT] = k(CP_MOD_SHIFT, CP_KEY_F11, "Step Out", true);
+    command_info_table[CMD_RUN_TO_CURSOR] = k(CP_MOD_SHIFT, CP_KEY_F10, "Run To Cursor", true);
     command_info_table[CMD_TOGGLE_BREAKPOINT] = k(CP_MOD_NONE, CP_KEY_F9, "Toggle Breakpoint");
     command_info_table[CMD_DELETE_ALL_BREAKPOINTS] = k(CP_MOD_SHIFT, CP_KEY_F9, "Delete All Breakpoints");
     command_info_table[CMD_REPLACE] = k(CP_MOD_PRIMARY, CP_KEY_H, "Replace...");
@@ -2007,15 +2011,15 @@ void init_command_info_table() {
     command_info_table[CMD_ADD_ALL_XML_TAGS] = k(0, 0, "Struct: Add all XML tags");
     command_info_table[CMD_REMOVE_TAG] = k(0, 0, "Struct: Remove tag");
     command_info_table[CMD_REMOVE_ALL_TAGS] = k(0, 0, "Struct: Remove all tags");
-    command_info_table[CMD_COMMAND_PALETTE] = k(CP_MOD_PRIMARY, CP_KEY_K, "Command Palette");
-    command_info_table[CMD_OPEN_FILE_MANUALLY] = k(CP_MOD_PRIMARY, CP_KEY_O, "Open File...");
+    command_info_table[CMD_COMMAND_PALETTE] = k(CP_MOD_PRIMARY, CP_KEY_K, "Command Palette", true);
+    command_info_table[CMD_OPEN_FILE_MANUALLY] = k(CP_MOD_PRIMARY, CP_KEY_O, "Open File...", true);
     command_info_table[CMD_CLOSE_EDITOR] = k(CP_MOD_PRIMARY, CP_KEY_W, "Close Editor");
     command_info_table[CMD_CLOSE_ALL_EDITORS] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_W, "Close All Editors");
     command_info_table[CMD_OPEN_LAST_CLOSED_EDITOR] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_T, "Open Last Closed Editor");
-    command_info_table[CMD_OPEN_FOLDER] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_O, "Open Folder...");
-    command_info_table[CMD_ZOOM_IN] = k(CP_MOD_PRIMARY, CP_KEY_EQUAL, "Zoom In");
-    command_info_table[CMD_ZOOM_OUT] = k(CP_MOD_PRIMARY, CP_KEY_MINUS, "Zoom Out");
-    command_info_table[CMD_ZOOM_ORIGINAL] = k(CP_MOD_PRIMARY, CP_KEY_0, "Original Size");
+    command_info_table[CMD_OPEN_FOLDER] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_O, "Open Folder...", true);
+    command_info_table[CMD_ZOOM_IN] = k(CP_MOD_PRIMARY, CP_KEY_EQUAL, "Zoom In", true);
+    command_info_table[CMD_ZOOM_OUT] = k(CP_MOD_PRIMARY, CP_KEY_MINUS, "Zoom Out", true);
+    command_info_table[CMD_ZOOM_ORIGINAL] = k(CP_MOD_PRIMARY, CP_KEY_0, "Original Size", true);
 #if OS_MAC
     command_info_table[CMD_GO_BACK] = k(CP_MOD_CTRL, CP_KEY_MINUS, "Go Back");
     command_info_table[CMD_GO_FORWARD] = k(CP_MOD_CTRL, CP_KEY_EQUAL, "Go Forward");
@@ -4193,4 +4197,11 @@ bool close_editor(Pane *pane, int editor_index) {
         pane->set_current_editor(pane->current_editor - 1);
     }
     return true;
+}
+
+bool is_imgui_hogging_keyboard() {
+    if (world.ui.keyboard_captured_by_imgui) return true;
+    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) return true;
+
+    return false;
 }

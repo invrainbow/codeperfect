@@ -238,12 +238,15 @@ void handle_key_event(Window_Event *it) {
         if (info.mods != keymods || info.key != key) continue;
         if (!is_command_enabled(cmd)) continue;
 
+        if (!info.allow_shortcut_when_imgui_focused)
+            if (is_imgui_hogging_keyboard())
+                continue;
+
         handle_command(cmd, false);
         return;
     }
 
-    if (world.ui.keyboard_captured_by_imgui) return;
-    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) return;
+    if (is_imgui_hogging_keyboard()) return;
 
     // handle editor-level shit now
     // ============================
@@ -780,8 +783,7 @@ void handle_window_event(Window_Event *it) {
         if (ch > 0 && ch < 0x10000)
             io.AddInputCharacter((u16)ch);
 
-        if (world.ui.keyboard_captured_by_imgui) break;
-        if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) break;
+        if (is_imgui_hogging_keyboard()) break;
         if (!uni_isprint(ch)) break;
 
         auto editor = get_current_editor();
