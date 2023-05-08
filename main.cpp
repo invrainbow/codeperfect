@@ -1345,32 +1345,39 @@ int realmain(int argc, char **argv) {
 
             // TODO: timeout?
             world.auth_status = (GH_Auth_Status)GHGetAuthStatus();
+
+            auto handle_error = [&](ccstr problem, ccstr title, int grace_period_days) {
+                set_window_title("unregistered");
+
+                if (in_grace_period(grace_period_days)) {
+                    ccstr fmt = "%s.\n\nCodePerfect will continue to work for %d days. Please contact support@codeperfect95.com if you need assistance.";
+                    tell_user(cp_sprintf(fmt, problem, grace_period_days), title);
+                } else {
+                    ccstr fmt = "%s.\n\nUnfortunately, the grace period has ended, so many features are now disabled. Please contact support@codeperfect95.com to resolve this. Thanks!";
+                    tell_user(cp_sprintf(fmt, problem), title);
+                    world.auth_error = true;
+                }
+            };
+
             switch (world.auth_status) {
             case GH_AUTH_OK:
                 auth.grace_period_start = get_unix_time();
                 write_auth();
-                // set_window_title(world.authed_email);
                 break;
-            case GH_AUTH_UNKNOWNERROR:
-                // for now just do nothing, don't punish user for our fuckup
+            case GH_AUTH_USERINACTIVE:
+                handle_error("Your subscription is no longer active", "Inactive subscription", 3);
                 break;
             case GH_AUTH_BADCREDS:
-                set_window_title("unregistered");
-                if (in_grace_period(3)) {
-                    tell_user("We were unable to validate your license key. CodePerfect will continue to work for a short grace period. Please go to Help > License to enter a new license, or contact support@codeperfect95.com for help. Thanks!", "Invalid credentials");
-                } else {
-                    tell_user("We were unable to validate your license key. Unfortunately, the grace period has ended, so many features are now disabled. Please go to Help > License to enter a new license, or contact support@codeperfect95.com for help. Thanks!", "Invalid credentials");
-                    world.auth_error = true;
-                }
+                handle_error("We were unable to validate your license key", "Invalid credentials", 3);
                 break;
             case GH_AUTH_INTERNETERROR:
-                set_window_title("unregistered");
-                if (in_grace_period(7)) {
-                    tell_user("We were unable to connect to the internet to validate your license key. CodePerfect will continue to work for a week; please connect to the internet at some point. Thanks!", "Unable to connect to internet");
-                } else {
-                    tell_user("We were unable to connect to the internet to validate your license key. Unfortunately, the grace period has ended, so many features are now disabled. Please connect to the internet, then restart CodePerfect.", "Unable to connect to internet");
-                    world.auth_error = true;
-                }
+                handle_error("We were unable to connect to the internet to validate your license key", "Unable to connect to the internet", 7);
+                break;
+            case GH_AUTH_VERSIONLOCKED:
+                handle_error("Your license is locked to a version older than this version", "Version not covered by license", 3);
+                break;
+            case GH_AUTH_UNKNOWNERROR:
+                // for now do nothing, don't punish user for something not their fault
                 break;
             }
         }

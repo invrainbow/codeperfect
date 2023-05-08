@@ -1,0 +1,41 @@
+<html>
+  <body>
+    <p>{{.Greeting}}</p>
+
+    <p>
+      Your purchase was successful! Your license info is:
+    </p>
+
+    <p>
+      <blockquote>
+        {{.Email}}<br>
+        <code>{{.LicenseKey}}</code>
+      </blockquote>
+    </p>
+
+    <p>Please activate your license by opening CodePerfect and going to Help &gt; Enter License.</p>
+
+    {{if ne .PaymentLinkType "license_only"}}
+      <p>
+        The plan you purchased includes a subscription for automatic updates. To
+        manage your subscription, use the <a href="{{.BillingPortalLink}}">Billing Portal</a>.
+        You can use this to cancel your subscription and manage your payment method.
+      </p>
+    {{end}}
+
+    <p>Here are some more links that may be helpful:</p>
+
+    <ul>
+      <li><a href="https://docs.codeperfect95.com">Documentation</a></li>
+      <li><a href="https://codeperfect95.substack.com">Follow our Substack</a></li>
+      <li><a href="https://discord.gg/WkFY44BY7a">Join us on Discord</a></li>
+    </ul>
+
+    <p>
+      If you have any questions, you can always reach us at
+      support@codeperfect95.com. Thank you for becoming a customer!
+    </p>
+
+    <p>- The CodePerfect Team</p>
+  </body>
+</html>

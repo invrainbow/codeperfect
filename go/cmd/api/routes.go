@@ -10,8 +10,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
-	"time"
 
 	"github.com/codeperfect95/codeperfect/go/cmd/api/emails"
 	"github.com/codeperfect95/codeperfect/go/cmd/lib"
@@ -107,35 +107,94 @@ func sendServerError(c *gin.Context, format string, args ...interface{}) {
 	sendError(c, "An unknown server error occurred.")
 }
 
-// can maybe refactor this
-func authUser(c *gin.Context) (*models.User, error) {
+type authUserResult struct {
+	user    *models.User
+	result  models.AuthResult
+	version int
+}
+
+func readVersionHeader(c *gin.Context) int {
+	n, err := strconv.Atoi(c.GetHeader("X-Version"))
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+func authUser(c *gin.Context, version int) (*authUserResult, error) {
 	email := c.GetHeader("X-Email")
 	licenseKey := c.GetHeader("X-License-Key")
 
+	if version == 0 {
+		version = readVersionHeader(c)
+		if version == 0 {
+			return &authUserResult{result: models.AuthFailInvalidVersion}, nil
+		}
+	}
+
+	makeResult := func(user *models.User, result models.AuthResult) (*authUserResult, error) {
+		return &authUserResult{
+			user:    user,
+			version: version,
+			result:  result,
+		}, nil
+	}
+
+	makeErr := func(result models.AuthResult) (*authUserResult, error) {
+		return makeResult(nil, result)
+	}
+
 	var user models.User
-	if res := db.DB.First(&user, "email = ?", email); res.Error != nil {
+	if res := db.DB.First(&user, "email = ? and license_key = ?", email, licenseKey); res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			return nil, nil
+			return makeErr(models.AuthFailInvalidCredentials)
 		}
 		return nil, res.Error
 	}
 
-	if user.LicenseKey != licenseKey {
-		return nil, nil
-	}
 	if !user.Active {
-		return nil, nil
+		return makeErr(models.AuthFailUserInactive)
 	}
-	return &user, nil
+
+	if user.LockedVersion != 0 {
+		if version > user.LockedVersion {
+			return makeErr(models.AuthFailVersionLocked)
+		}
+		return makeResult(&user, models.AuthSuccessLocked)
+	}
+	return makeResult(&user, models.AuthSuccessUnlocked)
 }
 
 var SendAlertsForSelf = (os.Getenv("SEND_ALERTS_FOR_SELF") == "1")
 
-func SendSlackMessageForUser(user *models.User, format string, args ...interface{}) {
+func SendSlackForUser(user *models.User, format string, args ...interface{}) {
 	if !SendAlertsForSelf && user.Email == "bh@codeperfect95.com" {
 		return
 	}
-	go SendSlackMessage(format, args...)
+	go SendSlack(format, args...)
+}
+
+func PostTrialV2(c *gin.Context) {
+	var req models.AuthRequestV2
+	if err := c.ShouldBindJSON(&req); err != nil {
+		sendError(c, "Invalid data.")
+		return
+	}
+
+	version := readVersionHeader(c)
+	if version == 0 {
+		sendError(c, "Invalid version.")
+		return
+	}
+
+	go SendSlack(
+		"trial user `%s` opened on `%s-%s`",
+		WorkaroundGinRetardationAndGetClientIP(c),
+		req.OS,
+		versions.VersionToString(version),
+	)
+
+	c.JSON(http.StatusOK, &models.AuthResponseV2{Result: models.AuthSuccessUnlocked})
 }
 
 func PostTrial(c *gin.Context) {
@@ -147,13 +206,7 @@ func PostTrial(c *gin.Context) {
 
 	ip := WorkaroundGinRetardationAndGetClientIP(c)
 
-	go SendSlackMessage("trial user `%s` opened on `%s-%s`", ip, req.OS, versions.VersionToString(req.CurrentVersion))
-
-	PosthogCaptureStringId(ip, "trial user", PosthogProps{
-		"os":              req.OS,
-		"current_version": req.CurrentVersion,
-		"ip":              ip,
-	})
+	go SendSlack("trial user `%s` opened on `%s-%s`", ip, req.OS, versions.VersionToString(req.CurrentVersion))
 
 	c.JSON(http.StatusOK, &models.AuthResponse{
 		Success: true,
@@ -161,86 +214,74 @@ func PostTrial(c *gin.Context) {
 }
 
 func PostAuth(c *gin.Context) {
-	user, err := authUser(c)
-	if err != nil {
-		sendServerError(c, err.Error())
-	}
-
-	if user == nil {
-		c.JSON(http.StatusOK, &models.AuthResponse{Success: false})
-		return
-	}
-
 	var req models.AuthRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		sendError(c, "Invalid data.")
 		return
 	}
 
-	SendSlackMessageForUser(user, "%s authed on `%s-%s`", user.Email, req.OS, versions.VersionToString(req.CurrentVersion))
+	res, err := authUser(c, req.CurrentVersion)
+	if err != nil {
+		sendServerError(c, "authUser error: %v", err)
+		return
+	}
 
-	PosthogCapture(user.ID, "user auth", PosthogProps{
-		"os":              req.OS,
-		"current_version": req.CurrentVersion,
-	})
+	if !res.result.IsSuccess() {
+		c.JSON(http.StatusOK, &models.AuthResponse{Success: false})
+		return
+	}
 
-	sess := models.Session{}
-	sess.UserID = user.ID
-	sess.StartedAt = time.Now()
-	sess.LastHeartbeatAt = sess.StartedAt
-	sess.Heartbeats = 1
-	db.DB.Create(&sess)
+	SendSlackForUser(res.user, "%s authed on `%s-%s`", res.user.Email, req.OS, versions.VersionToString(req.CurrentVersion))
 
 	c.JSON(http.StatusOK, &models.AuthResponse{
 		Success:   true,
-		SessionID: sess.ID,
+		SessionID: 0,
 	})
 }
 
-func PostHeartbeat(c *gin.Context) {
-	var req models.HeartbeatRequest
-	if err := c.BindJSON(&req); err != nil {
+func PostAuthV2(c *gin.Context) {
+	var req models.AuthRequestV2
+	if err := c.ShouldBindJSON(&req); err != nil {
+		sendError(c, "Invalid data.")
 		return
 	}
 
-	user, err := authUser(c)
+	res, err := authUser(c, 0)
 	if err != nil {
-		sendServerError(c, err.Error())
+		sendServerError(c, "authUser error: %v", err)
 		return
 	}
 
-	if user == nil {
-		sendError(c, "Invalid credentials.")
-		return
+	SendSlackForUser(
+		res.user,
+		"%s authed on `%s-%s`, result = %s",
+		res.user.Email,
+		req.OS,
+		versions.VersionToString(res.version),
+		res.result.String(),
+	)
+
+	if !res.result.IsSuccess() {
+		c.JSON(http.StatusOK, &models.AuthResponseV2{
+			Result: res.result,
+		})
+	} else {
+		c.JSON(http.StatusOK, &models.AuthResponseV2{
+			Result:        res.result,
+			LockedVersion: &res.version,
+		})
 	}
+}
 
-	var sess models.Session
-	res := db.DB.First(&sess, req.SessionID)
-	if res.Error != nil {
-		sendError(c, "Invalid session ID.")
-		return
-	}
-
-	if sess.UserID != user.ID {
-		sendError(c, "Invalid session ID.")
-		return
-	}
-
-	PosthogCapture(user.ID, "user heartbeat", nil)
-
-	sess.LastHeartbeatAt = time.Now()
-	sess.Heartbeats++ // not safe, i don't care
-	db.DB.Save(&sess)
-
+func PostHeartbeat(c *gin.Context) {
 	c.JSON(200, &gin.H{"ok": true})
 }
 
-func PostCrashReport(c *gin.Context) {
-	// just try to auth the user, but it's ok if user isn't authed, and don't fail if there's an error
-	user, err := authUser(c)
-	if err != nil {
-		// do print it out though
-		log.Print(err)
+func handleCrashReport(c *gin.Context, user *models.User, osslug string, version int, report string) {
+	if len(osslug) > 16 {
+		c.JSON(http.StatusBadRequest, gin.H{})
+		log.Printf("user sent bad os: %s", osslug[:128])
+		return
 	}
 
 	if user == nil {
@@ -249,47 +290,25 @@ func PostCrashReport(c *gin.Context) {
 		log.Printf("user not nil, email = %s license = %s", user.Email, user.LicenseKey)
 	}
 
-	body, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{})
-		log.Printf("ioutil.Readall: %v", err)
-		return
-	}
-
-	var req models.CrashReportRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{})
-		log.Printf("json.unmarshal", err)
-		return
-	}
-
-	if len(req.OS) > 16 {
-		c.JSON(http.StatusBadRequest, gin.H{})
-		log.Printf("user sent bad os: %s", req.OS[:128])
-		return
-	}
-
-	content := req.Content
-
-	if len(content) > 2048 {
-		log.Printf("user sent large content with len %d", len(content))
-		content = content[:2048]
+	if len(report) > 2048 {
+		log.Printf("user sent large content with len %d", len(report))
+		report = report[:2048]
 	}
 
 	newlines := 0
-	for i, ch := range content {
+	for i, ch := range report {
 		if ch == '\n' {
 			newlines++
 			if newlines > 128 {
 				log.Printf("user sent large content with lots of lines")
-				content = content[:i]
+				report = report[:i]
 				break
 			}
 		}
 	}
 
 	infoParts := []string{
-		req.OS + "-" + versions.VersionToString(req.Version),
+		osslug + "-" + versions.VersionToString(version),
 		WorkaroundGinRetardationAndGetClientIP(c),
 	}
 
@@ -301,7 +320,40 @@ func PostCrashReport(c *gin.Context) {
 		infoParts[i] = fmt.Sprintf("`%s`", val)
 	}
 
-	go SendSlackMessage("*New crash report*: %s\n```%s```", strings.Join(infoParts, " "), content)
+	go SendSlack("*New crash report*: %s\n```%s```", strings.Join(infoParts, " "), report)
+}
+
+func PostCrashReport(c *gin.Context) {
+	var req models.CrashReportRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{})
+		log.Printf("json.unmarshal", err)
+		return
+	}
+
+	auth, err := authUser(c, req.Version)
+	if err != nil {
+		log.Print(err) // don't fail
+	}
+
+	handleCrashReport(c, auth.user, req.OS, req.Version, req.Content)
+	c.JSON(http.StatusOK, true)
+}
+
+func PostCrashReportV2(c *gin.Context) {
+	var req models.CrashReportRequestV2
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{})
+		log.Printf("json.unmarshal", err)
+		return
+	}
+
+	auth, err := authUser(c, 0)
+	if err != nil {
+		log.Print(err) // don't fail
+	}
+
+	handleCrashReport(c, auth.user, req.OS, auth.version, req.Content)
 	c.JSON(http.StatusOK, true)
 }
 
@@ -329,48 +381,52 @@ func stripeEventWorker() {
 	}
 }
 
-var paymentLinkTypesDev = map[string]int{
-	"plink_1N3vNpBpL0Zd3zdOuDCwTfaR": models.LicenseAndSub,
-	"plink_1N3vNBBpL0Zd3zdO412WVvjR": models.LicenseAndSub,
-	// "plink_1N3vMWBpL0Zd3zdOho8Q0oPU": models.SubOnly,
-	// "plink_1N3vMOBpL0Zd3zdOHtyvGnlE": models.SubOnly,
-	"plink_1N3v85BpL0Zd3zdOtCHOLlYl": models.LicenseOnly,
-	// "plink_1N3v7uBpL0Zd3zdOOaU2UVIq": models.SubOnly,
-	// "plink_1N3v7ZBpL0Zd3zdO0JbYZunV": models.SubOnly,
-	"plink_1N3v7DBpL0Zd3zdOWUOCeXKf": models.LicenseOnly,
-	"plink_1N3v1gBpL0Zd3zdOrmBJGL8T": models.LicenseAndSub,
-	"plink_1N3v0RBpL0Zd3zdOSifnvyCs": models.LicenseAndSub,
+var paymentLinkTypesDev = map[string]string{
+	"plink_1N3vNpBpL0Zd3zdOuDCwTfaR": "license_and_sub",
+	"plink_1N3vNBBpL0Zd3zdO412WVvjR": "license_and_sub",
+	"plink_1N3vMWBpL0Zd3zdOho8Q0oPU": "sub_only",
+	"plink_1N3vMOBpL0Zd3zdOHtyvGnlE": "sub_only",
+	"plink_1N3v85BpL0Zd3zdOtCHOLlYl": "license_only",
+	"plink_1N3v7uBpL0Zd3zdOOaU2UVIq": "sub_only",
+	"plink_1N3v7ZBpL0Zd3zdO0JbYZunV": "sub_only",
+	"plink_1N3v7DBpL0Zd3zdOWUOCeXKf": "license_only",
+	"plink_1N3v1gBpL0Zd3zdOrmBJGL8T": "license_and_sub",
+	"plink_1N3v0RBpL0Zd3zdOSifnvyCs": "license_and_sub",
 }
 
-var paymentLinkTypesProd = map[string]int{
-	"plink_1N3vNpBpL0Zd3zdOuDCwTfaR": models.LicenseAndSub,
-	"plink_1N3vNBBpL0Zd3zdO412WVvjR": models.LicenseAndSub,
-	// "plink_1N3vMWBpL0Zd3zdOho8Q0oPU": models.SubOnly,
-	// "plink_1N3vMOBpL0Zd3zdOHtyvGnlE": models.SubOnly,
-	"plink_1N3v85BpL0Zd3zdOtCHOLlYl": models.LicenseOnly,
-	// "plink_1N3v7uBpL0Zd3zdOOaU2UVIq": models.SubOnly,
-	// "plink_1N3v7ZBpL0Zd3zdO0JbYZunV": models.SubOnly,
-	"plink_1N3v7DBpL0Zd3zdOWUOCeXKf": models.LicenseOnly,
-	"plink_1N3v1gBpL0Zd3zdOrmBJGL8T": models.LicenseAndSub,
-	"plink_1N3v0RBpL0Zd3zdOSifnvyCs": models.LicenseAndSub,
+var paymentLinkTypesProd = map[string]string{
+	"plink_1N3vNpBpL0Zd3zdOuDCwTfaR": "license_and_sub",
+	"plink_1N3vNBBpL0Zd3zdO412WVvjR": "license_and_sub",
+	"plink_1N3vMWBpL0Zd3zdOho8Q0oPU": "sub_only",
+	"plink_1N3vMOBpL0Zd3zdOHtyvGnlE": "sub_only",
+	"plink_1N3v85BpL0Zd3zdOtCHOLlYl": "license_only",
+	"plink_1N3v7uBpL0Zd3zdOOaU2UVIq": "sub_only",
+	"plink_1N3v7ZBpL0Zd3zdO0JbYZunV": "sub_only",
+	"plink_1N3v7DBpL0Zd3zdOWUOCeXKf": "license_only",
+	"plink_1N3v1gBpL0Zd3zdOrmBJGL8T": "license_and_sub",
+	"plink_1N3v0RBpL0Zd3zdOSifnvyCs": "license_and_sub",
+}
+
+func getPaymentLinkType(id string) string {
+	if IsDevelMode {
+		return paymentLinkTypesDev[id]
+	}
+	return paymentLinkTypesDev[id]
 }
 
 func paymentLinkHasLicense(id string) bool {
-	var ok bool
-	if IsDevelMode {
-		_, ok = paymentLinkTypesDev[id]
-	} else {
-		_, ok = paymentLinkTypesDev[id]
-	}
-	return ok
+	return getPaymentLinkType(id) != "sub_only"
 }
 
-func sendUserEmail(user *User, newUser bool) {
+func sendNewUserEmail(user *models.User) {
+	paymentLinkType := getPaymentLinkType(user.StripePaymentLinkID)
+
 	type EmailParams struct {
 		Email             string
 		LicenseKey        string
 		Greeting          string
 		BillingPortalLink string
+		PaymentLinkType   string
 	}
 
 	makeGreeting := func() string {
@@ -384,9 +440,10 @@ func sendUserEmail(user *User, newUser bool) {
 	}
 
 	params := &EmailParams{
-		Email:      user.Email,
-		LicenseKey: user.LicenseKey,
-		Greeting:   makeGreeting(),
+		Email:           user.Email,
+		LicenseKey:      user.LicenseKey,
+		Greeting:        makeGreeting(),
+		PaymentLinkType: paymentLinkType,
 	}
 
 	if IsDevelMode {
@@ -395,58 +452,54 @@ func sendUserEmail(user *User, newUser bool) {
 		params.BillingPortalLink = "https://billing.stripe.com/p/login/9AQ5o60VDdYC2Zy144"
 	}
 
-	sendEmail := func(subject, txtTmpl, htmlTmpl string) {
-		txt, err := lib.ExecuteTemplate(txtTmpl, params)
-		if err != nil {
-			return
-		}
-		html, err := lib.ExecuteTemplate(htmlTmpl, params)
-		if err != nil {
-			return
-		}
-		if err := lib.SendEmail(user.Email, subject, string(txt), string(html)); err != nil {
-			log.Printf("failed to send email to %s: %v", user.Email, err)
-		}
+	txt, err := lib.ExecuteTemplate(emails.EmailNewUserText, params)
+	if err != nil {
+		return
 	}
 
-	if user.Active {
-		if newUser {
-			sendEmail("CodePerfect 95: New License", emails.EmailUserCreatedText, emails.EmailUserCreatedHtml)
-			go SendSlackMessage("user created: %s", user.Email)
-		} else {
-			sendEmail("CodePerfect 95: License Reactivated", emails.EmailUserEnabledText, emails.EmailUserEnabledHtml)
-			go SendSlackMessage("user reactivated: %s", user.Email)
-		}
-	} else {
-		sendEmail("CodePerfect 95: License Deactivated", emails.EmailUserDisabledText, emails.EmailUserDisabledHtml)
-		go SendSlackMessage("user deactivated: %s", user.Email)
+	html, err := lib.ExecuteTemplate(emails.EmailNewUserHtml, params)
+	if err != nil {
+		return
+	}
+
+	if err := lib.SendEmail(user.Email, "Your new CodePerfect license", string(txt), string(html)); err != nil {
+		log.Printf("failed to send email to %s: %v", user.Email, err)
 	}
 }
 
-func getUserFromCustomer(cus *stripe.Customer) (*models.User, bool, error) {
+func ensureUser(cus *stripe.Customer) (*models.User, bool, error) {
 	var user models.User
-	newUser := false
+	isNew := false
 
 	res := db.DB.First(&user, "stripe_customer_id = ?", cus.ID)
 	if res.Error != nil {
 		if !errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("error looking up user: %v", res.Error)
+			return nil, false, fmt.Errorf("error looking up user: %v", res.Error)
 		}
 
-		/*
-			// new user. if not active, don't bother creating user yet.
-			if !active {
-				log.Printf("user doesn't exist for %s, status = %s, skipping...", cus.Email, sub.Status)
-				return
-			}
-		*/
-
-		newUser = true
+		isNew = true
 		user.LicenseKey = lib.GenerateLicenseKey()
 		user.StripeCustomerID = cus.ID
 		db.DB.Save(&user)
 	}
-	return user, newUser, nil
+
+	changed := false
+
+	if user.Email != cus.Email {
+		changed = true
+		user.Email = cus.Email
+	}
+
+	if user.Name != cus.Name {
+		changed = true
+		user.Name = cus.Name
+	}
+
+	if changed {
+		db.DB.Save(&user)
+	}
+
+	return &user, isNew, nil
 }
 
 func processStripeEvent(event stripe.Event) {
@@ -460,15 +513,37 @@ func processStripeEvent(event stripe.Event) {
 			return
 		}
 
-		cus, err := customer.Get(sub.Customer.ID, nil)
+		cus, err := customer.Get(sess.Customer.ID, nil)
 		if err != nil {
 			log.Printf("customer.Get: %v", err)
 			return
 		}
 
-		hasLicense := paymentLinkHasLicense(sess.PaymentLink.ID)
-		if hasLicense {
+		user, _, err := ensureUser(cus)
+		if err != nil {
+			log.Printf("ensureUser: %v", err)
+			return
 		}
+
+		plid := sess.PaymentLink.ID
+
+		if user.StripePaymentLinkID != "" && user.StripePaymentLinkID != plid {
+			msg := fmt.Sprintf(
+				"new payment link on existing user: user id = %v, cus_id = %v, old = %v, new = %v",
+				user.ID,
+				user.StripeCustomerID,
+				user.StripePaymentLinkID,
+				plid,
+			)
+			log.Printf("%s", msg)
+			SendSlack("%s", msg)
+		}
+
+		user.StripePaymentLinkID = plid
+		user.Active = true
+		db.DB.Save(&user)
+
+		sendNewUserEmail(user)
 
 	case "customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted":
 		var sub stripe.Subscription
@@ -477,8 +552,6 @@ func processStripeEvent(event stripe.Event) {
 			return
 		}
 
-		log.Printf("=== subscription change: %v, %s ===", sub.ID, sub.Status)
-
 		cus, err := customer.Get(sub.Customer.ID, nil)
 		if err != nil {
 			log.Printf("customer.Get: %v", err)
@@ -486,45 +559,27 @@ func processStripeEvent(event stripe.Event) {
 		}
 		// spew.Dump(cus)
 
-		user, isNew, err := getUserFromCustomer(cus)
+		user, _, err := ensureUser(cus)
 		if err != nil {
-			log.Printf("getUserFromCustomer: %v", err)
+			log.Printf("ensureUser: %v", err)
 			return
 		}
 
 		// user should only be able to have one sub at a time
 		if user.StripeSubscriptionID != "" && user.StripeSubscriptionID != sub.ID {
 			msg := fmt.Sprintf(
-				"user subscription id changed, go investigate: user id = %v, old id = %v, new = %v",
+				"user subscription id changed: user id = %v, cus_id = %v, old sub = %v, new = %v",
 				user.ID,
+				user.StripeCustomerID,
 				user.StripeSubscriptionID,
 				sub.ID,
 			)
 			log.Printf("%s", msg)
-			SendSlackMessage("%s", msg)
-			return
+			SendSlack("%s", msg)
 		}
 
-		old := user.HasSubscription
-
-		user.HasSubscription = (sub.Status == stripe.SubscriptionStatusActive)
 		user.StripeSubscriptionID = sub.ID
-		user.Email = cus.Email // TODO: check if email changed? (does it matter?)
-
-		old := user.Active
-		user.Active = active
-		user.Name = cus.Name
+		user.StripeSubscriptionActive = (sub.Status == stripe.SubscriptionStatusActive)
 		db.DB.Save(&user)
-
-		if old == user.Active {
-			return
-		}
-
-		PosthogCapture(user.ID, "user activation status changed", PosthogProps{
-			"active": user.Active,
-		})
-		PosthogIdentify(user.ID, PosthogProps{"active": user.Active})
-
-		sendUserEmail(&user, newUser)
 	}
 }

@@ -1,20 +1,23 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"go/build"
 	"go/format"
+	"io"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
-	"time"
 	"unicode"
 	"unsafe"
 
@@ -238,6 +241,8 @@ const (
 	AuthInternetError
 	AuthUnknownError
 	AuthBadCreds
+	AuthVersionLocked
+	AuthUserInactive
 )
 
 func sendCrashReports(license *License) error {
@@ -270,7 +275,7 @@ func sendCrashReports(license *License) error {
 		Version: versions.CurrentVersion,
 	}
 
-	return CallServer("crash-report", license, req, nil)
+	return CallServer("v2/crash-report", license, req, nil)
 }
 
 //export GHSendCrashReports
@@ -308,49 +313,55 @@ func GHAuth(rawEmail, rawLicenseKey *C.char) {
 			Email:      C.GoString(rawEmail),
 			LicenseKey: C.GoString(rawLicenseKey),
 		}
-		endpoint = "auth"
+		endpoint = "v2/auth"
 	} else {
-		endpoint = "trial"
+		endpoint = "v2/trial"
 	}
 
 	osSlug, _ := versions.GetOSSlug(runtime.GOOS, runtime.GOARCH)
-	req := &models.AuthRequest{
-		OS:             osSlug,
-		CurrentVersion: versions.CurrentVersion,
+	req := &models.AuthRequestV2{
+		OS: osSlug,
 	}
 
-	var resp models.AuthResponse
+	var resp models.AuthResponseV2
 
-	doAuth := func() int {
+	doAuth := func() {
 		if err := CallServer(endpoint, license, req, &resp); err != nil {
-			// log.Println(err)
+			log.Printf("error calling %s: %v", endpoint, err)
 			switch err.(type) {
 			case net.Error, *net.OpError, syscall.Errno:
-				return AuthInternetError
+				authStatus = AuthInternetError
+			default:
+				authStatus = AuthUnknownError
 			}
-			return AuthUnknownError
+			log.Printf("authStatus: %v", authStatus)
+			return
 		}
-		if !resp.Success {
-			return AuthBadCreds
+		log.Printf("resp.Result: %v", resp.Result)
+		switch resp.Result {
+		case models.AuthSuccessLocked:
+			authStatus = AuthOk
+		case models.AuthSuccessUnlocked:
+			go doUpdate()
+			authStatus = AuthOk
+		case models.AuthFailVersionLocked:
+			authStatus = AuthVersionLocked
+		case models.AuthFailInvalidCredentials:
+			authStatus = AuthBadCreds
+		// This means the version we passed in X-Version is bad, but that shouldn't happen.
+		case models.AuthFailInvalidVersion:
+			authStatus = AuthUnknownError
+		case models.AuthFailOther:
+			authStatus = AuthUnknownError
+		case models.AuthFailUserInactive:
+			authStatus = AuthUserInactive
+		default:
+			authStatus = AuthUnknownError
 		}
-		return AuthOk
+		log.Printf("authStatus: %v", authStatus)
 	}
 
-	run := func() {
-		authStatus = doAuth()
-		if authStatus == AuthOk && license != nil {
-			// heartbeat
-			for {
-				req := &models.HeartbeatRequest{SessionID: resp.SessionID}
-				var resp models.HeartbeatResponse
-				CallServer("heartbeat", license, req, &resp)
-
-				time.Sleep(time.Minute)
-			}
-		}
-	}
-
-	go run()
+	go doAuth()
 }
 
 type GitignoreChecker struct {
@@ -791,6 +802,166 @@ func GHCopyJblowTestSuite(src *C.char) *C.char {
 		return nil
 	}
 	return C.CString(path)
+}
+
+func getLatestVersion() (int, error) {
+	resp, err := http.Get(makeS3Url("meta.json"))
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, err
+	}
+
+	var meta struct {
+		CurrentVersion int `json:"current_version"`
+	}
+
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return 0, err
+	}
+
+	return meta.CurrentVersion, nil
+}
+
+var CodePerfectS3Url = "https://codeperfect95.s3.us-east-2.amazonaws.com"
+
+func makeS3Url(endpoint string) string {
+	return fmt.Sprintf("%s/%s", CodePerfectS3Url, endpoint)
+}
+
+func downloadFile(url string, f *os.File) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	n, err := io.Copy(f, resp.Body)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("failed to copy anything")
+	}
+	return nil
+}
+
+// unzip will decompress a zip archive, moving all files and folders
+// within the zip file (parameter 1) to an output directory (parameter 2).
+// Taken from here: https://golangcode.com/unzip-files-in-go/
+func unzip(src string, dest string) error {
+	r, err := zip.OpenReader(src)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	copyFile := func(f *zip.File) error {
+		fpath := filepath.Join(dest, f.Name)
+
+		// check for ZipSlip: http://bit.ly/2MsjAWE
+		if !strings.HasPrefix(fpath, filepath.Clean(dest)+string(os.PathSeparator)) {
+			return fmt.Errorf("%s: illegal file path", fpath)
+		}
+
+		if f.FileInfo().IsDir() {
+			return os.MkdirAll(fpath, os.ModePerm)
+		}
+
+		if err := os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
+			return err
+		}
+
+		outfile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+		if err != nil {
+			return err
+		}
+		defer outfile.Close()
+
+		infile, err := f.Open()
+		if err != nil {
+			return err
+		}
+		defer infile.Close()
+
+		if _, err = io.Copy(outfile, infile); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	for _, f := range r.File {
+		if err := copyFile(f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func doUpdate() {
+	log.Printf("current version is %s", versions.CurrentVersionAsString())
+
+	ver, err := getLatestVersion()
+	if err != nil {
+		log.Print(err)
+		return
+	}
+
+	log.Printf("latest version is %s", versions.VersionToString(ver))
+
+	// we don't need to update
+	if ver <= versions.CurrentVersion {
+		return
+	}
+
+	osSlug, err := versions.GetOSSlug(runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		panic("invalid os/arch")
+	}
+
+	downloadUrl := makeS3Url(fmt.Sprintf("update/%s-%s.zip", osSlug, versions.VersionToString(ver)))
+	log.Printf("downloading %s", downloadUrl)
+
+	tmpfile, err := os.CreateTemp("", "update.zip")
+	if err != nil {
+		log.Print("createtemp: ", err)
+		return
+	}
+	defer os.Remove(tmpfile.Name())
+
+	if err := downloadFile(downloadUrl, tmpfile); err != nil {
+		log.Print("downloadFile: ", err)
+		return
+	}
+
+	exepath, err := os.Executable()
+	if err != nil {
+		log.Print("executable: ", err)
+		return
+	}
+
+	dest := filepath.Join(filepath.Dir(exepath), "newbintmp")
+
+	log.Printf("deleting %s", dest)
+	os.RemoveAll(dest)
+
+	log.Printf("unzipping to %s", dest)
+	if err := unzip(tmpfile.Name(), dest); err != nil {
+		log.Print("unzip: ", err)
+		return
+	}
+
+	realdest := filepath.Join(filepath.Dir(exepath), "newbin")
+	log.Printf("moving unzipped folder to %s", realdest)
+
+	if err := utils.ReplaceFolder(dest, realdest); err != nil {
+		log.Print("utils.ReplaceFolder: ", err)
+	}
 }
 
 func main() {}

@@ -1,0 +1,29 @@
+{{.Greeting}}
+
+Your purchase was successful! Your license info is:
+
+    {{.Email}}
+    {{.LicenseKey}}
+
+Please activate your license by opening CodePerfect and going to Help &gt;
+Enter License.
+
+{{if ne .PaymentLinkType "license_only"}}
+The plan you purchased includes a subscription for automatic updates. To manage
+your subscription, use the Billing Portal:
+
+{{.BillingPortalLink}}
+
+You can use this to cancel your subscription and manage your payment method.
+
+{{end}}
+Here are some more links that may be helpful:
+
+ - Documentation: https://docs.codeperfect95.com
+ - Follow our Substack: https://codeperfect95.substack.com
+ - Join us on Discord: https://discord.gg/WkFY44BY7a
+
+If you have any questions or need help, you can always reach us at
+support@codeperfect95.com. Thank you for purchasing CodePerfect!
+
+- The CodePerfect Team

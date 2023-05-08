@@ -13,7 +13,7 @@ import (
 
 var SlackWebhookURL = os.Getenv("SLACK_WEBHOOK_URL")
 
-func SendSlackMessage(format string, args ...interface{}) {
+func SendSlack(format string, args ...interface{}) {
 	run := func() error {
 		req := map[string]string{"text": fmt.Sprintf(format, args...)}
 		data, err := json.Marshal(req)

@@ -15,6 +15,7 @@ func main() {
 		LicenseKey        string
 		Greeting          string
 		BillingPortalLink string
+		PaymentLinkType   string
 	}
 
 	params := &EmailParams{
@@ -22,43 +23,18 @@ func main() {
 		LicenseKey:        lib.GenerateLicenseKey(),
 		Greeting:          "Hi Brandon,",
 		BillingPortalLink: "https://billing.stripe.com/p/login/test_5kAcNMdzp6encGk4gg",
+		PaymentLinkType:   "license_and_sub",
 	}
 
-	type Email struct {
-		Text    string
-		Html    string
-		Subject string
+	txt, err := lib.ExecuteTemplate(emails.EmailNewUserText, params)
+	if err != nil {
+		panic(err)
 	}
 
-	emails := []Email{
-		{
-			Text:    emails.EmailUserCreatedText,
-			Html:    emails.EmailUserCreatedHtml,
-			Subject: "CodePerfect 95: New License",
-		},
-		{
-			Text:    emails.EmailUserEnabledText,
-			Html:    emails.EmailUserEnabledHtml,
-			Subject: "CodePerfect 95: License Reactivated",
-		},
-		{
-			Text:    emails.EmailUserDisabledText,
-			Html:    emails.EmailUserDisabledHtml,
-			Subject: "CodePerfect 95: License Deactivated",
-		},
+	html, err := lib.ExecuteTemplate(emails.EmailNewUserHtml, params)
+	if err != nil {
+		panic(err)
 	}
 
-	for _, email := range emails {
-		txt, err := lib.ExecuteTemplate(email.Text, params)
-		if err != nil {
-			panic(err)
-		}
-
-		html, err := lib.ExecuteTemplate(email.Html, params)
-		if err != nil {
-			panic(err)
-		}
-
-		lib.SendEmail(TestEmail, email.Subject, string(txt), string(html))
-	}
+	lib.SendEmail(TestEmail, "Your new CodePerfect license", string(txt), string(html))
 }

@@ -6,26 +6,19 @@ import (
 	"gorm.io/gorm"
 )
 
-const (
-	LicenseInvalid = iota
-	LicenseOnly
-	LicenseAndSub
-	SubOnly
-)
-
 type User struct {
 	gorm.Model
 	Email      string
 	Name       string
 	LicenseKey string
 
-	HasPerpetual    bool
-	HasSubscription bool
+	Active        bool
+	LockedVersion int // 0 if subscription
 
-	StripeCustomerID string
-
-	// Active               bool
-	StripeSubscriptionID string
+	StripePaymentLinkID      string
+	StripeCustomerID         string
+	StripeSubscriptionID     string
+	StripeSubscriptionActive bool
 }
 
 type Session struct {

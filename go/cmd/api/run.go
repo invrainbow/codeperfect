@@ -20,6 +20,10 @@ func main() {
 	r.POST("/stripe-webhook", PostStripeWebhook)
 	r.POST("/crash-report", PostCrashReport)
 
+	r.POST("/v2/auth", PostAuthV2)
+	r.POST("/v2/trial", PostTrialV2)
+	r.POST("/v2/crash-report", PostCrashReportV2)
+
 	log.Print(3)
 
 	r.Run()

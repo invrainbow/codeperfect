@@ -1,9 +1,0 @@
-{{.Greeting}}
-
-Your subscription has been successfully cancelled. We're sorry to see you go!
-
-If you have any feedback, or if this was a mistake and you'd like to
-resubscribe, please feel free to respond to this email.
-
-Thanks,
-The CodePerfect Team

@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/codeperfect95/codeperfect/go/models"
+	"github.com/codeperfect95/codeperfect/go/versions"
 )
 
 var ForceServerLocalhost = false
@@ -44,6 +46,7 @@ func CallServer(endpoint string, license *License, params interface{}, out inter
 		req.Header.Set("X-Email", license.Email)
 		req.Header.Set("X-License-Key", license.LicenseKey)
 	}
+	req.Header.Set("X-Version", strconv.Itoa(versions.CurrentVersion))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
