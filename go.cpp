@@ -714,8 +714,9 @@ void Go_Indexer::reload_editor(void *editor) {
 }
 
 // @Write
-// Should only be called from main thread.
 void Go_Indexer::reload_all_editors(bool force) {
+    cp_assert(is_main_thread);
+
     For (get_all_editors())
         if (it->buf->tree_dirty || force)
             reload_editor(it);
