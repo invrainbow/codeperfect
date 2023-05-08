@@ -777,7 +777,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                         new_contents_len--;
                     }
 
-                    cur2 start, old_end, new_end;
+                    cur2 start, old_end;
                     if (firstnode) {
                         start = firstnode->start();
                         old_end = firstnode->end();
@@ -785,34 +785,15 @@ void Editor::perform_autocomplete(AC_Result *result) {
                         start = package_node->end();
                         old_end = package_node->end();
                     }
-                    new_end = start;
 
                     auto chars = new_list(uchar);
                     if (!firstnode) {
                         // add two newlines, it's going after the package decl
                         chars->append('\n');
                         chars->append('\n');
-                        new_end.x = 0;
-                        new_end.y += 2;
                     }
-
-                    {
-                        auto ustr = cstr_to_ustr(new_contents);
-                        For (ustr) {
-                            chars->append(it);
-                            if (it == '\n') {
-                                new_end.x = 0;
-                                new_end.y++;
-                            } else {
-                                new_end.x++;
-                            }
-                        }
-                    }
-
-                    // perform the edit
-                    buf->apply_edit(start, old_end, chars->items, chars->len);
-
-                    move_cursor(new_cur2(cur.x, cur.y + new_end.y - old_end.y));
+                    chars->concat(cstr_to_ustr(new_contents));
+                    apply_edit_in_insert_mode_elsewhere(start, old_end, chars->items, chars->len);
                 } while (0);
             }
 
@@ -2624,6 +2605,9 @@ void Editor::indent_block(int y1, int y2, int indents) {
             chars->append(' ');
 
         buf->apply_edit(new_cur2(0, y), new_cur2(x, y), chars->items, chars->len);
+
+        if (cur.y == y)
+            move_cursor(new_cur2(cur.x - x + chars->len, cur.y));
     }
 }
 
@@ -6016,6 +6000,39 @@ void Editor::handle_type_enter() {
     // deleted if the user escapes out without further edits
     if (cur.x == buf->lines[cur.y].len)
         vim_save_inserted_indent(start, cur);
+}
+
+// This function name is kind of cryptic. It is called when user is in insert
+// mode, and we want to edit the buffer somewhere other than where their cursor
+// is. For instance if they autocomplete something that requires auto import.
+// In these cases the cursor and various saved positions (vim.insert_start,
+// etc) need to be adjusted.
+void Editor::apply_edit_in_insert_mode_elsewhere(cur2 start, cur2 old_end, uchar *text, int len) {
+    // perform the edit
+    auto new_end = buf->apply_edit(start, old_end, text, len);
+
+    // now adjust shit
+    auto adjust_pos = [&](cur2 pos) -> cur2 {
+        if (pos <= old_end) return pos;
+
+        pos.y += new_end.y - old_end.y;
+        if (pos.y == old_end.y)
+            pos.x += new_end.x - old_end.x;
+        return pos;
+    };
+
+    move_cursor(adjust_pos(cur));
+
+    if (world.vim.on) {
+        switch (world.vim_mode()) {
+        case VI_INSERT:
+            vim.insert_start = adjust_pos(vim.insert_start);
+            break;
+        case VI_REPLACE:
+            vim.replace_start = adjust_pos(vim.replace_start);
+            break;
+        }
+    }
 }
 
 void Editor::handle_type_tab(int mods) {

@@ -432,6 +432,8 @@ struct Editor {
     void trigger_file_search(int limit_start = -1, int limit_end = -1);
     int move_file_search_result(bool forward, int count);
     int find_current_or_next_match(cur2 pos, bool *in_match);
+
+    void apply_edit_in_insert_mode_elsewhere(cur2 start, cur2 old_end, uchar *text, int len);
 };
 
 void vim_copy_command(Vim_Command *dest, Vim_Command *src);
