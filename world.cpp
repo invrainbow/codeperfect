@@ -2521,14 +2521,18 @@ void handle_command(Command cmd, bool from_menu) {
         auto editor = get_current_editor();
         if (!editor) break;
 
-        if (!world.vim.on)
+        if (world.vim.on) {
+            editor->move_cursor(new_cur2(0, 0));
+            if (world.vim_mode() != VI_NORMAL)
+                editor->vim_handle_key(CP_KEY_ESCAPE, 0);
+            editor->vim_handle_char('v');
+            editor->move_cursor(editor->buf->end_pos());
+        } else {
             editor->select_start = new_cur2(0, 0);
-
-        editor->move_cursor(editor->buf->end_pos());
-
-        if (!world.vim.on)
+            editor->move_cursor(editor->buf->end_pos());
             if (editor->select_start != editor->cur)
                 editor->selecting = true;
+        }
         break;
     }
 
