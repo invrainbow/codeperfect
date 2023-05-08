@@ -446,8 +446,8 @@ const BUYING_QUESTIONS = [
     content: (
       <>
         <p>
-          If you need multiple licenses, bulk pricing, team management, or have
-          any other custom requests, please reach out.
+          If you need multiple licenses, volume pricing, team management, or
+          have any other custom requests, please reach out to us.
         </p>
         <p>
           <A href={`mailto:${SUPPORT_EMAIL}`} className="btn btn2 btn-sm">
@@ -474,16 +474,13 @@ const BUYING_QUESTIONS = [
   },
 ];
 
-function BuyLicenseSection({ label, children, icon }) {
+function BuyLicenseSection({ label, children }) {
   return (
-    <div>
-      <div className="flex gap-2 items-center mb-2 font-bold">
-        <div className="opacity-60 relative top-0.5">
-          <Icon size={24} icon={icon} />
-        </div>
-        <div>{label}</div>
+    <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div className="leading-none p-4 border-b border-neutral-200 flex gap-2 items-center font-bold">
+        {label}
       </div>
-      <div>{children}</div>
+      <div className="p-4">{children}</div>
     </div>
   );
 }
@@ -523,10 +520,10 @@ function BuySelectable({ selected, label, children, onClick }) {
     <button
       onClick={onClick}
       className={cx(
-        "font-inherit rounded-lg text-left p-5 relative flex flex-col bg-white transition-colors",
+        "font-inherit rounded-lg text-left p-5 relative flex flex-col bg-white transition-colors shadow",
         {
-          "border border-neutral-300": !selected,
-          "border border-neutral-500 shadow": selected,
+          "border border-neutral-300 bg-neutral-50 ": !selected,
+          "border border-neutral-500": selected,
         }
       )}
     >
@@ -666,6 +663,7 @@ function BuyLicense() {
   }
 
   const paymentLink = getPaymentLink();
+  console.log(paymentLink);
 
   function calcLicensePrice() {
     if (!isLicense) return 0;
@@ -696,197 +694,198 @@ function BuyLicense() {
       <div className="title text-center text-3xl md:text-5xl mb-6 md:mb-12">
         Buy License
       </div>
-      <div className="md:max-w-screen-lg mx-auto flex flex-col gap-10 p-10 bg-white shadow-lg rounded-lg">
-        <BuyLicenseSection icon={IconUsers} label="1. Select Plan">
-          <div className="grid grid-cols-3 gap-3">
-            {PLAN_INFO.map(({ label, features, key }) => (
-              <BuySelectable
-                key={key}
-                onClick={() => setPlan(key)}
-                label={label}
-                selected={plan === key}
-              >
-                <div>
-                  {features.map((it) => (
-                    <div
-                      className={cx(
-                        "flex items-center space-x-1.5 leading-6 mb-0.5 last:mb-0 text-[95%]",
-                        {
-                          "text-red-400": it.not,
-                          "text-neutral-600": !it.not,
-                        }
-                      )}
-                    >
-                      <Icon size={18} icon={it.not ? IconX : IconCheck} />
-                      <span>{it.label}</span>
-                    </div>
-                  ))}
-                </div>
-              </BuySelectable>
-            ))}
-          </div>
-        </BuyLicenseSection>
-        {plan !== "enterprise" && (
-          <>
-            <BuyLicenseSection
-              icon={IconShoppingCart}
-              label="2. Select Product"
-              description="Our licensing model has two parts: a one-time license, and subscription-based automatic updates."
-            >
+      <div className="md:max-w-screen-xl mx-auto md:mb-16">
+        <div className="flex gap-8 items-start">
+          <div className="flex-1 flex flex-col gap-4">
+            <BuyLicenseSection label="1. Select Plan">
               <div className="grid grid-cols-3 gap-3">
-                {PRODUCT_INFO.map(({ key, label, points }) => (
+                {PLAN_INFO.map(({ label, features, key }) => (
                   <BuySelectable
                     key={key}
-                    onClick={() => setProduct(key)}
-                    selected={product === key}
+                    onClick={() => setPlan(key)}
                     label={label}
+                    selected={plan === key}
                   >
-                    <ul style={{ marginTop: 0 }} className="pl-2 pt-1">
-                      {points.map((it) => (
-                        <li className="leading-tight mb-1 last:mb-0 text-[95%]">
-                          {it}
-                        </li>
+                    <div>
+                      {features.map((it) => (
+                        <div
+                          className={cx(
+                            "flex items-center space-x-1.5 leading-6 mb-0.5 last:mb-0 text-[95%]",
+                            {
+                              "text-red-400": it.not,
+                              "text-neutral-600": !it.not,
+                            }
+                          )}
+                        >
+                          <Icon size={18} icon={it.not ? IconX : IconCheck} />
+                          <span>{it.label}</span>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   </BuySelectable>
                 ))}
               </div>
             </BuyLicenseSection>
-            {product !== "license_only" && (
-              <BuyLicenseSection
-                icon={IconCalendarTime}
-                label="3. Select Billing Period"
-              >
-                <div className="grid grid-cols-2 gap-3">
-                  {PERIOD_INFO.map(({ key, label, subtitle }) => (
-                    <BuySelectable
-                      key={key}
-                      onClick={() => setPeriod(key)}
-                      selected={period === key}
-                      label={
-                        <div>
-                          {label}
-                          {subtitle && (
-                            <span className="font-light text-neutral-400 text-sm ml-2">
-                              ({subtitle})
-                            </span>
-                          )}
-                        </div>
-                      }
-                    />
-                  ))}
-                </div>
-              </BuyLicenseSection>
-            )}
-          </>
-        )}
-        <div className="shadow rounded-lg bg-neutral-800 p-12">
-          <div className="max-w-screen-md mx-auto">
-            {plan === "enterprise" ? (
-              <div className="text-center py-16">
-                <div className="mb-4 text-white text-lg">
-                  Please reach out to us.
-                </div>
-                <div>
-                  <A
-                    className="btn btn2 text-center py-3 border border-neutral-200 shadow-sm inline-flex items-center gap-2"
-                    href={`mailto:${SUPPORT_EMAIL}`}
-                  >
-                    <Icon size={16} icon={IconMessages} />
-                    <span>Contact support</span>
-                  </A>
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-12">
-                <div className="flex flex-col">
-                  <div>
-                    <span className="text-white font-bold text-xl leading-none">
-                      CodePerfect
-                    </span>
-                    <span className="text-neutral-300 text-lg ml-1.5">
-                      {planInfo.label}
-                    </span>
+            {plan !== "enterprise" && (
+              <>
+                <BuyLicenseSection label="2. Select Product">
+                  <div className="grid grid-cols-3 gap-3">
+                    {PRODUCT_INFO.map(({ key, label, points }) => (
+                      <BuySelectable
+                        key={key}
+                        onClick={() => setProduct(key)}
+                        selected={product === key}
+                        label={label}
+                      >
+                        <ul style={{ marginTop: 0 }} className="pl-2 pt-1">
+                          {points.map((it) => (
+                            <li className="leading-tight mb-1 last:mb-0 text-[95%]">
+                              {it}
+                            </li>
+                          ))}
+                        </ul>
+                      </BuySelectable>
+                    ))}
                   </div>
-                  <div className="mb-6 text-emerald-400 font-bold">
-                    {productInfo.label}
-                  </div>
-                  <div className="flex flex-col gap-1 mb-4">
-                    {isLicense && (
-                      <BuySummaryPoint good text="Perpetual license" />
-                    )}
-                    {isSub ? (
-                      <>
-                        <BuySummaryPoint good text="Automatic updates" />
-                        <BuySummaryPoint
-                          good
-                          text={
-                            period === "monthly"
-                              ? "Monthly billing"
-                              : "Annual billing"
+                </BuyLicenseSection>
+                {product !== "license_only" && (
+                  <BuyLicenseSection label="3. Select Billing Period">
+                    <div className="grid grid-cols-2 gap-3">
+                      {PERIOD_INFO.map(({ key, label, subtitle }) => (
+                        <BuySelectable
+                          key={key}
+                          onClick={() => setPeriod(key)}
+                          selected={period === key}
+                          label={
+                            <div>
+                              {label}
+                              {subtitle && (
+                                <span className="font-light text-neutral-400 text-sm ml-2">
+                                  ({subtitle})
+                                </span>
+                              )}
+                            </div>
                           }
                         />
-                      </>
-                    ) : (
-                      <BuySummaryPoint text="No updates after 3 months" />
-                    )}
-                    {!isLicense && (
-                      <BuySummaryPoint text="Lose access when subscription ends" />
-                    )}
-                    {plan === "individual" && (
-                      <BuySummaryPoint text="Cannot be paid for by company" />
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  </BuyLicenseSection>
+                )}
+              </>
+            )}
+          </div>
+          <div className="shadow-lg rounded-lg bg-neutral-800 p-8 w-[350px]">
+            <div className="max-w-screen-md mx-auto">
+              <div className="flex flex-col">
+                <div className="leading-none">
+                  <span className="text-white font-bold text-xl leading-none">
+                    CodePerfect
+                  </span>
+                  <span className="text-neutral-300 text-lg ml-1.5">
+                    {planInfo.label}
+                  </span>
                 </div>
-                <div className="">
-                  <div className="text-white border-neutral-400 border rounded-lg p-4">
-                    {isLicense && (
-                      <BuyLineItem
-                        label="License"
-                        value={formatMoney(licensePrice)}
-                      />
-                    )}
-                    {isSub && (
-                      <BuyLineItem
-                        label={
-                          period === "monthly"
-                            ? "Monthly subscription"
-                            : "Annual subscription"
-                        }
-                        value={`${formatMoney(subPrice)}/${
-                          period === "monthly" ? "mo" : "yr"
-                        }`}
-                      />
-                    )}
-                    <BuyLineItem
-                      label="Due today"
-                      total
-                      value={formatMoney(licensePrice + subPrice)}
-                    />
+                {plan === "enterprise" ? (
+                  <div className="pt-4 text-neutral-300 leading-tight">
+                    Please get in touch with our support team to discuss your
+                    options.
                   </div>
-                  <div className="mt-6 text-right">
-                    <A
-                      className="group btn btn2 btn-no-hover btn-lg inline-flex gap-2 items-center justify-center"
-                      style={{ paddingLeft: "40px", paddingRight: "40px" }}
-                      href={paymentLink}
-                    >
-                      Checkout
-                      <Icon
-                        className="group-hover:translate-x-1 transform transition-transform"
-                        icon={IconArrowRight}
-                      />
-                    </A>
-                  </div>
+                ) : (
+                  <>
+                    <div className="mb-6 text-emerald-400 font-bold">
+                      {productInfo.label}
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      {isLicense && (
+                        <BuySummaryPoint good text="Perpetual license" />
+                      )}
+                      {isSub ? (
+                        <>
+                          <BuySummaryPoint good text="Automatic updates" />
+                          <BuySummaryPoint
+                            good
+                            text={
+                              period === "monthly"
+                                ? "Monthly billing"
+                                : "Annual billing"
+                            }
+                          />
+                        </>
+                      ) : (
+                        <BuySummaryPoint text="No updates after 3 months" />
+                      )}
+                      {!isLicense && (
+                        <BuySummaryPoint text="Lose access after subscription" />
+                      )}
+                      {plan === "individual" && (
+                        <BuySummaryPoint text="Company cannot pay" />
+                      )}
+                    </div>
+                  </>
+                )}
+                <div className="mt-6 pt-6 border-t border-neutral-500 border-dashed">
+                  {plan === "enterprise" ? (
+                    <div>
+                      <A
+                        className="group btn btn2 btn-no-hover btn-lg inline-flex gap-2 items-center justify-center"
+                        href={`mailto:${SUPPORT_EMAIL}`}
+                      >
+                        <Icon size={16} icon={IconMessages} />
+                        <span>Contact support</span>
+                      </A>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-white border-neutral-400 border rounded-lg p-4">
+                        {isLicense && (
+                          <BuyLineItem
+                            label="License"
+                            value={formatMoney(licensePrice)}
+                          />
+                        )}
+                        {isSub && (
+                          <BuyLineItem
+                            label={
+                              period === "monthly"
+                                ? "Monthly subscription"
+                                : "Annual subscription"
+                            }
+                            value={`${formatMoney(subPrice)}/${
+                              period === "monthly" ? "mo" : "yr"
+                            }`}
+                          />
+                        )}
+                        <BuyLineItem
+                          label="Due today"
+                          total
+                          value={formatMoney(licensePrice + subPrice)}
+                        />
+                      </div>
+                      <div className="mt-6">
+                        <A
+                          className="group btn btn2 btn-no-hover btn-lg inline-flex gap-2 items-center justify-center"
+                          style={{ paddingLeft: "40px", paddingRight: "40px" }}
+                          href={paymentLink}
+                        >
+                          Checkout
+                          <Icon
+                            className="group-hover:translate-x-1 transform transition-transform"
+                            icon={IconArrowRight}
+                          />
+                        </A>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
-      <div className="md:max-w-screen-xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-3 my-12 md:mb-16 gap-12 md:gap-0">
+      <div className="bg-zinc-50 border-y border-t-neutral-200 border-b-neutral-100 py-12 mt-16">
+        <div className="md:max-w-screen-xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-6">
           {BUYING_QUESTIONS.map((it) => (
-            <div className="md:border-y md:border-l md:border-r-0 md:last:border-r md:border-gray-200 md:first:border-l md:border-dashed md:p-8">
+            <div className="">
               <div className="text-neutral-700 text-lg font-semibold mb-2">
                 {it.title}
               </div>
