@@ -1045,6 +1045,8 @@ void delete_ft_node(FT_Node *it, bool delete_on_disk) {
 }
 
 ccstr ft_node_to_path(FT_Node *node) {
+    cp_assert(node);
+
     auto path = new_list(FT_Node*);
     for (auto curr = node; curr; curr = curr->parent)
         path->append(curr);
@@ -3347,12 +3349,10 @@ void open_add_file_or_folder(bool folder, FT_Node *dest) {
 
     if (!dest) dest = world.file_explorer.selection;
 
-    FT_Node *node = NULL;
+    FT_Node *node = dest;
     auto &wnd = world.wnd_add_file_or_folder;
 
     auto is_root = [&]() {
-        node = dest;
-
         if (!node) return true;
         if (node == world.file_tree) return true;
         if (node->is_directory) return false;
@@ -3361,8 +3361,13 @@ void open_add_file_or_folder(bool folder, FT_Node *dest) {
     };
 
     wnd.location_is_root = is_root();
-    if (!wnd.location_is_root)
+    if (!wnd.location_is_root) {
+        if (!node->is_directory) {
+            node = node->parent;
+            cp_assert(node);
+        }
         cp_strcpy_fixed(wnd.location, ft_node_to_path(node));
+    }
 
     wnd.folder = folder;
     wnd.show = true;
