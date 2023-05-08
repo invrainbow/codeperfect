@@ -712,14 +712,16 @@ cur2 Buffer::apply_edit(cur2 start, cur2 old_end, uchar *text, s32 len, bool app
 
     // do the insert
     cur2 new_end = start;
-    if (text && len) {
+    {
         i32 x = start.x, y = start.y;
 
         bool has_newline = false;
-        for (u32 i = 0; i < len; i++) {
-            if (text[i] == '\n') {
-                has_newline = true;
-                break;
+        if (text && len) {
+            for (u32 i = 0; i < len; i++) {
+                if (text[i] == '\n') {
+                    has_newline = true;
+                    break;
+                }
             }
         }
 
@@ -753,29 +755,33 @@ cur2 Buffer::apply_edit(cur2 start, cur2 old_end, uchar *text, s32 len, bool app
         } else {
             line->ensure_cap(total_len);
             memmove(&line->items[x + len], &line->items[x], sizeof(uchar) * (line->len - x));
-            memcpy(&line->items[x], text, sizeof(uchar) * len);
+            if (text && len)
+                memcpy(&line->items[x], text, sizeof(uchar) * len);
             line->len = total_len;
 
             u32 bc = 0;
+            if (text && len)
             for (u32 i = 0; i < len; i++)
-                bc += uchar_size(text[i]);
+                    bc += uchar_size(text[i]);
 
             bctree.set(y, bctree.get(y) + bc);
         }
 
         // easier/better way to calculate this?
         new_end = start;
-        for (int i = 0; i < len; i++) {
-            if (text[i] == '\n') {
-                new_end.x = 0;
-                new_end.y++;
-            } else {
-                new_end.x++;
-            }
-        }
 
-        if (use_history && !applying_change)
-            internal_commit_insert_to_history(start, new_end);
+        if (text && len) {
+            for (int i = 0; i < len; i++) {
+                if (text[i] == '\n') {
+                    new_end.x = 0;
+                    new_end.y++;
+                } else {
+                    new_end.x++;
+                }
+            }
+            if (use_history && !applying_change)
+                internal_commit_insert_to_history(start, new_end);
+        }
     }
 
     edit.new_end_byte = cur_to_offset(new_end);
