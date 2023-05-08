@@ -2444,15 +2444,17 @@ void handle_command(Command cmd, bool from_menu) {
         if (!editor) break;
         if (!editor->is_modifiable()) break;
 
-        if (editor->selecting) {
-            auto a = editor->select_start.y;
-            auto b = editor->cur.y;
-            ORDER(a, b);
-            editor->toggle_comment(a, b);
+        int start, end;
+        auto sel = editor->get_selection();
+        if (sel) {
+            start = sel->ranges->at(0).start.y;
+            end = sel->ranges->last()->end.y;
         } else {
-            editor->toggle_comment(editor->cur.y, editor->cur.y);
+            start = editor->cur.y;
+            end = editor->cur.y;
         }
-        break;
+        editor->toggle_comment(start, end);
+            break;
     }
 
     case CMD_REPLACE:

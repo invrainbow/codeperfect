@@ -799,7 +799,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                         chars->append('\n');
                     }
                     chars->concat(cstr_to_ustr(new_contents));
-                    apply_edit_in_insert_mode_elsewhere(start, old_end, chars->items, chars->len);
+                    apply_edit_and_adjust_cursor(start, old_end, chars->items, chars->len);
                 } while (0);
             }
 
@@ -2461,54 +2461,44 @@ void Editor::toggle_comment(int ystart, int yend) {
         return true;
     };
 
-    cur2 new_cur = new_cur2(-1, ystart);
-    {
-        SCOPED_BATCH_CHANGE(buf);
+    SCOPED_BATCH_CHANGE(buf);
+    if (is_commented()) {
+        // remove comments
+        for (int y = ystart; y <= yend; y++) {
+            int x = 0;
+            auto line = &buf->lines[y];
 
-        if (is_commented()) {
-            // remove comments
-            for (int y = ystart; y <= yend; y++) {
-                int x = 0;
-                auto line = &buf->lines[y];
+            for (; x+1 < line->len; x++) {
+                if (u_isspace(line->at(x))) continue;
+                if (line->at(x) != '/' || line->at(x+1) != '/') break;
 
-                for (; x+1 < line->len; x++) {
-                    if (u_isspace(line->at(x))) continue;
-                    if (line->at(x) != '/' || line->at(x+1) != '/') break;
+                cur2 start = new_cur2(x, y);
+                cur2 end = new_cur2(x+2, y);
 
-                    if (new_cur.x == -1) new_cur.x = x;
+                if (u_isspace(line->at(x+2))) end.x++;
 
-                    cur2 start = new_cur2(x, y);
-                    cur2 end = new_cur2(x+2, y);
-
-                    if (u_isspace(line->at(x+2))) end.x++;
-
-                    buf->remove(start, end);
-                }
-            }
-        } else {
-            // add comments
-            int smallest_indent = -1;
-
-            for (int y = ystart; y <= yend; y++) {
-                auto line = &buf->lines[y];
-                auto stripped = strip_spaces(line);
-                auto indent = line->len - stripped->len;
-
-                if (smallest_indent == -1 || indent < smallest_indent)
-                    smallest_indent = indent;
-            }
-
-            new_cur.x = smallest_indent;
-
-            for (int y = ystart; y <= yend; y++) {
-                auto comments = cstr_to_ustr("// ");
-                buf->insert(new_cur2(smallest_indent, y), comments->items, comments->len, false);
+                apply_edit_and_adjust_cursor(start, end, NULL, 0);
             }
         }
-    }
+    } else {
+        // add comments
+        int smallest_indent = -1;
 
-    move_cursor(new_cur);
-    selecting = false;
+        for (int y = ystart; y <= yend; y++) {
+            auto line = &buf->lines[y];
+            auto stripped = strip_spaces(line);
+            auto indent = line->len - stripped->len;
+
+            if (smallest_indent == -1 || indent < smallest_indent)
+                smallest_indent = indent;
+        }
+
+        for (int y = ystart; y <= yend; y++) {
+            auto comments = cstr_to_ustr("// ");
+            auto pos = new_cur2(smallest_indent, y);
+            apply_edit_and_adjust_cursor(pos, pos, comments->items, comments->len);
+        }
+    }
 }
 
 void Editor::highlight_snippet(cur2 start, cur2 end) {
@@ -6017,7 +6007,7 @@ void Editor::handle_type_enter() {
 // is. For instance if they autocomplete something that requires auto import.
 // In these cases the cursor and various saved positions (vim.insert_start,
 // etc) need to be adjusted.
-void Editor::apply_edit_in_insert_mode_elsewhere(cur2 start, cur2 old_end, uchar *text, int len) {
+void Editor::apply_edit_and_adjust_cursor(cur2 start, cur2 old_end, uchar *text, int len) {
     // perform the edit
     auto new_end = buf->apply_edit(start, old_end, text, len);
 
@@ -6041,7 +6031,12 @@ void Editor::apply_edit_in_insert_mode_elsewhere(cur2 start, cur2 old_end, uchar
         case VI_REPLACE:
             vim.replace_start = adjust_pos(vim.replace_start);
             break;
+        case VI_VISUAL:
+            vim.visual_start = adjust_pos(vim.visual_start);
+            break;
         }
+    } else if (selecting) {
+        select_start = adjust_pos(select_start);
     }
 }
 
