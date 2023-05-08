@@ -3007,6 +3007,7 @@ done:
     }
 
     switch (it.ch) {
+    case ' ':
     case 'h':
     case 'j':
     case 'k':
@@ -4208,6 +4209,21 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
         case 'l':
             handle_basic_right();
             return ret;
+        case ' ': {
+            auto it = iter();
+            for (int i = 0; i < count; i++) {
+                it.gr_next();
+                if (it.eol() && !it.eof())
+                    it.gr_next();
+                if (it.eof()) {
+                    ret->interrupted = true;
+                    break;
+                }
+            }
+            ret->dest = it.pos;
+            ret->type = MOTION_CHAR_EXCL;
+            return ret;
+        }
         case '-': {
             int y = cur.y - count;
             if (y < 0) {
