@@ -54,7 +54,7 @@
 NORETURN void cp_panic(ccstr s);
 #endif
 
-#define cp_assert(x) if (!(x)) cp_panic("assertion failed")
+#define cp_assert(x) do { if (!(x)) cp_panic("assertion failed"); } while (0)
 
 #include "common.hpp"
 #include "list.hpp"
