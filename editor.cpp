@@ -6400,10 +6400,7 @@ int Editor::find_current_or_next_match(cur2 pos, bool *in_match) {
     }
 
     *in_match = false;
-    int ret = idx;
-    if (prev->search_result.end <= pos)
-        ret = (ret + 1) % total;
-    return ret;
+    return idx % total;
 }
 
 char* gh_fmt_finish() {
