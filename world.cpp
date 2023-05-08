@@ -675,6 +675,9 @@ void World::start_background_threads() {
 Pane* get_current_pane() {
     if (!world.panes.len) return NULL;
 
+    // happens when we're closing shit
+    if (world.current_pane == world.panes.len) return NULL;
+
     return &world.panes[world.current_pane];
 }
 

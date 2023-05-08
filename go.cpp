@@ -3672,7 +3672,7 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
                 result.reference = it;
 
                 auto pos = it->is_sel ? it->x_start : it->start;
-                while (toplevels->at(tidx).spec_start < pos && tidx < toplevels->len)
+                while (tidx < toplevels->len && toplevels->at(tidx).spec_start < pos)
                     tidx++;
 
                 if (tidx) {
@@ -3971,7 +3971,7 @@ ccstr Go_Indexer::find_best_import(ccstr package_name, List<ccstr> *identifiers)
         int matching_idents;
     };
 
-    List<Score> scores; scores.init();
+    auto scores = new_array(Score, candidates.len);
 
     for (int i = 0; i < candidates.len; i++) {
         auto it = candidates[i];

@@ -1335,6 +1335,9 @@ Editor* Pane::get_current_editor() {
     if (!editors.len) return NULL;
     if (current_editor == -1) return NULL;
 
+    // happens when we're closing editors
+    if (current_editor == editors.len) return NULL;
+
     return &editors[current_editor];
 }
 

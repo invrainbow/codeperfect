@@ -134,8 +134,8 @@ List<Diff> *diff_bisect(DString a, DString b) {
     auto voff = maxd;
     auto vlen = maxd*2;
 
-    List<int> v1; v1.init(LIST_FIXED, vlen, new_array(int, vlen));
-    List<int> v2; v2.init(LIST_FIXED, vlen, new_array(int, vlen));
+    auto v1 = new_array(int, vlen);
+    auto v2 = new_array(int, vlen);
     for (int i = 0; i < vlen; i++) {
         v1[i] = -1;
         v2[i] = -1;

@@ -418,7 +418,10 @@ List<uchar>* Buffer::get_uchars(cur2 start, cur2 end, int limit, cur2 *actual_en
         if (y < end.y) count++; // '\n'
 
         if (limit != -1 && count > limit) {
-            ret->concat(&lines[y].at(xstart), limit);
+            if (!lines[y].len)
+                cp_assert(!limit);
+            else
+                ret->concat(&lines[y].at(xstart), limit);
             *actual_end = new_cur2(xstart + limit, y);
             break;
         } else {
