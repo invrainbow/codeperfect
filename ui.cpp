@@ -168,6 +168,7 @@ ccstr get_key_name(int key) {
     case CP_KEY_COMMA: return ",";
     case CP_KEY_MINUS: return "-";
     case CP_KEY_EQUAL: return "=";
+    case CP_KEY_SLASH: return "/";
     }
     return NULL;
 }
