@@ -792,7 +792,7 @@ function BuyLicense() {
                   </div>
                 ) : (
                   <>
-                    <div className="mb-6 text-emerald-400 font-bold">
+                    <div className="mb-6 text-amber-300 font-bold">
                       {productInfo.label}
                     </div>
                     <div className="flex flex-col gap-1">
