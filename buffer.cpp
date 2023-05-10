@@ -1216,6 +1216,8 @@ i32 Buffer::cur_to_offset(cur2 c) {
 }
 
 u32 Buffer::idx_gr_to_cp(int y, int off) {
+    if (!off) return 0;
+
     auto &line = lines[y];
 
     Grapheme_Clusterer gc;
@@ -1234,6 +1236,8 @@ u32 Buffer::idx_gr_to_cp(int y, int off) {
 }
 
 u32 Buffer::idx_cp_to_byte(int y, int off) {
+    if (!off) return 0;
+
     auto &line = lines[y];
     int ret = 0;
 
@@ -1245,6 +1249,8 @@ u32 Buffer::idx_cp_to_byte(int y, int off) {
 }
 
 u32 Buffer::idx_byte_to_gr(int y, int off) {
+    if (!off) return 0;
+
     auto &line = lines[y];
     int k = 0;
     u32 x = 0;
@@ -1269,6 +1275,8 @@ u32 Buffer::idx_byte_to_gr(int y, int off) {
 }
 
 u32 Buffer::idx_byte_to_cp(int y, int off, bool nocrash) {
+    if (!off) return 0;
+
     auto &line = lines[y];
     for (u32 x = 0; x < line.len; x++) {
         auto size = uchar_size(line[x]);
