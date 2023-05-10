@@ -1949,10 +1949,10 @@ void init_command_info_table() {
     command_info_table[CMD_GO_TO_PREVIOUS_ERROR] = k(CP_MOD_ALT, CP_KEY_LEFT_BRACKET, "Go To Previous Error");
     command_info_table[CMD_GO_TO_DEFINITION] = k(CP_MOD_PRIMARY, CP_KEY_G, "Go To Definition");
 
-    command_info_table[CMD_GO_TO_NEXT_FILE_SEARCH_RESULT] = k(0, CP_KEY_F3, "Find Next");
-    command_info_table[CMD_GO_TO_PREVIOUS_FILE_SEARCH_RESULT] = k(CP_MOD_SHIFT, CP_KEY_F3, "Find Previous");
-    command_info_table[CMD_GO_TO_NEXT_SEARCH_RESULT] = k(0, CP_KEY_F4, "Go To Next Search Result");
-    command_info_table[CMD_GO_TO_PREVIOUS_SEARCH_RESULT] = k(CP_MOD_SHIFT, CP_KEY_F4, "Go To Previous Search Result");
+    command_info_table[CMD_GO_TO_NEXT_FILE_SEARCH_RESULT] = k(0, CP_KEY_F3, "Find Next", true);
+    command_info_table[CMD_GO_TO_PREVIOUS_FILE_SEARCH_RESULT] = k(CP_MOD_SHIFT, CP_KEY_F3, "Find Previous", true);
+    command_info_table[CMD_GO_TO_NEXT_SEARCH_RESULT] = k(0, CP_KEY_F4, "Go To Next Search Result", true);
+    command_info_table[CMD_GO_TO_PREVIOUS_SEARCH_RESULT] = k(CP_MOD_SHIFT, CP_KEY_F4, "Go To Previous Search Result", true);
 
     command_info_table[CMD_FIND_REFERENCES] = k(CP_MOD_PRIMARY | CP_MOD_ALT, CP_KEY_R, "Find References");
     command_info_table[CMD_FORMAT_FILE] = k(CP_MOD_ALT | CP_MOD_SHIFT, CP_KEY_F, "Format File");
