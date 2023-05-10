@@ -88,6 +88,9 @@ struct Mark {
 
 bool is_mark_valid(Mark *mark);
 
+// Avl_Node pointers CANNOT BE STORED, they may potentially be freed as other
+// nodes are deleted. more precisely, they can't be persisted across
+// delete_node() calls
 struct Avl_Node {
     // position of node
     cur2 pos;

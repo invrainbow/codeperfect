@@ -946,8 +946,12 @@ void Buffer::apply_edit_to_trees(cur2 start, cur2 oldend, cur2 newend) {
             node = search_tree->successor(node);
         while (node && node->pos < lookahead) {
             auto next = search_tree->successor(node);
+            cur2 pos = next ? next->pos : NULL_CUR;
+
             search_tree->delete_node(node->pos);
-            node = next;
+
+            if (pos == NULL_CUR) break;
+            node = search_tree->find_node(search_tree->root, pos);
         }
 
         Search_Session sess; ptr0(&sess);
@@ -1588,11 +1592,13 @@ Avl_Node *Avl_Tree::internal_delete_node(Avl_Node *root, cur2 pos) {
     if (!root) return root;
 
     if (pos < root->pos) {
+        int old = get_size(root->left);
         root->left = internal_delete_node(root->left, pos);
-        root->size--; // we just deleted an item
+        root->size -= (old - get_size(root->left));
     } else if (pos > root->pos) {
+        int old = get_size(root->right);
         root->right = internal_delete_node(root->right, pos);
-        root->size--; // we just deleted an item
+        root->size -= (old - get_size(root->right));
     } else {
         if (type == AVL_MARKS)
             cp_assert(!root->marks);
@@ -1634,8 +1640,9 @@ Avl_Node *Avl_Tree::internal_delete_node(Avl_Node *root, cur2 pos) {
             break;
         }
 
+        int old = get_size(root->left);
         root->right = internal_delete_node(root->right, min->pos);
-        root->size--;
+        root->size -= (old - get_size(root->right));
     }
 
     recalc_height(root);
