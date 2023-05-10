@@ -5268,9 +5268,11 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             *can_dotrepeat = true;
             return true;
         case 'a': {
-            auto gr = buf->idx_cp_to_gr(c.y, c.x);
-            auto x = buf->idx_gr_to_cp(c.y, gr+1);
-            move_cursor(new_cur2(x, c.y));
+            if (c.x < buf->lines[c.y].len) {
+                auto gr = buf->idx_cp_to_gr(c.y, c.x);
+                auto x = buf->idx_gr_to_cp(c.y, gr+1);
+                move_cursor(new_cur2(x, c.y));
+            }
             enter_insert_mode([]() { return; });
             *can_dotrepeat = true;
             return true;
