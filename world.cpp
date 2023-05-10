@@ -1486,6 +1486,8 @@ void kick_off_rename_identifier() {
 
     if (!handle_unsaved_files()) return;
 
+    world.indexer.reload_all_editors();
+
     auto &wnd = world.wnd_rename_identifier;
     wnd.running = true;
     wnd.too_late_to_cancel = false;
@@ -2234,6 +2236,8 @@ void initiate_find_references(cur2 pos) {
         tell_user_error("The indexer is currently busy.");
         return;
     }
+
+    world.indexer.reload_all_editors();
 
     auto thread_proc = [](void *param) {
         auto &wnd = world.wnd_find_references;

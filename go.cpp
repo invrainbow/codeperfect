@@ -3490,7 +3490,6 @@ void Go_Indexer::actually_generate_callee_hierarchy(Goresult *declres, List<Call
 }
 
 List<Find_References_File> *Go_Indexer::find_references(Goresult *declres, bool include_self) {
-    reload_all_editors();
     return actually_find_references(declres, include_self);
 }
 
