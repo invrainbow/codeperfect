@@ -833,9 +833,9 @@ cur2 Buffer::apply_edit(cur2 start, cur2 old_end, uchar *text, s32 len, bool app
                 if (s.get(i) == '\n') {
                     c.y++;
                     c.x = 0;
-                } else {
-                    c.x++;
+                    continue;
                 }
+                c.x++;
             }
             return c;
         };

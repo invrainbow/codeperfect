@@ -10,6 +10,7 @@
 #include "set.hpp"
 #include "unicode.hpp"
 #include "defer.hpp"
+#include "diff.hpp"
 
 bool Editor::is_modifiable() {
     if (is_untitled) return true;
@@ -2278,17 +2279,22 @@ bool Editor::optimize_imports() {
 void Editor::format_on_save() {
     if (lang != LANG_GO) return; // any more checks needed?
 
-    auto old_cur = cur;
+    auto old_uchars = buf->get_uchars(new_cur2(0, 0), buf->end_pos());
 
     GHFmtStart();
 
-    for (int i = 0; i < buf->lines.len; i++) {
-        SCOPED_FRAME();
-
+    {
         List<char> line;
         line.init();
 
-        For (&buf->lines[i]) {
+        For (old_uchars) {
+            if (it == '\n') {
+                line.append('\0');
+                GHFmtAddLine(line.items);
+                line.len = 0;
+                continue;
+            }
+
             char tmp[4];
             auto n = uchar_to_cstr(it, tmp);
             for (u32 j = 0; j < n; j++)
@@ -2306,10 +2312,49 @@ void Editor::format_on_save() {
     }
     defer { GHFree(new_contents); };
 
-    auto uchars = cstr_to_ustr(new_contents);
-    cp_assert(uchars);
+    auto new_uchars = cstr_to_ustr(new_contents);
+    cp_assert(new_uchars);
 
-    buf->apply_edit(new_cur2(0, 0), buf->end_pos(), uchars->items, uchars->len);
+    {
+        auto a = new_dstr(old_uchars);
+        auto b = new_dstr(new_uchars);
+        auto diffs = diff_main(a, b);
+
+        // for some reason we couldn't diff, just apply the entire file :(
+        if (!diffs) {
+            buf->apply_edit(new_cur2(0, 0), buf->end_pos(), new_uchars->items, new_uchars->len);
+        } else {
+            auto cur = new_cur2(0, 0);
+
+            auto advance_cur = [&](cur2 c, DString s) -> cur2 {
+                for (int i = 0, len = s.len(); i < len; i++) {
+                    if (s.get(i) == '\n') {
+                        c.y++;
+                        c.x = 0;
+                        continue;
+                    }
+                    c.x++;
+                }
+                return c;
+            };
+
+            For (diffs) {
+                switch (it.type) {
+                case DIFF_INSERT: {
+                    auto uchars = cstr_to_ustr(it.s.str());
+                    cur = buf->insert(cur, uchars->items, uchars->len);
+                    break;
+                }
+                case DIFF_DELETE:
+                    buf->remove(cur, advance_cur(cur, it.s));
+                    break;
+                case DIFF_SAME:
+                    cur = advance_cur(cur, it.s);
+                    break;
+                }
+            }
+        }
+    }
 
     // we need to adjust cursor manually
     if (cur.y >= buf->lines.len)
