@@ -435,6 +435,7 @@ struct Editor {
     int find_current_or_next_match(cur2 pos, bool *in_match);
 
     void apply_edit_and_adjust_cursor(cur2 start, cur2 old_end, uchar *text, int len);
+    void reset_search_results();
 };
 
 void vim_copy_command(Vim_Command *dest, Vim_Command *src);

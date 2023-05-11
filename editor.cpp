@@ -6380,21 +6380,19 @@ void Editor::trigger_escape() {
         handle_escape();
 }
 
+void Editor::reset_search_results() {
+    auto tree = buf->search_tree;
+    cp_assert(tree);
+    tree->cleanup();
+    tree->init();
+    buf->search_mem.reset();
+}
+
 void Editor::trigger_file_search(int limit_start, int limit_end) {
     auto editors = get_all_editors();
     if (isempty(editors)) return;
 
-    // clear out results in all editors
-    For (editors) {
-        auto editor = it;
-        auto buf = editor->buf;
-        auto tree = buf->search_tree;
-        cp_assert(tree);
-
-        tree->cleanup();
-        tree->init();
-        buf->search_mem.reset();
-    }
+    For (editors) it->reset_search_results();
 
     auto &wnd = world.wnd_local_search;
     if (!wnd.query[0]) return;

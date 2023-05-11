@@ -2481,8 +2481,10 @@ void UI::draw_everything() {
             menu_command(CMD_FIND_IMPLEMENTATIONS);
             menu_command(CMD_FIND_INTERFACES);
             im::Separator();
-            menu_command(CMD_GO_TO_NEXT_FILE_SEARCH_RESULT);
-            menu_command(CMD_GO_TO_PREVIOUS_FILE_SEARCH_RESULT);
+            menu_command(CMD_FIND_NEXT);
+            menu_command(CMD_FIND_PREVIOUS);
+            menu_command(CMD_FIND_CLEAR);
+            im::Separator();
             menu_command(CMD_GO_TO_NEXT_SEARCH_RESULT);
             menu_command(CMD_GO_TO_PREVIOUS_SEARCH_RESULT);
             im::EndMenu();
@@ -7086,7 +7088,9 @@ void UI::draw_everything() {
             int next_hl = (highlights.len ? 0 : -1);
 
             int next_search_match = -1;
-            if (world.wnd_local_search.show) {
+
+            // if (world.wnd_local_search.show) {
+            if (editor->buf->search_tree) {
                 auto tree = editor->buf->search_tree;
                 if (tree->get_size(tree->root))
                     next_search_match = 0;
