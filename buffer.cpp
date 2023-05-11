@@ -316,7 +316,7 @@ void Buffer::tree_batch_start() {
 void Buffer::tree_batch_end() {
     if (lang == LANG_NONE) return;
 
-    Timer t; t.init("tree_batch_end"); t.always_log = true;
+    // Timer t; t.init("tree_batch_end");
 
     tree_batch_refs--;
     if (tree_batch_refs != 0) return;
@@ -347,11 +347,11 @@ void Buffer::tree_batch_end() {
             }
         }
         ts_tree_edit(tree, &curr);
-        t.log("apply tsedits");
+        // t.log("apply tsedits");
     }
 
     update_tree();
-    t.log("call update_tree");
+    // t.log("call update_tree");
 }
 
 cur2 Buffer::hist_undo(cur2 *end) {
