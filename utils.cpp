@@ -220,3 +220,22 @@ int binary_search(void *list, s32 num, s32 size, bs_test_func test) {
     }
     return -1;
 }
+
+ccstr read_file(ccstr filepath) {
+    auto fm = map_file_into_memory(filepath);
+    if (!fm) return NULL;
+    defer { fm->cleanup(); };
+
+    auto ret = new_list(char);
+    ret->concat((char*)fm->data, fm->len);
+    ret->append('\0');
+    return ret->items;
+}
+
+bool write_file(ccstr filepath, ccstr s) {
+    File f;
+    if (!f.init_write(filepath)) return false;
+    defer { f.cleanup(); };
+
+    return f.write(s, strlen(s));
+}

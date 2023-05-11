@@ -1,6 +1,7 @@
 #include "diff.hpp"
 #include "mem.hpp"
 #include "os.hpp"
+#include "buffer.hpp"
 
 DString new_dstr(List<uchar> *text) {
     DString i;
@@ -8,6 +9,28 @@ DString new_dstr(List<uchar> *text) {
     i.start = 0;
     i.end = text->len;
     return i;
+}
+
+ccstr format_string(ccstr s) {
+    auto ret = new_list(char);
+    for (auto *p = s; *p; p++) {
+        if (*p == '\n') {
+            ret->append('\\');
+            ret->append('n');
+        } else {
+            ret->append(*p);
+        }
+    }
+    ret->append('\0');
+    return ret->items;
+}
+
+void diff_print(Diff *diff) {
+    switch (diff->type) {
+    case DIFF_INSERT: print(" - [insert] |%s|", format_string(diff->s.str())); break;
+    case DIFF_DELETE: print(" - [delete] |%s|", format_string(diff->s.str())); break;
+    case DIFF_SAME: print(" - [same] |%s|", format_string(diff->s.str())); break;
+    }
 }
 
 Diff *add_diff(List<Diff> *arr, Diff_Type type, DString s) {
@@ -20,10 +43,13 @@ Diff *add_diff(List<Diff> *arr, Diff_Type type, DString s) {
 uchar DString::get(int i) {
     if (i < 0)
         i = len()+i;
-    if (start+i >= end) {
+    if (start+i >= end)
         cp_panic("out of bounds");
-    }
     return text->at(start + i);
+}
+
+ccstr DString::str() {
+    return ustr_to_cstr(uchars())->items;
 }
 
 int index_of(DString big, DString small, int start = 0) {
@@ -55,13 +81,14 @@ List<Diff> *diff_compute(DString a, DString b) {
         return ret;
     }
 
-    DString big = a.len() > b.len() ? a : b;
-    DString small = a.len() > b.len() ? b : a;
+    bool abig = a.len() > b.len();
+
+    DString big = abig ? a : b;
+    DString small = abig ? b : a;
 
     int i = index_of(big, small);
     if (i != -1) {
         auto ret = new_list(Diff);
-        bool abig = a.len() > b.len();
         add_diff(ret, abig ? DIFF_DELETE : DIFF_INSERT, big.slice(0, i));
         if (abig)
             add_diff(ret, DIFF_SAME, big.slice(i, i+small.len()));
@@ -75,9 +102,9 @@ List<Diff> *diff_compute(DString a, DString b) {
         auto ret = new_list(Diff);
         add_diff(ret, DIFF_DELETE, a);
         add_diff(ret, DIFF_INSERT, b);
+        return ret;
     }
 
-    // TODO:
     auto hm = diff_half_match(a, b);
     if (hm) {
         // A half-match was found, sort out the return data.
@@ -129,10 +156,10 @@ List<Diff> *diff_main(DString a, DString b) {
 List<Diff> *diff_bisect(DString a, DString b) {
     auto alen = a.len();
     auto blen = b.len();
-    auto maxd = div_ceil(alen + blen, 2);
+    auto max_d = (alen + blen + 1) / 2;
 
-    auto voff = maxd;
-    auto vlen = maxd*2;
+    auto v_off = max_d;
+    auto vlen = max_d*2;
 
     auto v1 = new_array(int, vlen);
     auto v2 = new_array(int, vlen);
@@ -141,16 +168,19 @@ List<Diff> *diff_bisect(DString a, DString b) {
         v2[i] = -1;
     }
 
-    v1[voff+1] = 0;
-    v2[voff+1] = 0;
+    v1[v_off+1] = 0;
+    v2[v_off+1] = 0;
 
     auto delta = alen-blen;
     bool front = (delta % 2 != 0);
     int k1start = 0, k1end = 0, k2start = 0, k2end = 0;
 
-    for (int d = 0; d < maxd; d++) {
-        for (int k1 = -d + k1start; k1 <= d - k1end; k1 += 2) {
-            int k1_offset = voff + k1;
+    for (int d = 0; d < max_d; d++) {
+        auto range_start = -d + k1start;
+        auto range_end = d + 1 - k1end;
+
+        for (int k1 = range_start; k1 < range_end; k1 += 2) {
+            int k1_offset = v_off + k1;
             int x1;
             if (k1 == -d || (k1 != d && v1[k1_offset - 1] < v1[k1_offset + 1]))
                 x1 = v1[k1_offset + 1];
@@ -167,7 +197,7 @@ List<Diff> *diff_bisect(DString a, DString b) {
             } else if (y1 > blen) {
                 k1start += 2;
             } else if (front) {
-                int k2_offset = voff + delta - k1;
+                int k2_offset = v_off + delta - k1;
                 if (k2_offset >= 0 && k2_offset < vlen && v2[k2_offset] != -1) {
                     int x2 = alen - v2[k2_offset];
                     if (x1 >= x2) {
@@ -177,14 +207,16 @@ List<Diff> *diff_bisect(DString a, DString b) {
             }
         }
 
-        for (int k2 = -d + k2start; k2 <= d - k2end; k2 += 2) {
-            int k2_offset = voff + k2;
+        range_start = -d + k2start;
+        range_end = d + 1 - k2end;
+
+        for (int k2 = range_start; k2 < range_end; k2 += 2) {
+            int k2_offset = v_off + k2;
             int x2;
-            if (k2 == -d || (k2 != d && v2[k2_offset - 1] < v2[k2_offset + 1])) {
+            if (k2 == -d || (k2 != d && v2[k2_offset - 1] < v2[k2_offset + 1]))
                 x2 = v2[k2_offset + 1];
-            } else {
+            else
                 x2 = v2[k2_offset - 1] + 1;
-            }
             int y2 = x2 - k2;
             while (x2 < alen && y2 < blen && a.get(alen-x2-1) == b.get(blen-y2-1)) {
                 x2++;
@@ -196,10 +228,10 @@ List<Diff> *diff_bisect(DString a, DString b) {
             } else if (y2 > blen) {
                 k2start += 2;
             } else if (!front) {
-                int k1_offset = voff + delta - k2;
+                int k1_offset = v_off + delta - k2;
                 if (k1_offset >= 0 && k1_offset < vlen && v1[k1_offset] != -1) {
                     int x1 = v1[k1_offset];
-                    int y1 = voff + x1 - k1_offset;
+                    int y1 = v_off + x1 - k1_offset;
                     x2 = alen - x2;
                     if (x1 >= x2)
                         return diff_bisect_split(a, b, x1, y1);
@@ -217,11 +249,8 @@ List<Diff> *diff_bisect(DString a, DString b) {
 List<Diff> *diff_bisect_split(DString a, DString b, int x, int y) {
     auto diffs = diff_main(a.slice(0, x), b.slice(0, y));
     auto diffsb = diff_main(a.slice(x), b.slice(y));
-
-    auto ret = new_list(Diff);
-    For (diffs) ret->append(&it);
-    For (diffsb) ret->append(&it);
-    return ret;
+    diffs->concat(diffsb);
+    return diffs;
 }
 
 DString diff_common_prefix(DString a, DString b) {
@@ -250,10 +279,6 @@ DString diff_common_suffix(DString a, DString b) {
     return alen < blen ? a : b;
 }
 
-int div_ceil(int x, int y) {
-    return x/y + (x % y != 0);
-}
-
 Half_Match *diff_half_match(DString a, DString b) {
     DString big = a.len() > b.len() ? a : b;
     DString small = a.len() > b.len() ? b : a;
@@ -263,6 +288,7 @@ Half_Match *diff_half_match(DString a, DString b) {
 
     auto diff_half_match_i = [](DString big, DString small, int i) -> Half_Match* {
         auto seed = big.slice(i, i + big.len() / 4);
+
         int j = -1;
 
         DString best_common = {0};
@@ -271,6 +297,7 @@ Half_Match *diff_half_match(DString a, DString b) {
         while ((j = index_of(small, seed, j + 1)) != -1) {
             auto plen = diff_common_prefix(big.slice(i), small.slice(j)).len();
             auto slen = diff_common_suffix(big.slice(0, i), small.slice(0, j)).len();
+
             if (best_common.len() < slen + plen) {
                 best_common = small.slice(j - slen, j + plen);
                 best_big_a = big.slice(0, i - slen);
@@ -291,17 +318,20 @@ Half_Match *diff_half_match(DString a, DString b) {
         return ret;
     };
 
-    auto hm1 = diff_half_match_i(big, small, div_ceil(big.len(), 4));
-    auto hm2 = diff_half_match_i(big, small, div_ceil(big.len(), 2));
+    auto hm1 = diff_half_match_i(big, small, (big.len()+3) / 4);
+    auto hm2 = diff_half_match_i(big, small, (big.len()+1) / 2);
 
-    if (!hm1 && !hm2)
-        return NULL;
+    if (!hm1 && !hm2) return NULL;
 
-    auto len1 = !hm1 ? 0 : hm1->middle.len();
-    auto len2 = !hm2 ? 0 : hm2->middle.len();
-    auto hm = len1 > len2 ? hm1 : hm2;
+    Half_Match *hm = NULL;
+    if (!hm2)
+        hm = hm1;
+    else if (!hm1)
+        hm = hm2;
+    else
+        hm = hm1->middle.len() > hm2->middle.len() ? hm1 : hm2;
 
-    if (a.len() < b.len()) {
+    if (a.len() <= b.len()) {
         auto tmp = hm->big_prefix;
         hm->big_prefix = hm->small_prefix;
         hm->small_prefix = tmp;

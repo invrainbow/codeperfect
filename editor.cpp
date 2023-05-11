@@ -2296,9 +2296,7 @@ void Editor::format_on_save() {
             }
 
             char tmp[4];
-            auto n = uchar_to_cstr(it, tmp);
-            for (u32 j = 0; j < n; j++)
-                line.append(tmp[j]);
+            line.concat(tmp, uchar_to_cstr(it, tmp));
         }
 
         line.append('\0');
@@ -2338,6 +2336,7 @@ void Editor::format_on_save() {
                 return c;
             };
 
+            SCOPED_BATCH_CHANGE(buf);
             For (diffs) {
                 switch (it.type) {
                 case DIFF_INSERT: {
@@ -4200,9 +4199,7 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
                     if (!gr_isident(gr)) break;
                     For (gr) {
                         char buf[4];
-                        auto count = uchar_to_cstr(it, buf);
-                        for (int i = 0; i < count; i++)
-                            chars->append(buf[i]);
+                        chars->concat(buf, uchar_to_cstr(it, buf));
                     }
                 }
 

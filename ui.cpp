@@ -1153,14 +1153,7 @@ void UI::draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int b
 }
 
 Glyph *UI::lookup_glyph_for_grapheme(Grapheme gr) {
-    auto utf8chars = new_list(char);
-    For (gr) {
-        char buf[4];
-        int len = uchar_to_cstr(it, buf);
-        for (int i = 0; i < len; i++)
-            utf8chars->append(buf[i]);
-    }
-    utf8chars->append('\0');
+    auto utf8chars = ustr_to_cstr(gr);
     auto utf8str = utf8chars->items;
 
     auto glyph = glyph_cache.get(utf8str);

@@ -515,3 +515,6 @@ struct String_Cursor {
         return ret;
     }
 };
+
+ccstr read_file(ccstr filepath);
+bool write_file(ccstr filepath, ccstr s);

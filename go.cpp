@@ -1863,9 +1863,7 @@ ccstr Ast_Node::string() {
             char utf8[4];
             int n = uchar_to_cstr(it->next(), utf8);
             if (ret->len + n > len) break;
-
-            for (int i = 0; i < n; i++)
-                ret->append(utf8[i]);
+            ret->concat(utf8, n);
         }
         ret->append('\0');
         return ret->items;

@@ -12,27 +12,12 @@
 #include "mtwist_shim.hpp"
 
 void test_diff() {
-    auto run = [&](ccstr a, ccstr b) {
-        print("diff \"%s\" \"%s\"", a, b);
+    auto a = read_file("/Users/brandon/ide/old.go");
+    auto b = read_file("/Users/brandon/ide/new.go");
 
-        auto al = new_list(uchar);
-        auto bl = new_list(uchar);
-        for (auto p = a; *p != '\0'; p++) al->append(*p);
-        for (auto p = b; *p != '\0'; p++) bl->append(*p);
-
-        auto diffs = diff_main(new_dstr(al), new_dstr(bl));
-        For (diffs) {
-            switch (it.type) {
-            case DIFF_INSERT: print(" - [insert] %s", it.s.str()); break;
-            case DIFF_DELETE: print(" - [delete] %s", it.s.str()); break;
-            case DIFF_SAME: print(" - [same] %s", it.s.str()); break;
-            }
-        }
-    };
-
-    run("loldongs", "dongs");
-    run("cocks", "roflcockter");
-    run("good dog", "bad dog");
+    auto al = cstr_to_ustr(a);
+    auto bl = cstr_to_ustr(b);
+    diff_main(new_dstr(al), new_dstr(bl));
 }
 
 void test_mark_tree() {

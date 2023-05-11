@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "list.hpp"
+#include "mem.hpp"
 
 struct DString {
     List<uchar> *text;
@@ -10,15 +11,13 @@ struct DString {
 
     int len() { return end - start; }
 
-    ccstr str() {
-        // TODO: utf-8
-        List<char> chars;
-        chars.init();
-        for (int i = 0, n = len(); i < n; i++)
-            chars.append((char)get(i));
-        chars.append('\0');
-        return chars.items;
+    List<uchar> *uchars() {
+        auto ret = new_list(uchar);
+        ret->concat(&text->items[start], len());
+        return ret;
     }
+
+    ccstr str();
 
     DString slice(int a, int b = -1) {
         if (b == -1) b = len();
@@ -70,3 +69,4 @@ List<Diff> *diff_main(DString a, DString b);
 List<Diff> *diff_compute(DString a, DString b);
 Diff *add_diff(List<Diff> *arr, Diff_Type type, DString s);
 DString new_dstr(List<uchar> *text);
+void diff_print(Diff *diff);

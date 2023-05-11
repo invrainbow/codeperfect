@@ -58,6 +58,7 @@ struct Cstr_To_Ustr {
 };
 
 List<uchar>* cstr_to_ustr(ccstr s, int len = -1);
+List<char>* ustr_to_cstr(List<uchar> *arr);
 
 s32 uchar_to_cstr(uchar c, cstr out);
 char* uchar_to_cstr(uchar c);

@@ -278,6 +278,16 @@ List<uchar>* cstr_to_ustr(ccstr s, int len) {
     return ret;
 }
 
+List<char>* ustr_to_cstr(List<uchar> *arr) {
+    auto ret = new_list(char);
+
+    char buf[4];
+    For (arr) ret->concat(buf, uchar_to_cstr(it, buf));
+
+    ret->append('\0');
+    return ret;
+}
+
 void Buffer::hist_apply_change(Change *change, bool undo) {
     auto start = change->start;
     cur2 old_end;
@@ -443,14 +453,7 @@ List<uchar>* Buffer::get_uchars(cur2 start, cur2 end, int limit, cur2 *actual_en
 }
 
 ccstr Buffer::get_text(cur2 start, cur2 end, int *len) {
-    auto ret = new_list(char);
-
-    For (get_uchars(start, end)) {
-        char tmp[4];
-        int count = uchar_to_cstr(it, tmp);
-        ret->concat(tmp, count);
-    }
-
+    auto ret = ustr_to_cstr(get_uchars(start, end));
     ret->append('\0');
     if (len) *len = ret->len;
     return ret->items;
@@ -573,14 +576,9 @@ void Buffer::read(File_Mapping *fm) {
 void Buffer::write(File *f) {
     Fori (&lines) {
         auto uchars = &it;
-        auto chars = new_list(char);
 
-        For (uchars) {
-            char buf[4];
-            auto count = uchar_to_cstr(it, buf);
-            chars->concat(buf, count);
-        }
-
+        auto chars = ustr_to_cstr(&it);
+        chars->len--; // remove '\0'
         if (i != lines.len-1)
             chars->append('\n');
 
