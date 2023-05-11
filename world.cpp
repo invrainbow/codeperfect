@@ -2128,6 +2128,8 @@ void init_goto_symbol() {
     wnd.symbols = NULL;
     wnd.filtered_results = NULL;
 
+    world.indexer.reload_all_editors();
+
     auto worker = [](void*) {
         defer { world.indexer.release_lock(IND_READING); };
 

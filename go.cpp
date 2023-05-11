@@ -4938,8 +4938,6 @@ void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selecte
 }
 
 void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
-    reload_all_editors();
-
     auto packages = new_list(Go_Package*);
     For (index.packages)
         if (index.workspace->find_module_containing(it.import_path))
