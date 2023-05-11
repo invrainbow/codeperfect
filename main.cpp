@@ -98,26 +98,6 @@ void new_ortho_matrix(float* mat, float l, float r, float b, float t) {
 
 #define MAX_RETRIES 5
 
-void goto_next_tab() {
-    auto pane = get_current_pane();
-    if (!pane->editors.len) return;
-
-    auto idx = (pane->current_editor + 1) % pane->editors.len;
-    pane->focus_editor_by_index(idx);
-}
-
-void goto_previous_tab() {
-    auto pane = get_current_pane();
-    if (!pane->editors.len) return;
-
-    u32 idx;
-    if (!pane->current_editor)
-        idx = pane->editors.len - 1;
-    else
-        idx = pane->current_editor - 1;
-    pane->focus_editor_by_index(idx);
-}
-
 bool is_git_folder(ccstr path) {
     SCOPED_FRAME();
     auto pathlist = make_path(path);
@@ -172,7 +152,7 @@ void handle_key_event(Window_Event *it) {
 
     if (!press) return;
 
-    // handle global keys first
+    // handle global keys
 
     if (keymods == CP_MOD_PRIMARY) {
         switch (key) {
@@ -191,51 +171,18 @@ void handle_key_event(Window_Event *it) {
         }
     }
 
-    switch (keymods) {
-    case CP_MOD_NONE:
-        switch (key) {
-        case CP_KEY_ESCAPE:
-            if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) {
-                world.cmd_unfocus_all_windows = true; // see if this causes any sync problems
-                return;
-            }
-            break;
-        }
-        break;
-    case CP_MOD_CTRL: {
-        switch (key) {
-        case CP_KEY_TAB:
-            goto_next_tab();
+    if (!keymods && key == CP_KEY_ESCAPE) {
+        if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) {
+            world.cmd_unfocus_all_windows = true; // see if this causes any sync problems
             return;
         }
-        break;
-    }
-    case CP_MOD_CTRL | CP_MOD_SHIFT:
-        switch (key) {
-        case CP_KEY_TAB:
-            goto_previous_tab();
-            return;
-        }
-        break;
-#if OS_MAC
-    case CP_MOD_CMD | CP_MOD_SHIFT:
-        switch (key) {
-        case CP_KEY_LEFT_BRACKET:
-            goto_previous_tab();
-            return;
-        case CP_KEY_RIGHT_BRACKET:
-            goto_next_tab();
-            return;
-        }
-        break;
-#endif
     }
 
     // commands
     for (int i = 0; i < _CMD_COUNT_; i++) {
         auto cmd = (Command)i;
         auto info = command_info_table[cmd];
-        if (info.mods != keymods || info.key != key) continue;
+        if (!info.has_shortcut(keymods, key)) continue;
         if (!is_command_enabled(cmd)) continue;
 
         if (!info.allow_shortcut_when_imgui_focused)

@@ -275,16 +275,31 @@ enum Command {
     CMD_ZOOM_IN,
     CMD_ZOOM_OUT,
     CMD_ZOOM_ORIGINAL,
+    CMD_GO_TO_NEXT_EDITOR,
+    CMD_GO_TO_PREVIOUS_EDITOR,
     /**/
     _CMD_COUNT_,
     CMD_INVALID = -1,
 };
 
-struct Command_Info {
-    int mods;
+struct Command_Shortcut {
     int key;
+    int mods;
+    Command_Shortcut *next;
+};
+
+struct Command_Info {
     ccstr name;
     bool allow_shortcut_when_imgui_focused;
+
+    Command_Shortcut *shortcuts;
+
+    bool has_shortcut(int mods, int key) {
+        for (auto it = shortcuts; it; it = it->next)
+            if (it->key == key && it->mods == mods)
+                return true;
+        return false;
+    }
 };
 
 extern Command_Info command_info_table[_CMD_COUNT_];

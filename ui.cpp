@@ -286,9 +286,11 @@ ImGuiKey cp_key_to_imgui_key(Key key) {
 
 ccstr get_menu_command_key(Command cmd) {
     auto info = command_info_table[cmd];
-    if (!info.key) return NULL;
 
-    auto keyname = get_key_name(info.key);
+    auto sc = info.shortcuts;
+    if (!sc) return NULL;
+
+    auto keyname = get_key_name(sc->key);
     if (!keyname) return NULL;
 
     auto s = new_list(char);
@@ -298,7 +300,7 @@ ccstr get_menu_command_key(Command cmd) {
         s->append(it);
     }
     s->append('\0');
-    return format_key(info.mods, s->items, true);
+    return format_key(sc->mods, s->items, true);
 }
 
 bool menu_command(Command cmd, bool selected) {
@@ -8162,7 +8164,9 @@ void UI::draw_tutorial(boxf rect) {
         if (name_width > max_name_width) max_name_width = name_width;
 
         auto info = command_info_table[it];
-        cp_assert(info.key);
+
+        auto sc = info.shortcuts;
+        cp_assert(sc);
 
         float hotkey_width = 0;
 
@@ -8173,13 +8177,13 @@ void UI::draw_tutorial(boxf rect) {
             hotkey_width += hotkey_padding_x * 2;
         };
 
-        auto mods = info.mods;
+        auto mods = sc->mods;
         if (mods & CP_MOD_CMD)   add_hotkey_part("Cmd");
         if (mods & CP_MOD_SHIFT) add_hotkey_part("Shift");
         if (mods & CP_MOD_ALT)   add_hotkey_part("Alt");
         if (mods & CP_MOD_CTRL)  add_hotkey_part("Ctrl");
 
-        auto keyname = get_key_name(info.key);
+        auto keyname = get_key_name(sc->key);
         cp_assert(strlen(keyname) <= 3);
         add_hotkey_part(keyname);
 
@@ -8223,13 +8227,15 @@ void UI::draw_tutorial(boxf rect) {
         draw_command_name(name);
 
         auto info = command_info_table[it];
+        auto sc = info.shortcuts;
+        cp_assert(sc);
 
-        auto mods = info.mods;
+        auto mods = sc->mods;
         if (mods & CP_MOD_CMD)   draw_hotkey_part("Cmd");
         if (mods & CP_MOD_SHIFT) draw_hotkey_part("Shift");
         if (mods & CP_MOD_ALT)   draw_hotkey_part("Alt");
         if (mods & CP_MOD_CTRL)  draw_hotkey_part("Ctrl");
-        draw_hotkey_part(get_key_name(info.key));
+        draw_hotkey_part(get_key_name(sc->key));
 
         cur.y += base_font->height + spacing_y;
     }

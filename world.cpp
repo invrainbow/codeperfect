@@ -1600,6 +1600,12 @@ Command_Info command_info_table[_CMD_COUNT_];
 
 bool is_command_enabled(Command cmd) {
     switch (cmd) {
+    case CMD_GO_TO_NEXT_EDITOR:
+    case CMD_GO_TO_PREVIOUS_EDITOR: {
+        auto pane = get_current_pane();
+        return pane && pane->editors.len > 1;
+    }
+
     case CMD_FIND_NEXT:
     case CMD_FIND_PREVIOUS: {
         auto editor = get_current_editor();
@@ -1923,12 +1929,22 @@ ccstr get_command_name(Command cmd) {
 }
 
 void init_command_info_table() {
+    auto add_shortcut = [&](Command_Info *info, int mods, int key) {
+        SCOPED_MEM(&world.world_mem); // will need to change this when we make shortcuts customizable
+
+        auto sc = new_object(Command_Shortcut);
+        sc->key = key;
+        sc->mods = mods;
+
+        sc->next = info->shortcuts;
+        info->shortcuts = sc;
+    };
+
     auto k = [&](int mods, int key, ccstr name, bool allow_shortcut_when_imgui_focused = false) {
-        Command_Info ret;
-        ret.mods = mods;
-        ret.key = key;
+        Command_Info ret; ptr0(&ret);
         ret.name = name;
         ret.allow_shortcut_when_imgui_focused = allow_shortcut_when_imgui_focused;
+        if (mods || key) add_shortcut(&ret, mods, key);
         return ret;
     };
 
@@ -1950,6 +1966,14 @@ void init_command_info_table() {
     command_info_table[CMD_GO_TO_NEXT_ERROR] = k(CP_MOD_ALT, CP_KEY_RIGHT_BRACKET, "Go To Next Error");
     command_info_table[CMD_GO_TO_PREVIOUS_ERROR] = k(CP_MOD_ALT, CP_KEY_LEFT_BRACKET, "Go To Previous Error");
     command_info_table[CMD_GO_TO_DEFINITION] = k(CP_MOD_PRIMARY, CP_KEY_G, "Go To Definition");
+
+    command_info_table[CMD_GO_TO_NEXT_EDITOR] = k(CP_MOD_CTRL, CP_KEY_TAB, "Go To Next Editor");
+    command_info_table[CMD_GO_TO_PREVIOUS_EDITOR] = k(CP_MOD_CTRL | CP_MOD_SHIFT, CP_KEY_TAB, "Go To Previous Editor");
+
+#if OS_MAC
+    add_shortcut(&command_info_table[CMD_GO_TO_NEXT_EDITOR], CP_MOD_CMD | CP_MOD_SHIFT, CP_KEY_RIGHT_BRACKET);
+    add_shortcut(&command_info_table[CMD_GO_TO_PREVIOUS_EDITOR], CP_MOD_CMD | CP_MOD_SHIFT, CP_KEY_LEFT_BRACKET);
+#endif
 
     command_info_table[CMD_FIND_NEXT] = k(0, CP_KEY_F3, "Find: Go To Next", true);
     command_info_table[CMD_FIND_PREVIOUS] = k(CP_MOD_SHIFT, CP_KEY_F3, "Find: Go To Previous", true);
@@ -2293,6 +2317,28 @@ void handle_command(Command cmd, bool from_menu) {
     if (!is_command_enabled(cmd)) return;
 
     switch (cmd) {
+    case CMD_GO_TO_NEXT_EDITOR: {
+        auto pane = get_current_pane();
+        if (!pane->editors.len) break;
+
+        auto idx = (pane->current_editor + 1) % pane->editors.len;
+        pane->focus_editor_by_index(idx);
+        break;
+    }
+
+    case CMD_GO_TO_PREVIOUS_EDITOR: {
+        auto pane = get_current_pane();
+        if (!pane->editors.len) break;
+
+        u32 idx;
+        if (!pane->current_editor)
+            idx = pane->editors.len - 1;
+        else
+            idx = pane->current_editor - 1;
+        pane->focus_editor_by_index(idx);
+        break;
+    }
+
     case CMD_FIND_CLEAR:
         For (get_all_editors()) it->reset_search_results();
         break;
