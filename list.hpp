@@ -110,6 +110,12 @@ struct List {
         return &items[len-1];
     }
 
+    T pop() {
+        auto ret = *last();
+        len--;
+        return ret;
+    }
+
     void filter(fn<bool(T *it)> pred) {
         List<int> to_remove;
         to_remove.init();

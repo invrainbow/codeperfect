@@ -2706,9 +2706,8 @@ void handle_command(Command cmd, bool from_menu) {
     case CMD_OPEN_LAST_CLOSED_EDITOR: {
         cp_assert(world.last_closed->len);
 
-        auto lc = world.last_closed->last();
-        world.last_closed->len--;
-        goto_file_and_pos(lc->filepath, lc->pos);
+        auto lc = world.last_closed->pop();
+        goto_file_and_pos(lc.filepath, lc.pos);
         break;
     }
 

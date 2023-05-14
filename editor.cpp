@@ -1896,8 +1896,7 @@ void Editor::backspace_in_replace_mode() {
 
     auto rev = new_list(uchar);
     while (vim.replace_old_chars.len) {
-        uchar ch = *vim.replace_old_chars.last();
-        vim.replace_old_chars.len--;
+        uchar ch = vim.replace_old_chars.pop();
         if (ch == 0) break;
         rev->append(ch);
     }

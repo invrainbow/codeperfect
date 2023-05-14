@@ -182,9 +182,7 @@ List<ccstr> *list_go_files(ccstr subfolder) {
     auto cwd = cp_getcwd();
 
     while (queue->len) {
-        auto path = *queue->last();
-        queue->len--;
-
+        auto path = queue->pop();
         auto pre = "jblow_tests/autocomplete";
         auto fullpath = streq(path, "") ? pre : path_join(pre, path);
 

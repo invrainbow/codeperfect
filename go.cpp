@@ -1217,11 +1217,8 @@ void Go_Indexer::background_thread() {
             }
 
             while (import_paths_queue->len > 0) {
-                auto import_path = *import_paths_queue->last();
-                auto resolved_path = *resolved_paths_queue->last();
-
-                import_paths_queue->len--;
-                resolved_paths_queue->len--;
+                auto import_path = import_paths_queue->pop();
+                auto resolved_path = resolved_paths_queue->pop();
 
                 bool already_in_index = (find_up_to_date_package(import_path));
                 bool is_go_package = false;
@@ -1417,8 +1414,7 @@ void Go_Indexer::background_thread() {
             // pop package from end of queue
             ccstr import_path = NULL;
             {
-                import_path = *package_queue.last();
-                package_queue.len--;
+                import_path = package_queue.pop();
                 already_enqueued_packages.remove(import_path);
             }
 
@@ -1969,8 +1965,8 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
     auto scope_ops_decls = new_list(Godecl);
 
     walk_ast_node(root, true, [&](Ast_Node* node, Ts_Field_Type field, int depth) -> Walk_Action {
-        for (; open_scopes.len > 0; open_scopes.len--) {
-            auto it = open_scopes.last();
+        while (open_scopes.len) {
+            auto it = open_scopes.pop();
             if (depth > it->depth) break;
 
             Go_Scope_Op op;

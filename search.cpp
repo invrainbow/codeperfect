@@ -64,8 +64,7 @@ void Searcher::search_worker() {
     auto matches = new_list(Search_Match);
 
     while (file_queue.len > 0 && total_results < 1000) {
-        auto filepath = *file_queue.last();
-        file_queue.len--;
+        auto filepath = file_queue.pop();
 
         auto fm = map_file_into_memory(filepath);
         if (!fm) continue;
@@ -271,11 +270,8 @@ bool Searcher::start_search(ccstr _query, Searcher_Opts *_opts) {
         stackpaths.append(world.current_path);
 
         while (stack.len > 0) {
-            auto node = *stack.last();
-            auto path = *stackpaths.last();
-
-            stack.len--;
-            stackpaths.len--;
+            auto node = stack.pop();
+            auto path = stackpaths.pop();
 
             auto fullpath = path_join(path, node->name);
             if (node->is_directory) {
