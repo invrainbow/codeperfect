@@ -281,19 +281,19 @@ List<T>* alloc_list(s32 len) {
     return ret;
 }
 
-#define new_list(t, ...) alloc_list<t>(__VA_ARGS__)
-
-template<T>
-List<T> *listof(T elem) {
-    auto ret = new_list(T);
-    ret->append(elem);
-    return ret;
-}
-
 template <typename T>
 List<T>* alloc_list() {
     auto ret = new_object(List<T>);
     ret->init();
+    return ret;
+}
+
+#define new_list(t, ...) alloc_list<t>(__VA_ARGS__)
+
+template <typename T>
+List<T> *listof(T elem) {
+    auto ret = new_list(T);
+    ret->append(&elem);
     return ret;
 }
 

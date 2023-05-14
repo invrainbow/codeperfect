@@ -256,8 +256,8 @@ bool Searcher::start_search(ccstr _query, Searcher_Opts *_opts) {
     }
 
     // generate file queue
-    auto stack = listof(world.file_tree);
-    auto stackpaths = listof(world.current_path);
+    auto stack = listof<FT_Node*>(world.file_tree);
+    auto stackpaths = listof<ccstr>(world.current_path);
 
     while (stack->len) {
         auto node = stack->pop();

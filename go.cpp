@@ -1967,11 +1967,11 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
     walk_ast_node(root, true, [&](Ast_Node* node, Ts_Field_Type field, int depth) -> Walk_Action {
         while (open_scopes.len) {
             auto it = open_scopes.pop();
-            if (depth > it->depth) break;
+            if (depth > it.depth) break;
 
             Go_Scope_Op op;
             op.type = GSOP_CLOSE_SCOPE;
-            op.pos = it->close_pos; // node->start();
+            op.pos = it.close_pos; // node->start();
             if (!cb(&op)) return WALK_ABORT;
         }
 
