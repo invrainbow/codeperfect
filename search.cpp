@@ -141,7 +141,7 @@ void Searcher::search_worker() {
                 sr.preview_len += to_left;
 
                 int to_right = 0;
-                for (int k = i; sr.preview_len < PREVIEW_LEN && buf[k] != '\n' && k < buflen; k++)
+                for (int k = i; sr.preview_len + to_right < PREVIEW_LEN && buf[k] != '\n' && k < buflen; k++)
                     to_right++;
 
                 sr.preview_len += to_right;
