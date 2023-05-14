@@ -1977,7 +1977,7 @@ void init_command_info_table() {
 
     command_info_table[CMD_FIND_NEXT] = k(0, CP_KEY_F3, "Find: Go To Next", true);
     command_info_table[CMD_FIND_PREVIOUS] = k(CP_MOD_SHIFT, CP_KEY_F3, "Find: Go To Previous", true);
-    command_info_table[CMD_FIND_CLEAR] = k(CP_MOD_CMD | CP_MOD_CTRL, CP_KEY_SLASH, "Find: Clear");
+    command_info_table[CMD_FIND_CLEAR] = k(CP_MOD_CTRL, CP_KEY_SLASH, "Find: Clear");
     command_info_table[CMD_GO_TO_NEXT_SEARCH_RESULT] = k(0, CP_KEY_F4, "Go To Next Search Result", true);
     command_info_table[CMD_GO_TO_PREVIOUS_SEARCH_RESULT] = k(CP_MOD_SHIFT, CP_KEY_F4, "Go To Previous Search Result", true);
 
@@ -2343,6 +2343,8 @@ void handle_command(Command cmd, bool from_menu) {
 
     case CMD_FIND_CLEAR:
         For (get_all_editors()) it->reset_search_results();
+        world.wnd_local_search.query[0] = '\0';
+        world.wnd_local_search.permanent_query[0] = '\0';
         break;
 
     case CMD_ZOOM_ORIGINAL:
