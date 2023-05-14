@@ -255,35 +255,22 @@ bool Searcher::start_search(ccstr _query, Searcher_Opts *_opts) {
         search_results.init();
     }
 
-    if (opts.include) include_parts = make_path(opts.include)->parts;
-    if (opts.exclude) exclude_parts = make_path(opts.exclude)->parts;
-
     // generate file queue
-    {
-        List<FT_Node*> stack;
-        List<ccstr> stackpaths;
+    auto stack = listof(world.file_tree);
+    auto stackpaths = listof(world.current_path);
 
-        stack.init();
-        stackpaths.init();
+    while (stack->len) {
+        auto node = stack->pop();
+        auto path = stackpaths->pop();
+        auto fullpath = path_join(path, node->name);
 
-        stack.append(world.file_tree);
-        stackpaths.append(world.current_path);
-
-        while (stack.len > 0) {
-            auto node = stack.pop();
-            auto path = stackpaths.pop();
-
-            auto fullpath = path_join(path, node->name);
-            if (node->is_directory) {
-                for (auto child = node->children; child; child = child->next) {
-                    stack.append(child);
-                    stackpaths.append(fullpath);
-                }
-            } else {
-                // if (!include_parts || pattern_matches(include_parts, fullpath))
-                //     if (!exclude_parts || !pattern_matches(exclude_parts, fullpath))
-                file_queue.append(fullpath);
-            }
+        if (!node->is_directory) {
+            file_queue.append(fullpath);
+            continue;
+        }
+        for (auto child = node->children; child; child = child->next) {
+            stack->append(child);
+            stackpaths->append(fullpath);
         }
     }
 

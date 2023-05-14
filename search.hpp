@@ -76,8 +76,6 @@ List<Replace_Part> *parse_search_replacement(ccstr replace_text);
 struct Searcher_Opts {
     bool case_sensitive;
     bool literal;
-    ccstr include;
-    ccstr exclude;
 };
 
 enum Searcher_State {
@@ -125,9 +123,6 @@ struct Searcher {
     Searcher_Opts opts;
     ccstr replace_with;
     u64 search_start_time_milli;
-
-    List<ccstr> *include_parts;
-    List<ccstr> *exclude_parts;
 
     // search
     // s32 *find_skip;
