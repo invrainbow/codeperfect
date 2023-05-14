@@ -34,13 +34,13 @@ void Jblow_Tests::catchup() {
         return true;
     };
 
-    while (!check()) sleep_milliseconds(10);
+    while (!check()) sleep_milli(10);
 }
 
 void Jblow_Tests::skip_frame() {
     auto start = world.frame_index;
     while (world.frame_index < start + 3)
-        sleep_milliseconds(5);
+        sleep_milli(5);
 }
 
 bool is_editor_selected(ccstr relative_filepath) {
@@ -71,7 +71,7 @@ struct Timeout {
                 jt->skip_frame();
                 return;
             }
-            sleep_milliseconds(10);
+            sleep_milli(10);
         }
         cp_panic(cp_sprintf("timeout at line %d", line));
     }
@@ -218,7 +218,7 @@ void Jblow_Tests::run() {
 
     world.dont_prompt_on_close_unsaved_tab = true;
 
-    while (!ready) sleep_milliseconds(10);
+    while (!ready) sleep_milli(10);
 
     {
         SCOPED_FRAME();
@@ -277,7 +277,7 @@ void Jblow_Tests::run() {
                 inject_jblow_input(input);
                 last_count = 0;
             }
-            if (i % 10 == 0) sleep_milliseconds(25);
+            if (i % 10 == 0) sleep_milli(25);
         }
     }
 
@@ -315,7 +315,7 @@ void Jblow_Tests::run() {
             for (int i = 0; i < 500; i++) {
                 inject_jblow_input(gen.pick());
                 if (i % 10 == 0)
-                    sleep_milliseconds(25);
+                    sleep_milli(25);
             }
 
             // close editor

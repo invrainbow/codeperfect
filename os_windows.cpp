@@ -396,7 +396,7 @@ bool File::write(ccstr buf, s32 size) {
     return (n == size);
 }
 
-void sleep_milliseconds(u32 milliseconds) {
+void sleep_milli(u32 milliseconds) {
     Sleep((DWORD)milliseconds);
 }
 

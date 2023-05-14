@@ -960,9 +960,9 @@ bool Debugger::start(Debug_Profile *debug_profile) {
         world.error_list.show = true;
         world.error_list.cmd_focus = true;
         kick_off_build(&build_profile);
-        while (!world.build.done) sleep_milliseconds(10);
+        while (!world.build.done) sleep_milli(10);
 
-        sleep_milliseconds(100);
+        sleep_milli(100);
 
         dbg_print("build completed");
 
@@ -1106,7 +1106,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
         return -1;
     };
 
-    for (u32 i = 0; i < 4; i++, sleep_milliseconds(1000)) {
+    for (u32 i = 0; i < 4; i++, sleep_milli(1000)) {
         conn = make_connection();
         if (conn != -1) break;
     }
@@ -1159,7 +1159,7 @@ void Debugger::pipe_stdout_into_our_buffer() {
 
     while (true) {
         if (!p.can_read()) {
-            sleep_milliseconds(50);
+            sleep_milli(50);
             continue;
         }
 
@@ -1363,7 +1363,7 @@ void Debugger::do_everything() {
 
     defer {
         if (!read_something) {
-            sleep_milliseconds(100);
+            sleep_milli(100);
         }
     };
 

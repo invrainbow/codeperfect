@@ -1601,12 +1601,12 @@ int realmain(int argc, char **argv) {
 
                     // sleep what's rest of the 4 milliseconds
                     auto rem2 = timeleft();
-                    if (rem - rem2 < 4) sleep_milliseconds(4 - (rem - timeleft()));
+                    if (rem - rem2 < 4) sleep_milli(4 - (rem - timeleft()));
                     continue;
                 }
 
                 if (rem > 0) {
-                    sleep_milliseconds((u32)rem);
+                    sleep_milli((u32)rem);
                     break;
                 }
 

@@ -70,7 +70,7 @@ void cp_quicksort(void *list, s32 num, s32 size, compare_func cmp) {
     qsort_r(list, num, size, &cmp, _cmp_trampoline);
 }
 
-void sleep_milliseconds(u32 ms) {
+void sleep_milli(u32 ms) {
     struct timespec elapsed, tv;
 
     elapsed.tv_sec = ms / 1000;

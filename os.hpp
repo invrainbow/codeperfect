@@ -265,7 +265,7 @@ struct File {
 };
 
 void max_out_clock_frequency();
-void sleep_milliseconds(u32 milliseconds);
+void sleep_milli(u32 milliseconds);
 
 struct Select_File_Opts {
     cstr buf;

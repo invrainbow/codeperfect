@@ -272,7 +272,7 @@ u64 current_time_nano() {
     return (u64)start_ns.time_since_epoch().count();
 }
 
-void sleep_milliseconds(u32 milliseconds) {
+void sleep_milli(u32 milliseconds) {
     usleep((u64)milliseconds * 1000);
 }
 

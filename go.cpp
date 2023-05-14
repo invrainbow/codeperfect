@@ -469,7 +469,7 @@ void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
         while (proc->status() != PROCESS_DONE) {
             if (current_time_milli() - start > 10000)
                 return NULL;
-            sleep_milliseconds(100);
+            sleep_milli(100);
         }
 
         // should we surface these errors? even if only for debugging?
@@ -480,7 +480,7 @@ void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
         while (!proc->can_read()) {
             if (current_time_milli() - start > 1000)
                 return NULL;
-            sleep_milliseconds(100);
+            sleep_milli(100);
         }
 
         return proc;
@@ -1345,7 +1345,7 @@ void Go_Indexer::background_thread() {
     index_print("Entering main loop...");
 
     bool try_write_after_checking_hashes = false;
-    for (;; sleep_milliseconds(100)) {
+    for (;; sleep_milli(100)) {
         // SCOPED_FRAME(); // does this work? lol
 
         bool try_write_this_time = false;

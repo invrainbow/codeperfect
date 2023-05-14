@@ -661,7 +661,7 @@ void World::start_background_threads() {
     // it when I need to break.
 
     auto microsoft_programmers_are_fucking_monkeys = [](void*) {
-        while (true) sleep_milliseconds(1000);
+        while (true) sleep_milli(1000);
     };
 
     {
@@ -822,7 +822,7 @@ void kick_off_build(Build_Profile *build_profile) {
             GH_BUILD_RUNNING,
         };
 
-        for (;; sleep_milliseconds(100)) {
+        for (;; sleep_milli(100)) {
             GoInt num_errors = 0;
             GoInt status = 0;
             auto errors = GHGetBuildStatus(&status, &num_errors);
