@@ -1,17 +1,13 @@
 package main
 
 import (
-	"archive/zip"
 	"bytes"
 	"encoding/gob"
-	"encoding/json"
 	"fmt"
 	"go/build"
 	"go/format"
-	"io"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -246,7 +242,7 @@ const (
 )
 
 func sendCrashReports(license *License) error {
-	dir, err := GetConfigDir()
+	dir, err := utils.GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -303,6 +299,31 @@ func GHGetAuthStatus() int {
 	return authStatus
 }
 
+func tellLauncherWhetherToAutoupdate(update bool) error {
+	pipeFile, err := utils.GetAppToLauncherPipeFile()
+	if err != nil {
+		return err
+	}
+
+	log.Printf("got pipefile: %s", pipeFile)
+
+	f, err := os.OpenFile(pipeFile, os.O_WRONLY, os.ModeNamedPipe)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("opened file")
+
+	message := "autoupdate"
+	if !update {
+		message = "noautoupdate"
+	}
+
+	_, err = f.WriteString(message + "\n")
+	log.Printf("wrote to file")
+	return err
+}
+
 //export GHAuth
 func GHAuth(rawEmail, rawLicenseKey *C.char) {
 	var license *License
@@ -325,6 +346,8 @@ func GHAuth(rawEmail, rawLicenseKey *C.char) {
 
 	var resp models.AuthResponseV2
 
+	shouldUpdate := false
+
 	doAuth := func() {
 		if err := CallServer(endpoint, license, req, &resp); err != nil {
 			log.Printf("error calling %s: %v", endpoint, err)
@@ -342,7 +365,7 @@ func GHAuth(rawEmail, rawLicenseKey *C.char) {
 		case models.AuthSuccessLocked:
 			authStatus = AuthOk
 		case models.AuthSuccessUnlocked:
-			go doUpdate()
+			shouldUpdate = true
 			authStatus = AuthOk
 		case models.AuthFailVersionLocked:
 			authStatus = AuthVersionLocked
@@ -361,7 +384,12 @@ func GHAuth(rawEmail, rawLicenseKey *C.char) {
 		log.Printf("authStatus: %v", authStatus)
 	}
 
-	go doAuth()
+	run := func() {
+		doAuth()
+		tellLauncherWhetherToAutoupdate(shouldUpdate)
+	}
+
+	go run()
 }
 
 type GitignoreChecker struct {
@@ -582,7 +610,7 @@ var buildenv struct {
 }
 
 func getBuildContextFile() (string, error) {
-	dir, err := GetConfigDir()
+	dir, err := utils.GetConfigDir()
 	if err != nil {
 		return "", err
 	}
@@ -784,7 +812,7 @@ func GHGetGoWork(filepath *C.char) *C.char {
 
 //export GHCopyJblowTestSuite
 func GHCopyJblowTestSuite(src *C.char) *C.char {
-	configDir, err := GetConfigDir()
+	configDir, err := utils.GetConfigDir()
 	if err != nil {
 		log.Print(err)
 		return nil
@@ -804,164 +832,5 @@ func GHCopyJblowTestSuite(src *C.char) *C.char {
 	return C.CString(path)
 }
 
-func getLatestVersion() (int, error) {
-	resp, err := http.Get(makeS3Url("meta.json"))
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, err
-	}
-
-	var meta struct {
-		CurrentVersion int `json:"current_version"`
-	}
-
-	if err := json.Unmarshal(data, &meta); err != nil {
-		return 0, err
-	}
-
-	return meta.CurrentVersion, nil
+func main() {
 }
-
-var CodePerfectS3Url = "https://codeperfect95.s3.us-east-2.amazonaws.com"
-
-func makeS3Url(endpoint string) string {
-	return fmt.Sprintf("%s/%s", CodePerfectS3Url, endpoint)
-}
-
-func downloadFile(url string, f *os.File) error {
-	resp, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	n, err := io.Copy(f, resp.Body)
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return fmt.Errorf("failed to copy anything")
-	}
-	return nil
-}
-
-// unzip will decompress a zip archive, moving all files and folders
-// within the zip file (parameter 1) to an output directory (parameter 2).
-// Taken from here: https://golangcode.com/unzip-files-in-go/
-func unzip(src string, dest string) error {
-	r, err := zip.OpenReader(src)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
-
-	copyFile := func(f *zip.File) error {
-		fpath := filepath.Join(dest, f.Name)
-
-		// check for ZipSlip: http://bit.ly/2MsjAWE
-		if !strings.HasPrefix(fpath, filepath.Clean(dest)+string(os.PathSeparator)) {
-			return fmt.Errorf("%s: illegal file path", fpath)
-		}
-
-		if f.FileInfo().IsDir() {
-			return os.MkdirAll(fpath, os.ModePerm)
-		}
-
-		if err := os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
-			return err
-		}
-
-		outfile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
-		if err != nil {
-			return err
-		}
-		defer outfile.Close()
-
-		infile, err := f.Open()
-		if err != nil {
-			return err
-		}
-		defer infile.Close()
-
-		if _, err = io.Copy(outfile, infile); err != nil {
-			return err
-		}
-
-		return nil
-	}
-
-	for _, f := range r.File {
-		if err := copyFile(f); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func doUpdate() {
-	log.Printf("current version is %s", versions.CurrentVersionAsString())
-
-	ver, err := getLatestVersion()
-	if err != nil {
-		log.Print(err)
-		return
-	}
-
-	log.Printf("latest version is %s", versions.VersionToString(ver))
-
-	// we don't need to update
-	if ver <= versions.CurrentVersion {
-		return
-	}
-
-	osSlug, err := versions.GetOSSlug(runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		panic("invalid os/arch")
-	}
-
-	downloadUrl := makeS3Url(fmt.Sprintf("update/%s-%s.zip", osSlug, versions.VersionToString(ver)))
-	log.Printf("downloading %s", downloadUrl)
-
-	tmpfile, err := os.CreateTemp("", "update.zip")
-	if err != nil {
-		log.Print("createtemp: ", err)
-		return
-	}
-	defer os.Remove(tmpfile.Name())
-
-	if err := downloadFile(downloadUrl, tmpfile); err != nil {
-		log.Print("downloadFile: ", err)
-		return
-	}
-
-	exepath, err := os.Executable()
-	if err != nil {
-		log.Print("executable: ", err)
-		return
-	}
-
-	dest := filepath.Join(filepath.Dir(exepath), "newbintmp")
-
-	log.Printf("deleting %s", dest)
-	os.RemoveAll(dest)
-
-	log.Printf("unzipping to %s", dest)
-	if err := unzip(tmpfile.Name(), dest); err != nil {
-		log.Print("unzip: ", err)
-		return
-	}
-
-	realdest := filepath.Join(filepath.Dir(exepath), "newbin")
-	log.Printf("moving unzipped folder to %s", realdest)
-
-	if err := utils.ReplaceFolder(dest, realdest); err != nil {
-		log.Print("utils.ReplaceFolder: ", err)
-	}
-}
-
-func main() {}

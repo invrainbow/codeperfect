@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/codeperfect95/codeperfect/go/utils"
 )
 
 // read file located in same folder as executable
@@ -26,16 +28,8 @@ func IsDebugMode() bool {
 	return DebugModeFlag || os.Getenv("DEBUG") == "1"
 }
 
-func GetConfigDir() (string, error) {
-	configdir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(configdir, "CodePerfect"), nil
-}
-
 func PrepareConfigDir() (string, error) {
-	appdir, err := GetConfigDir()
+	appdir, err := utils.GetConfigDir()
 	if err != nil {
 		return "", err
 	}

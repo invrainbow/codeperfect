@@ -5,55 +5,18 @@ import (
 	"path/filepath"
 )
 
-func ReplaceFolder(oldpath, newpath string) error {
-	deletemePath := filepath.Join(filepath.Dir(newpath), "DELETEME")
-
-	info, err := os.Stat(oldpath)
+func GetConfigDir() (string, error) {
+	configdir, err := os.UserConfigDir()
 	if err != nil {
-		if os.IsNotExist(err) {
-			// oldpath doesn't exist, do nothing.
-			return nil
-		}
-		return err
-	} else if !info.IsDir() {
-		// oldpath isn't a directory, fail condition.
-		return nil
+		return "", err
 	}
+	return filepath.Join(configdir, "CodePerfect"), nil
+}
 
-	deleteme := false
-
-	// check newpath
-	//  - if it doesn't exist, keep going
-	//  - if it's a directory, move it to ./DELETEME
-	//  - if it's not a directory, fail condition
-	info, err = os.Stat(newpath)
+func GetAppToLauncherPipeFile() (string, error) {
+	configdir, err := GetConfigDir()
 	if err != nil {
-		if !os.IsNotExist(err) {
-			return err
-		}
-	} else if !info.IsDir() {
-		// newpath exists but is not a directory, fail condition.
-		return nil
-	} else {
-		// newpath is a directory
-		if err := os.Rename(newpath, deletemePath); err != nil {
-			return err
-		}
-		deleteme = true
+		return "", err
 	}
-
-	if err := os.Rename(oldpath, newpath); err != nil {
-		if deleteme {
-			// restore newpath
-			os.Rename(deletemePath, newpath)
-		}
-		return err
-	}
-
-	if deleteme {
-		// even if it fails, the move succeeded, we just have this extra directory here. let it pass
-		os.RemoveAll(deletemePath)
-	}
-
-	return nil
+	return filepath.Join(configdir, ".launcher_pipe"), nil
 }
