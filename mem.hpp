@@ -96,6 +96,7 @@ struct Pool {
     s32 blocksize;
     ccstr name;
     u64 mem_allocated;
+    bool disable_alignment;
     Pool *prev, *next;
 
     bool owns_address(void *addr) {
@@ -253,8 +254,9 @@ struct Pool {
     }
 
     void *alloc(s32 n) {
-        if (n % POOL_MEMORY_ALIGNMENT != 0)
-            n += (POOL_MEMORY_ALIGNMENT - (n % POOL_MEMORY_ALIGNMENT));
+        if (!disable_alignment)
+            if (n % POOL_MEMORY_ALIGNMENT != 0)
+                n += (POOL_MEMORY_ALIGNMENT - (n % POOL_MEMORY_ALIGNMENT));
 
         ensure_enough(n);
         auto ret = curr->base + sp;

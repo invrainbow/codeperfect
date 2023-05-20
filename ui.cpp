@@ -2669,6 +2669,7 @@ void UI::draw_everything() {
 
                     Go_File file; ptr0(&file);
 
+                    file.use_pool = true;
                     file.pool.init("file pool");
                     defer { file.pool.cleanup(); };
 
@@ -2693,7 +2694,7 @@ void UI::draw_everything() {
                     Ast_Node root; ptr0(&root);
                     root.init(ts_tree_root_node(tree), &it);
 
-                    world.indexer.process_tree_into_gofile(&file, &root, file.filename, NULL);
+                    world.indexer.process_tree_into_gofile(&file, &root, file.filename, NULL, &file.pool);
                 } while (0);
             }
 

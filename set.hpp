@@ -22,6 +22,10 @@ struct String_Set {
         return ret;
     }
 
+    void clear() {
+        For (items()) remove(it);
+    }
+
     void init() {
         ptr0(this);
         table = NULL;

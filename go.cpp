@@ -631,25 +631,34 @@ bool isident(int c) {
 Goresult *Goresult::wrap(Godecl *new_decl) { return make_goresult(new_decl, ctx); }
 Goresult *Goresult::wrap(Gotype *new_gotype) { return make_goresult(new_gotype, ctx); }
 
+Pool *Go_Indexer::get_package_pool(Go_Package *pkg) {
+    return pkg->use_pool ? &pkg->pool : &final_mem;
+}
+
+Pool *Go_Indexer::get_file_pool(Go_Package *pkg, Go_File *file) {
+    return file->use_pool ? &file->pool : &pkg->pool;
+}
+
 // @Write
-Go_File *get_ready_file_in_package(Go_Package *pkg, ccstr filename) {
+Go_File *Go_Indexer::get_ready_file_in_package(Go_Package *pkg, ccstr filename) {
     auto file = pkg->files->find([&](auto it) { return streq(filename, it->filename); });
-
-    if (!file)
+    if (!file) {
         file = pkg->files->append();
-    else
-        file->pool.cleanup();
-    file->pool.init("file pool", 512); // tweak this
-
-    {
-        SCOPED_MEM(&file->pool);
-        file->filename = cp_strdup(filename);
-        file->scope_ops = new_list(Go_Scope_Op);
-        file->decls = new_list(Godecl);
-        file->imports = new_list(Go_Import);
-        file->references = new_list(Go_Reference);
+        file->use_pool = !pkg->use_pool;
     }
 
+    if (file->use_pool) {
+        file->pool.cleanup();
+        file->pool.init("go_file");
+        file->pool.disable_alignment = true;
+    }
+
+    SCOPED_MEM(get_file_pool(pkg, file));
+    file->filename = cp_strdup(filename);
+    file->scope_ops = new_list(Go_Scope_Op);
+    file->decls = new_list(Godecl);
+    file->imports = new_list(Go_Import);
+    file->references = new_list(Go_Reference);
     return file;
 }
 
@@ -674,7 +683,7 @@ void Go_Indexer::reload_single_file(ccstr filepath) {
     defer { free_parsed_file(pf); };
 
     ccstr package_name = NULL;
-    process_tree_into_gofile(file, pf->root, filepath, &package_name);
+    process_tree_into_gofile(file, pf->root, filepath, &package_name, get_file_pool(pkg, file));
     if (!str_ends_with(filepath, "_test.go"))
         replace_package_name(pkg, package_name);
 }
@@ -704,7 +713,7 @@ void Go_Indexer::reload_editor(void *editor) {
     auto root_node = new_ast_node(ts_tree_root_node(it->buf->tree), iter);
 
     ccstr package_name = NULL;
-    process_tree_into_gofile(file, root_node, it->filepath, &package_name);
+    process_tree_into_gofile(file, root_node, it->filepath, &package_name, get_file_pool(pkg, file));
     if (!str_ends_with(it->filepath, "_test.go"))
         replace_package_name(pkg, package_name);
 
@@ -744,10 +753,8 @@ void Go_Indexer::replace_package_name(Go_Package *pkg, ccstr package_name) {
         if (streq(pkg->package_name, package_name))
             return;
 
-    {
-        SCOPED_MEM(&final_mem);
-        pkg->package_name = cp_strdup(package_name);
-    }
+    SCOPED_MEM(get_package_pool(pkg));
+    pkg->package_name = cp_strdup(package_name);
 }
 
 void Go_Indexer::init_builtins(Go_Package *pkg) {
@@ -758,8 +765,10 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
     auto f = get_ready_file_in_package(pkg, fake_filename);
     f->hash = CUSTOM_HASH_BUILTINS;
 
+    auto file_pool = get_file_pool(pkg, f);
+
     auto add_builtin = [&](Godecl_Type decl_type, Gotype_Builtin_Type type, ccstr name) -> Gotype * {
-        SCOPED_MEM(&final_mem);
+        SCOPED_MEM(file_pool);
 
         auto gotype = new_gotype(GOTYPE_BUILTIN);
         gotype->builtin_type = type;
@@ -800,7 +809,7 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
     add_builtin(GODECL_TYPE, GO_BUILTIN_UINTPTR, "uintptr");
 
     auto add_builtin_value = [&](Gotype_Builtin_Type type, ccstr name) {
-        SCOPED_MEM(&final_mem);
+        SCOPED_MEM(file_pool);
 
         auto decl = f->decls->append();
         decl->type = GODECL_VAR; // TODO: special godecl_type for builtin values?
@@ -841,7 +850,7 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
         auto save = [&](Gotype_Builtin_Type type, ccstr name) {
             auto gotype = add_builtin(GODECL_FUNC, type, name);
 
-            SCOPED_MEM(&final_mem);
+            SCOPED_MEM(file_pool);
             gotype->builtin_underlying_base = func_type->copy();
         };
 
@@ -892,7 +901,7 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
 
         // "any"
         {
-            SCOPED_MEM(&final_mem);
+            SCOPED_MEM(file_pool);
 
             auto gotype = add_builtin(GODECL_TYPE, GO_BUILTIN_ANY, "any");
             gotype->base = empty_interface();
@@ -900,7 +909,7 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
 
         // error interface
         {
-            SCOPED_MEM(&final_mem);
+            SCOPED_MEM(file_pool);
 
             start();
             add_result(builtin("string"));
@@ -1113,8 +1122,9 @@ void Go_Indexer::background_thread() {
         start_writing();
         defer { stop_writing(); };
 
-        pkg->cleanup();
         index.packages->remove(pkg);
+        pkg->cleanup();
+
         rebuild_package_lookup();
     };
 
@@ -1162,6 +1172,8 @@ void Go_Indexer::background_thread() {
     auto init_index = [&](bool force_reset_index) {
         bool reset_index = force_reset_index;
 
+        SCOPED_MEM(&final_mem);
+
         auto workspace = module_resolver.workspace.copy();
 
         auto workspace_changed = [&]() -> bool {
@@ -1203,6 +1215,9 @@ void Go_Indexer::background_thread() {
     };
 
     auto rescan_everything = [&]() {
+        package_queue.len = 0;
+        already_enqueued_packages.clear();
+
         // make sure workspace is in index or queue
         // ===
         {
@@ -1377,9 +1392,9 @@ void Go_Indexer::background_thread() {
 
                 start_writing();
                 delete_file(path_join(world.current_path, ".cpdb"));
+                package_lookup.clear();
                 index.cleanup();
                 final_mem.reset();
-                package_lookup.clear();
                 rescan_gomod(true);
                 rescan_everything();
                 break;
@@ -1424,20 +1439,34 @@ void Go_Indexer::background_thread() {
 
             // we defer this, because in case we don't find any files,
             // we don't actually want to create the package
-            auto create_package_if_null = [&]() {
-                if (pkg) return;
+            auto get_ready_package = [&]() {
+                if (pkg) {
+                    pkg->pool.cleanup();
+                    if (pkg->use_pool) {
+                        pkg->pool.init("go_package");
+                        pkg->pool.disable_alignment = true;
+                    }
+                } else {
+                    auto idx = index.packages->len;
+                    pkg = index.packages->append();
+                    pkg->use_pool = !index_has_module_containing(import_path);
+                    if (pkg->use_pool) {
+                        pkg->pool.init("go_package");
+                        pkg->pool.disable_alignment = true;
+                    }
+                    package_lookup.set(import_path, idx);
+                }
 
-                SCOPED_MEM(&final_mem);
-                auto idx = index.packages->len;
-                pkg = index.packages->append();
-                pkg->status = GPS_OUTDATED;
-                pkg->files = new_list(Go_File);
-                pkg->import_path = cp_strdup(import_path);
-                package_lookup.set(pkg->import_path, idx);
+                {
+                    SCOPED_MEM(get_package_pool(pkg));
+                    pkg->status = GPS_OUTDATED;
+                    pkg->files = new_list(Go_File);
+                    pkg->import_path = cp_strdup(import_path);
+                }
             };
 
             if (streq(import_path, "@builtin")) {
-                create_package_if_null();
+                get_ready_package();
                 pkg->status = GPS_UPDATING; // i don't think we actually need this anymore...
 
                 init_builtins(pkg);
@@ -1464,10 +1493,8 @@ void Go_Indexer::background_thread() {
                 continue;
             }
 
-            create_package_if_null();
-
+            get_ready_package();
             pkg->status = GPS_UPDATING;
-            pkg->cleanup();
 
             ccstr package_name = NULL;
             ccstr test_package_name = NULL;
@@ -1488,10 +1515,9 @@ void Go_Indexer::background_thread() {
                 auto file = get_ready_file_in_package(pkg, filename);
 
                 ccstr pkgname = NULL;
-                process_tree_into_gofile(file, pf->root, filepath, &pkgname);
+                process_tree_into_gofile(file, pf->root, filepath, &pkgname, get_file_pool(pkg, file));
 
                 if (pkgname) {
-                    SCOPED_MEM(&final_mem);
                     if (str_ends_with(filename, "_test.go")) {
                         if (!test_package_name)
                             test_package_name = cp_strdup(pkgname);
@@ -1595,6 +1621,8 @@ void Go_Indexer::background_thread() {
         // ---
 
         // clean up every 50 megabytes
+        // i don't think it makes sense to do this anymore, now that most of the memory is inside the inner pools
+        /*
         if (cleanup_unused_memory_this_time || final_mem.mem_allocated - last_final_mem_allocated > 1024 * 1024 * 50) {
             index_print("Cleaning up unused memory...");
 
@@ -1628,6 +1656,7 @@ void Go_Indexer::background_thread() {
 
             last_final_mem_allocated = final_mem.mem_allocated;
         }
+        */
 
         // write index to disk
         // ---
@@ -2221,6 +2250,7 @@ void Go_Indexer::process_tree_into_gofile(
     Ast_Node *root,
     ccstr filepath,
     ccstr *package_name,
+    Pool *pool,
     bool time
 ) {
     Timer t;
@@ -2251,7 +2281,7 @@ void Go_Indexer::process_tree_into_gofile(
         // TS_TYPE_DECLARATION.
         // case TS_TYPE_ALIAS:
         case TS_SHORT_VAR_DECLARATION:
-            node_to_decls(it, file->decls, filename, &file->pool);
+            node_to_decls(it, file->decls, filename, pool);
             break;
         }
     }
@@ -2266,7 +2296,7 @@ void Go_Indexer::process_tree_into_gofile(
     iterate_over_scope_ops(root, [&](Go_Scope_Op *it) -> bool {
         auto op = file->scope_ops->append();
         {
-            SCOPED_MEM(&file->pool);
+            SCOPED_MEM(pool);
             memcpy(op, it->copy(), sizeof(Go_Scope_Op));
         }
         return true;
@@ -2312,7 +2342,7 @@ void Go_Indexer::process_tree_into_gofile(
             }
 
             if (ref) {
-                SCOPED_MEM(&file->pool);
+                SCOPED_MEM(pool);
                 file->references->append(ref->copy());
             }
 
@@ -2348,7 +2378,7 @@ void Go_Indexer::process_tree_into_gofile(
         import_decl_to_goimports(decl_node, file->imports);
 
         {
-            SCOPED_MEM(&file->pool);
+            SCOPED_MEM(pool);
             Fori (file->imports) memcpy(&it, it.copy(), sizeof(Go_Import));
         }
     }
@@ -6267,6 +6297,8 @@ void Go_Indexer::cleanup() {
     ui_mem.cleanup();
     scoped_table_mem.cleanup();
     lock.cleanup();
+
+    For (index.packages) it.cleanup();
 }
 
 List<Godecl> *Go_Indexer::parameter_list_to_fields(Ast_Node *params) {
@@ -9401,20 +9433,39 @@ void Go_Scope_Op::read(Index_Stream *s) {
 }
 
 void Go_File::read(Index_Stream *s) {
-    pool.init();
-    SCOPED_MEM(&pool);
+    auto read = [&]() {
+        READ_STR(filename);
+        READ_LIST(scope_ops);
+        READ_LIST(decls);
+        READ_LIST(imports);
+        READ_LIST(references);
+    };
 
-    READ_STR(filename);
-    READ_LIST(scope_ops);
-    READ_LIST(decls);
-    READ_LIST(imports);
-    READ_LIST(references);
+    if (use_pool) {
+        pool.init("go_file");
+        pool.disable_alignment = true;
+        SCOPED_MEM(&pool);
+        read();
+    } else {
+        read();
+    }
 }
 
 void Go_Package::read(Index_Stream *s) {
-    READ_STR(import_path);
-    READ_STR(package_name);
-    READ_LIST(files);
+    auto read = [&]() {
+        READ_STR(import_path);
+        READ_STR(package_name);
+        READ_LIST(files);
+    };
+
+    if (use_pool) {
+        pool.init("go_package");
+        pool.disable_alignment = true;
+        SCOPED_MEM(&pool);
+        read();
+    } else {
+        read();
+    }
 }
 
 void Go_Index::read(Index_Stream *s) {

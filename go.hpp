@@ -48,7 +48,11 @@ enum Parse_Lang {
 // version 39: support type aliases
 // version 40: distinguish between null and empty lists
 // version 41: treat iota as int
-#define GO_INDEX_VERSION 41
+// version 42: change size of pool
+// version 43: redo mem, shrink Go_Type
+// version 44: add disable_alignment
+// version 45: make enums u8
+#define GO_INDEX_VERSION 45
 
 enum {
     CUSTOM_HASH_BUILTINS = 1,
@@ -397,7 +401,7 @@ struct Ast_Node {
 
 struct Gotype;
 
-enum Godecl_Type {
+enum Godecl_Type : u8 {
     GODECL_IMPORT,
     GODECL_VAR,
     GODECL_CONST,
@@ -435,8 +439,8 @@ struct Godecl {
             union {
                 struct {
                     bool field_is_embedded; // GODECL_FIELD
-                    int field_depth;
-                    int field_order;
+                    u8 field_depth;
+                    u8 field_order;
                 };
                 struct {
                     List<Godecl> *type_params; // GODECL_FUNC, GODECL_TYPE
@@ -444,7 +448,7 @@ struct Godecl {
                 };
                 struct { // GODECL_METHOD_RECEIVER_TYPE_PARAM
                     Gotype *base;
-                    int type_param_index;
+                    u8 type_param_index;
                 };
             };
         };
@@ -473,7 +477,7 @@ struct Go_Struct_Spec {
     void write(Index_Stream *s);
 };
 
-enum Go_Interface_Spec_Type {
+enum Go_Interface_Spec_Type : u8 {
     GO_INTERFACE_SPEC_METHOD,
     GO_INTERFACE_SPEC_EMBEDDED,
     GO_INTERFACE_SPEC_ELEM,
@@ -528,7 +532,7 @@ enum Range_Type {
     RANGE_MAP,
 };
 
-enum Gotype_Builtin_Type {
+enum Gotype_Builtin_Type : u8 {
     // functions
     GO_BUILTIN_APPEND,  // func append(slice []Type, elems ...Type) []Type
     GO_BUILTIN_CAP,     // func cap(v Type) int
@@ -574,7 +578,7 @@ enum Gotype_Builtin_Type {
     GO_BUILTIN_UINTPTR,
 };
 
-enum Gotype_Type {
+enum Gotype_Type : u8 {
     GOTYPE_ID,
     GOTYPE_SEL,
     GOTYPE_MAP,
@@ -721,7 +725,7 @@ struct Gotype {
 
         struct {
             Gotype *lazy_one_of_multi_base;
-            int lazy_one_of_multi_index;
+            u8 lazy_one_of_multi_index;
             bool lazy_one_of_multi_is_single; // lhs.len == 1 && rhs.len == 1
         };
     };
@@ -732,13 +736,13 @@ struct Gotype {
     bool equals_in_go_sense(Gotype *other);
 };
 
-enum Go_Package_Status {
+enum Go_Package_Status : u8 {
     GPS_OUTDATED,
     GPS_UPDATING,
     GPS_READY,
 };
 
-enum Go_Package_Name_Type {
+enum Go_Package_Name_Type : u8 {
     GPN_IMPLICIT,
     GPN_EXPLICIT,
     GPN_BLANK,
@@ -756,7 +760,7 @@ struct Go_Import {
     void write(Index_Stream *s);
 };
 
-enum Go_Scope_Op_Type {
+enum Go_Scope_Op_Type : u8 {
     GSOP_OPEN_SCOPE,
     GSOP_CLOSE_SCOPE,
     GSOP_DECL,
@@ -765,10 +769,8 @@ enum Go_Scope_Op_Type {
 struct Go_Scope_Op {
     Go_Scope_Op_Type type;
     cur2 pos;
-    struct {
-        Godecl *decl;
-        int decl_scope_depth;
-    };
+    Godecl *decl;
+    u8 decl_scope_depth;
 
     Go_Scope_Op *copy();
     void read(Index_Stream *s);
@@ -803,34 +805,40 @@ struct Go_Reference {
 
 struct Go_File {
     Pool pool;
+    bool use_pool;
 
     ccstr filename;
     List<Go_Scope_Op> *scope_ops;
     List<Godecl> *decls;
     List<Go_Import> *imports;
     List<Go_Reference> *references;
-
     u64 hash;
 
-    void cleanup() { pool.cleanup(); }
+    void cleanup() {
+        if (use_pool) pool.cleanup();
+    }
+
     Go_File *copy();
     void read(Index_Stream *s);
     void write(Index_Stream *s);
 };
 
 struct Go_Package {
+    Pool pool;
+    bool use_pool;
+
     Go_Package_Status status;
     ccstr import_path;
-    // ccstr resolved_path?
     ccstr package_name;
     List<Go_File> *files;
     u64 hash;
     bool checked_for_outdated_hash;
 
     void cleanup() {
-        if (!files) return;
-        For (files) it.cleanup();
-        files->len = 0;
+        if (use_pool)
+            pool.cleanup();
+        else
+            For (files) it.cleanup();
     }
 
     Go_Package *copy();
@@ -847,8 +855,7 @@ struct Go_Work_Module {
     void write(Index_Stream *s);
 };
 
-
-enum Go_Workspace_Situation {
+enum Go_Workspace_Situation : u8 {
     GWS_NO_GOWORK,
     GWS_GOWORK_AT_ROOT,
     GWS_GOWORK_SOMEWHERE_ELSE,
@@ -1057,7 +1064,7 @@ enum {
 
 Go_File *get_ready_file_in_package(Go_Package *pkg, ccstr filename);
 
-enum Go_Message_Type {
+enum Go_Message_Type : u8 {
     GOMSG_RESCAN_INDEX,
     GOMSG_OBLITERATE_AND_RECREATE_INDEX,
     GOMSG_CLEANUP_UNUSED_MEMORY,
@@ -1271,6 +1278,7 @@ struct Go_Indexer {
         Ast_Node *root,
         ccstr filename,
         ccstr *package_name,
+        Pool *pool,
         bool time = false
     );
     void iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> cb, ccstr filename);
@@ -1334,6 +1342,10 @@ struct Go_Indexer {
 
     Godecl *read_method_spec_into_field(Ast_Node *node, int field_order);
     List<Go_Struct_Spec> *read_struct_field_into_specs(Ast_Node *field_node, int starting_field_order, bool is_toplevel);
+
+    Pool *get_package_pool(Go_Package *pkg);
+    Pool *get_file_pool(Go_Package *pkg, Go_File *file);
+    Go_File *get_ready_file_in_package(Go_Package *pkg, ccstr filename);
 };
 
 Parsed_File *parse_file(ccstr filepath, Parse_Lang lang, bool use_latest = false);
