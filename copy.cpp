@@ -5,49 +5,8 @@
 #include "go.hpp"
 #include "dbg.hpp"
 #include "editor.hpp"
+#include "search.hpp"
 
-// -----
-// stupid c++ template shit
-
-template<typename T>
-T *clone(T *old) {
-    auto ret = new_object(T);
-    memcpy(ret, old, sizeof(T));
-    return ret;
-}
-
-template <typename T>
-T* copy_object(T *old) {
-    return !old ? NULL : old->copy();
-}
-
-template <typename T>
-List<T> *copy_list(List<T> *arr, fn<T*(T* it)> copy_func) {
-    if (!arr) return NULL;
-
-    auto new_arr = new_object(List<T>);
-    new_arr->init(LIST_POOL, max(arr->len, 1));
-    For (arr) new_arr->append(copy_func(&it));
-    return new_arr;
-}
-
-template <typename T>
-List<T> *copy_listp(List<T> *arr) {
-    if (!arr) return NULL;
-
-    auto new_arr = new_object(List<T>);
-    new_arr->init(LIST_POOL, max(arr->len, 1));
-    For (arr) new_arr->append(copy_object(it));
-    return new_arr;
-}
-
-template <typename T>
-List<T> *copy_list(List<T> *arr) {
-    auto copy_func = [&](T *it) -> T* { return copy_object(it); };
-    return copy_list<T>(arr, copy_func);
-}
-
-// specialization of copy_list for ccstr
 List<ccstr> *copy_string_list(List<ccstr> *arr) {
     if (!arr) return NULL;
 
@@ -56,25 +15,6 @@ List<ccstr> *copy_string_list(List<ccstr> *arr) {
     For (arr) new_arr->append(cp_strdup(it));
     return new_arr;
 }
-
-template <typename T>
-List<T> *copy_raw_list(List<T> *arr) {
-    if (!arr) return NULL;
-
-    auto new_arr = new_object(List<T>);
-    new_arr->init(LIST_POOL, max(arr->len, 1));
-    new_arr->concat(arr);
-    return new_arr;
-}
-
-template <typename T>
-List<T> *copy_list(List<T*> *arr) {
-    auto copy_func = [&](T **it) -> T* { return copy_object(*it); };
-    return copy_list<T>(arr, copy_func);
-}
-
-// -----
-// actual code that tells us how to copy objects
 
 Call_Hier_Node* Call_Hier_Node::copy() {
     auto ret = clone(this);
@@ -502,5 +442,27 @@ Dlv_Call *Dlv_Call::copy() {
         break;
     }
 
+    return ret;
+}
+
+Searcher_Opts *Searcher_Opts::copy() {
+    auto ret = clone(this);
+    ret->query = cp_strdup(query);
+    return ret;
+}
+
+Searcher_Result_Match *Searcher_Result_Match::copy() {
+    auto ret = clone(this);
+    ret->match = cp_strdup(match);
+    ret->preview = cp_strdup(preview);
+    ret->groups = copy_string_list(groups);
+    // no need to copy marks, they're global pointers to marks alloc'd from fridge
+    return ret;
+}
+
+Searcher_Result_File *Searcher_Result_File::copy() {
+    auto ret = clone(this);
+    ret->filepath = cp_strdup(filepath);
+    ret->results = copy_list(results);
     return ret;
 }

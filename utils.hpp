@@ -455,6 +455,10 @@ struct Message_Queue {
         }
     }
 
+    int len() {
+        return messages.len;
+    }
+
     List<T> *start() {
         lock.enter();
         return &messages;

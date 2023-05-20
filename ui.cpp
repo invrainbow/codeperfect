@@ -5582,24 +5582,18 @@ void UI::draw_everything() {
 
         im_small_newline();
 
-        if (search_again) {
-            auto &s = world.searcher;
+        if (search_again && wnd.find_str[0] != '\0') {
+            wnd.files_open = NULL;
+            wnd.sel_file = -1;
+            wnd.sel_result = -1;
+            wnd.scroll_file = -1;
+            wnd.scroll_result = -1;
 
-            s.cleanup();
-            if (wnd.find_str[0] != '\0') {
-                s.init();
-
-                Searcher_Opts opts; ptr0(&opts);
-                opts.case_sensitive = wnd.case_sensitive;
-                opts.literal = !wnd.use_regex;
-
-                wnd.files_open = NULL;
-                wnd.sel_file = -1;
-                wnd.sel_result = -1;
-                wnd.scroll_file = -1;
-                wnd.scroll_result = -1;
-                s.start_search(wnd.find_str, &opts);
-            }
+            Searcher_Opts opts; ptr0(&opts);
+            opts.case_sensitive = wnd.case_sensitive;
+            opts.literal = !wnd.use_regex;
+            opts.query = wnd.find_str;
+            world.searcher.start_search(&opts);
         }
 
         switch (world.searcher.state) {
@@ -5609,7 +5603,7 @@ void UI::draw_everything() {
                 im::Text("Searching...");
                 im::SameLine();
                 if (im::Button("Cancel")) {
-                    world.searcher.cleanup();
+                    world.searcher.cancel();
                 }
             }
             break;
@@ -5617,10 +5611,12 @@ void UI::draw_everything() {
             if (!wnd.files_open) {
                 wnd.mem.cleanup();
                 wnd.mem.init("search_wnd");
+
+                auto len = world.searcher.search_results->len;
                 SCOPED_MEM(&wnd.mem);
-                wnd.files_open = new_array(bool, world.searcher.search_results.len);
-                wnd.set_file_open = new_array(bool, world.searcher.search_results.len);
-                wnd.set_file_close = new_array(bool, world.searcher.search_results.len);
+                wnd.files_open = new_array(bool, len);
+                wnd.set_file_open = new_array(bool, len);
+                wnd.set_file_close = new_array(bool, len);
             }
 
             if (wnd.replace)
@@ -5629,10 +5625,10 @@ void UI::draw_everything() {
                     world.searcher.start_replace(wnd.replace_str);
 
             int index = 0;
-            auto &search_results = world.searcher.search_results;
-            int num_files = search_results.len;
+            auto search_results = world.searcher.search_results;
+            int num_files = search_results->len;
 
-            Fori (&search_results) {
+            Fori (search_results) {
                 auto file_idx = i;
 
                 if (index + it.results->len > 400) {
@@ -5832,7 +5828,7 @@ void UI::draw_everything() {
 
                 int file_idx = wnd.sel_file-1;
                 if (wnd.files_open[file_idx])
-                    goto_result(file_idx, search_results[file_idx].results->len - 1);
+                    goto_result(file_idx, search_results->at(file_idx).results->len - 1);
                 else
                     goto_result(file_idx, -1);
             };
@@ -5844,14 +5840,14 @@ void UI::draw_everything() {
                 }
 
                 if (wnd.files_open[wnd.sel_file]) {
-                    auto &file = search_results[wnd.sel_file];
+                    auto &file = search_results->at(wnd.sel_file);
                     if ((int)wnd.sel_result < (int)file.results->len-1) {
                         goto_result(wnd.sel_file, wnd.sel_result+1);
                         return;
                     }
                 }
 
-                if (wnd.sel_file + 1 >= search_results.len) return;
+                if (wnd.sel_file + 1 >= search_results->len) return;
 
                 goto_result(wnd.sel_file+1, -1);
             };
@@ -5898,7 +5894,7 @@ void UI::draw_everything() {
                     handle_up();
                     break;
                 case KN_ENTER: {
-                    if (!(0 <= wnd.sel_file && wnd.sel_file < search_results.len)) break;
+                    if (!(0 <= wnd.sel_file && wnd.sel_file < search_results->len)) break;
 
                     if (wnd.sel_result == -1) {
                         if (wnd.files_open[wnd.sel_file])
@@ -5907,7 +5903,7 @@ void UI::draw_everything() {
                             wnd.set_file_open[wnd.sel_file] = true;
                         goto_result(wnd.sel_file, -1);
                     } else {
-                        auto &file = search_results[wnd.sel_file];
+                        auto &file = search_results->at(wnd.sel_file);
                         if (!(0 <= wnd.sel_result && wnd.sel_result < file.results->len)) break;
 
                         auto &result = file.results->at(wnd.sel_result);
@@ -5918,7 +5914,7 @@ void UI::draw_everything() {
                 }
             }
 
-            if (num_files < search_results.len) im::Text("There were too many results; some are omitted.");
+            if (num_files < search_results->len) im::Text("There were too many results; some are omitted.");
             break;
         }
         case SEARCH_REPLACE_IN_PROGRESS:

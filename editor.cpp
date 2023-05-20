@@ -1071,7 +1071,7 @@ bool Editor::load_file(ccstr new_filepath) {
 
     // fill in search results
     if (world.searcher.state == SEARCH_SEARCH_DONE) {
-        For (&world.searcher.search_results) {
+        For (world.searcher.search_results) {
             if (!are_filepaths_equal(it.filepath, filepath)) continue;
 
             For (it.results) {

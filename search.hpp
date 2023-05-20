@@ -7,6 +7,7 @@
 #include "list.hpp"
 #include "mem.hpp"
 #include "buffer.hpp"
+#include "utils.hpp"
 
 struct Search_Match {
     int start;
@@ -74,8 +75,11 @@ struct Search_Session {
 List<Replace_Part> *parse_search_replacement(ccstr replace_text);
 
 struct Searcher_Opts {
+    ccstr query;
     bool case_sensitive;
     bool literal;
+
+    Searcher_Opts *copy();
 };
 
 enum Searcher_State {
@@ -104,49 +108,53 @@ struct Searcher_Result_Match {
     Mark *mark_end;
 
     List<ccstr> *groups;
+
+    Searcher_Result_Match *copy();
 };
 
 struct Searcher_Result_File {
     ccstr filepath;
     List<Searcher_Result_Match> *results;
+
+    Searcher_Result_File *copy();
+};
+
+enum Searcher_Message_Type {
+    SM_START_SEARCH,
+    SM_START_REPLACE,
+    SM_CANCEL,
+};
+
+struct Searcher_Message {
+    Searcher_Message_Type type;
+    struct {} cancel;
+    struct {
+        Searcher_Opts *opts;
+        List<ccstr> *file_queue;
+    } start_search;
+    struct {
+        ccstr replace_with;
+    } start_replace;
 };
 
 struct Searcher {
-    Pool mem; // orchestration
-    Pool final_mem; // results
-
-    bool mem_active;
-    bool final_mem_active;
-
-    Search_Session sess;
-    Searcher_State state;
-    Searcher_Opts opts;
-    ccstr replace_with;
-    u64 search_start_time_milli;
-
-    // search
-    // s32 *find_skip;
-    // s32 *alpha_skip;
-    // pcre *re;
-    // pcre_extra *re_extra;
-
-    List<ccstr> file_queue;
-    List<Searcher_Result_File> search_results;
-
+    Pool thread_mem;
     Thread_Handle thread;
+    Searcher_State state;
+    Message_Queue<Searcher_Message> message_queue;
 
-    bool cleaned_up; // don't clean up twice
+    Searcher_Opts *opts;
+    u64 search_start_time_milli;
+    List<Searcher_Result_File> *search_results;
 
-    void init();
-    void cleanup();
-    void cleanup_search();
+    bool init();
+    void search_thread();
 
-    bool start_search(ccstr _query, Searcher_Opts *_opts);
-    void search_worker();
+    bool start_search(Searcher_Opts *opts);
+    void start_replace(ccstr replace_with);
+    void cancel();
 
     ccstr get_replacement_text(Searcher_Result_Match *sr, ccstr replace_text);
-    bool start_replace(ccstr _replace_with);
-    void replace_worker();
 };
 
 bool is_binary(ccstr buf, s32 len);

@@ -1,186 +1,257 @@
 #include "search.hpp"
 #include "world.hpp"
 #include "defer.hpp"
+#include "copy.hpp"
 
 #define PREVIEW_LEN 40
 
-void Searcher::init() {
+bool Searcher::init() {
     ptr0(this);
 
-    mem.init();
-    final_mem.init();
+    thread_mem.init("searcher_thread_mem");
+    message_queue.init();
 
-    mem_active = true;
-    final_mem_active = true;
+    auto fun = [](void *param) {
+        auto s = (Searcher*)param;
+        SCOPED_MEM(&s->thread_mem);
+        s->search_thread();
+    };
+
+    thread = create_thread(fun, this);
+    return !!thread;
 }
 
-// two cases to cleanup:
-// 1) user clears (whether the thread is running or not)
-//     - clear everything
-// 2) thread completes
-//     - clear everything but final
+void Searcher::search_thread() {
+    Search_Session sess; ptr0(&sess);
 
-void Searcher::cleanup_search() {
-    if (thread) {
-        kill_thread(thread);
-        close_thread_handle(thread);
-        thread = NULL;
-    }
+    // not a great name - it's basically a mem that lives for a whole "cycle"
+    // of search -> replace -> cancel. whenever we cancel or initiate a new
+    // search, this gets reset
+    Pool cycle_mem; cycle_mem.init("searcher_cycle_mem");
 
-    sess.cleanup();
-}
+    auto search_result_buffer = new_list(Searcher_Result_File);
+    auto search_match_buffer = new_list(Search_Match);
+    List<ccstr> *search_file_queue = NULL;
+    int search_total_results = 0;
 
-void Searcher::cleanup() {
-    For (&search_results) {
-        if (!it.results) continue;
-        For (it.results) {
-            it.mark_start->cleanup();
-            it.mark_end->cleanup();
+    ccstr replace_with = NULL;
+    int replace_current_search_result = 0;
 
-            world.mark_fridge.free(it.mark_start);
-            world.mark_fridge.free(it.mark_end);
+    auto cleanup_previous_search = [&]() {
+        if (search_results) {
+            For (search_results) {
+                if (!it.results) continue;
+                For (it.results) {
+                    it.mark_start->cleanup();
+                    it.mark_end->cleanup();
+
+                    world.mark_fridge.free(it.mark_start);
+                    world.mark_fridge.free(it.mark_end);
+                }
+            }
+            search_results = NULL;
         }
-    }
-    search_results.len = 0;
+        sess.cleanup();
+        cycle_mem.cleanup();
+    };
 
-    cleanup_search();
+    while (true) {
+        do {
+            if (!message_queue.len()) break;
+            auto messages = message_queue.start();
+            defer { message_queue.end(); };
 
-    if (mem_active) {
-        mem.cleanup();
-        mem_active = false;
-    }
+            auto msg = messages->last();
+            if (!msg) break;
 
-    if (final_mem_active) {
-        final_mem.cleanup();
-        final_mem_active = false;
-    }
+            switch (msg->type) {
+            case SM_START_SEARCH: {
+                cleanup_previous_search();
+                {
+                    cycle_mem.init("searcher_cycle_mem");
+                    SCOPED_MEM(&cycle_mem);
 
-    state = SEARCH_NOTHING_HAPPENING;
-}
+                    opts = msg->start_search.opts->copy();
+                    search_file_queue = copy_string_list(msg->start_search.file_queue);
 
-void Searcher::search_worker() {
-    int total_results = 0;
+                    ptr0(&sess);
+                    sess.query = cp_strdup(opts->query);
+                    sess.qlen = strlen(sess.query);
+                    sess.case_sensitive = opts->case_sensitive;
+                    sess.literal = opts->literal;
+                    if (!sess.init()) break;
+                }
+                search_total_results = 0;
+                search_start_time_milli = current_time_milli();
+                search_match_buffer->len = 0;
+                search_result_buffer->len = 0;
+                state = SEARCH_SEARCH_IN_PROGRESS;
+                break;
+            }
+            case SM_START_REPLACE: {
+                if (state != SEARCH_SEARCH_DONE) break;
+                {
+                    SCOPED_MEM(&cycle_mem);
+                    replace_with = cp_strdup(msg->start_replace.replace_with);
+                    replace_current_search_result = 0;
+                }
+                state = SEARCH_REPLACE_IN_PROGRESS;
+                break;
+            }
+            case SM_CANCEL:
+                cleanup_previous_search();
+                state = SEARCH_NOTHING_HAPPENING;
+                break;
+            }
+        } while (0);
 
-    auto matches = new_list(Search_Match);
+        switch (state) {
+        case SEARCH_NOTHING_HAPPENING:
+        case SEARCH_SEARCH_DONE:
+        case SEARCH_REPLACE_DONE:
+            sleep_milli(10);
+            break;
 
-    while (file_queue.len > 0 && total_results < 1000) {
-        auto filepath = file_queue.pop();
+        case SEARCH_SEARCH_IN_PROGRESS: {
+            // are we done? copy results over to cycle_mem, exit
+            if (!search_file_queue->len) {
+                sess.cleanup();
+                {
+                    SCOPED_MEM(&cycle_mem);
+                    search_results = copy_list(search_result_buffer);
+                }
+                state = SEARCH_SEARCH_DONE;
+                break;
+            }
 
-        auto fm = map_file_into_memory(filepath);
-        if (!fm) continue;
-        defer { fm->cleanup(); };
+            // otherwise, do one unit of work - search a single file
+            auto filepath = *search_file_queue->last(); // pop();
 
-        auto buf = (char*)fm->data;
-        i64 buflen = fm->len;
+            auto fm = map_file_into_memory(filepath);
+            if (!fm) break;
+            defer { fm->cleanup(); };
 
-        if (is_binary(buf, buflen)) continue;
+            auto buf = (char*)fm->data;
+            i64 buflen = fm->len;
+            if (is_binary(buf, buflen)) break;
 
-        matches->len = 0;
-        sess.search(buf, buflen, matches, 10000);
-        if (!matches->len) continue;
+            search_match_buffer->len = 0;
+            sess.search(buf, buflen, search_match_buffer, 10000);
+            if (!search_match_buffer->len) break;
 
-        int curr_match = 0;
-        cur2 pos; ptr0(&pos);
+            int curr_match = 0;
+            cur2 pos; ptr0(&pos);
 
-        ccstr final_filepath = NULL;
-        {
-            SCOPED_MEM(&final_mem);
-            final_filepath = cp_strdup(filepath);
-        }
+            Searcher_Result_Match sr; ptr0(&sr);
 
-        auto editor = find_editor_by_filepath(final_filepath);
+            auto results = new_list(Searcher_Result_Match, search_match_buffer->len);
 
-        Searcher_Result_Match sr; ptr0(&sr);
-        auto results = new_list(Searcher_Result_Match, matches->len);
+            // convert temp matches into search results
+            for (int i = 0; i < buflen; i++) {
+                auto it = buf[i];
 
-        // convert temp matches into search results
-        for (int i = 0; i < buflen; i++) {
-            auto it = buf[i];
+                auto &next = search_match_buffer->at(curr_match);
+                if (i == next.start) {
+                    if (search_total_results++ > 1000) break;
 
-            auto &nextmatch = matches->at(curr_match);
-            if (i == nextmatch.start) {
-                if (total_results++ > 1000) break;
+                    sr.match_start = pos;
+                    sr.match_off = i;
 
-                sr.match_start = pos;
-                sr.match_off = i;
+                    if (next.group_starts) {
+                        sr.groups = new_list(ccstr, next.group_starts->len);
+                        Fori (next.group_starts) {
+                            auto start = it;
+                            auto end = next.group_ends->at(i);
 
-                if (nextmatch.group_starts) {
-                    SCOPED_MEM(&final_mem);
-
-                    sr.groups = new_list(ccstr, nextmatch.group_starts->len);
-                    Fori (nextmatch.group_starts) {
-                        auto start = it;
-                        auto end = nextmatch.group_ends->at(i);
-
-                        auto group = cp_strncpy(&buf[start], end-start);
-                        sr.groups->append(group);
+                            auto group = cp_strncpy(&buf[start], end-start);
+                            sr.groups->append(group);
+                        }
                     }
                 }
-            }
 
-            if (i == nextmatch.end) {
-                SCOPED_MEM(&final_mem);
+                if (i == next.end) {
+                    sr.match_len = i - sr.match_off;
+                    sr.match_end = pos;
+                    sr.match = cp_strncpy(&buf[sr.match_off], sr.match_len);
 
-                sr.match_len = i - sr.match_off;
-                sr.match_end = pos;
-                sr.match = cp_strncpy(&buf[sr.match_off], sr.match_len);
+                    sr.preview_start = sr.match_start;
+                    sr.preview_end = sr.match_end;
+                    sr.preview_len = sr.match_len;
 
-                sr.preview_start = sr.match_start;
-                sr.preview_end = sr.match_end;
-                sr.preview_len = sr.match_len;
+                    sr.match_offset_in_preview = 0;
 
-                sr.match_offset_in_preview = 0;
+                    auto prevoff = sr.match_off;
 
-                auto prevoff = sr.match_off;
+                    int to_left = min((PREVIEW_LEN - sr.preview_len) / 2, min(sr.preview_start.x, 10));
 
-                int to_left = min((PREVIEW_LEN - sr.preview_len) / 2, min(sr.preview_start.x, 10));
+                    prevoff -= to_left;
+                    sr.preview_start.x -= to_left;
+                    sr.match_offset_in_preview += to_left;
+                    sr.preview_len += to_left;
 
-                prevoff -= to_left;
-                sr.preview_start.x -= to_left;
-                sr.match_offset_in_preview += to_left;
-                sr.preview_len += to_left;
+                    int to_right = 0;
+                    for (int k = i; sr.preview_len + to_right < PREVIEW_LEN && buf[k] != '\n' && k < buflen; k++)
+                        to_right++;
 
-                int to_right = 0;
-                for (int k = i; sr.preview_len + to_right < PREVIEW_LEN && buf[k] != '\n' && k < buflen; k++)
-                    to_right++;
+                    sr.preview_len += to_right;
+                    sr.preview_end.x += to_right;
+                    sr.preview = cp_strncpy(&buf[prevoff], sr.preview_len);
 
-                sr.preview_len += to_right;
-                sr.preview_end.x += to_right;
-                sr.preview = cp_strncpy(&buf[prevoff], sr.preview_len);
+                    sr.mark_start = world.mark_fridge.alloc();
+                    sr.mark_end = world.mark_fridge.alloc();
 
-                sr.mark_start = world.mark_fridge.alloc();
-                sr.mark_end = world.mark_fridge.alloc();
+                    // TODO: do this from main thread.
+                    // editor->buf->insert_mark(MARK_SEARCH_RESULT, sr.match_start, sr.mark_start);
+                    // editor->buf->insert_mark(MARK_SEARCH_RESULT, sr.match_end, sr.mark_end);
 
-                if (editor) {
-                    // what do we do here?
-                    editor->buf->insert_mark(MARK_SEARCH_RESULT, sr.match_start, sr.mark_start);
-                    editor->buf->insert_mark(MARK_SEARCH_RESULT, sr.match_end, sr.mark_end);
+                    results->append(&sr);
+
+                    if (++curr_match >= search_match_buffer->len) break;
                 }
 
-                results->append(&sr);
-
-                if (++curr_match >= matches->len) break;
+                if (it == '\n') {
+                    pos.y++;
+                    pos.x = 0;
+                } else {
+                    pos.x++;
+                }
             }
 
-            if (it == '\n') {
-                pos.y++;
-                pos.x = 0;
-            } else {
-                pos.x++;
-            }
+            Searcher_Result_File sf;
+            sf.filepath = filepath;
+            sf.results = results;
+            search_result_buffer->append(&sf);
+            break;
         }
 
-        Searcher_Result_File sf;
-        sf.filepath = final_filepath;
-        sf.results = results;
-        search_results.append(&sf);
+        case SEARCH_REPLACE_IN_PROGRESS: {
+            if (replace_current_search_result >= search_results->len) {
+                state = SEARCH_REPLACE_DONE;
+                break;
+            }
+
+            auto &it = search_results->at(replace_current_search_result++);
+
+            // would these ever happen
+            if (!it.filepath) break;
+            if (!it.results || !it.results->len) break;
+
+            File_Replacer fr;
+            if (!fr.init(it.filepath, "search_and_replace")) break;
+
+            For (it.results) {
+                if (fr.done()) break;
+
+                auto newtext = get_replacement_text(&it, replace_with);
+                fr.goto_next_replacement(new_cur2(it.match_off, -1));
+                fr.do_replacement(new_cur2(it.match_off + it.match_len, -1), newtext);
+            }
+
+            fr.finish();
+            break;
+        }
+        }
     }
-
-    state = SEARCH_SEARCH_DONE;
-    close_thread_handle(thread);
-    thread = NULL;
-
-    cleanup_search();
 }
 
 bool is_binary(ccstr buf, s32 len) {
@@ -225,47 +296,22 @@ bool is_binary(ccstr buf, s32 len) {
     return ((suspicious_bytes * 100) / total_bytes > 10);
 }
 
-bool Searcher::start_search(ccstr _query, Searcher_Opts *_opts) {
-    SCOPED_MEM(&mem);
-
-    bool ok = false;
-    search_start_time_milli = current_time_milli();
-    state = SEARCH_SEARCH_IN_PROGRESS;
-    defer { if (!ok) state = SEARCH_NOTHING_HAPPENING; };
-
-    opts = *_opts;
-
-    ptr0(&sess);
-    sess.query = cp_strdup(_query);
-    sess.qlen = strlen(sess.query);
-    sess.case_sensitive = opts.case_sensitive;
-    sess.literal = opts.literal;
-    // sess.match_limit = 1000;
-    if (!sess.init()) return false;
-
+bool Searcher::start_search(Searcher_Opts *opts) {
     if (world.file_tree_busy) {
         tell_user_error("The file list is currently being generated.");
         return false;
     }
 
-    file_queue.init();
-
-    {
-        SCOPED_MEM(&final_mem);
-        search_results.init();
-    }
-
     // generate file queue
+    auto file_queue = new_list(ccstr);
     auto stack = listof<FT_Node*>(world.file_tree);
     auto stackpaths = listof<ccstr>(world.current_path);
-
     while (stack->len) {
         auto node = stack->pop();
         auto path = stackpaths->pop();
         auto fullpath = path_join(path, node->name);
-
         if (!node->is_directory) {
-            file_queue.append(fullpath);
+            file_queue->append(fullpath);
             continue;
         }
         for (auto child = node->children; child; child = child->next) {
@@ -274,31 +320,25 @@ bool Searcher::start_search(ccstr _query, Searcher_Opts *_opts) {
         }
     }
 
-    auto fun = [](void *param) {
-        auto s = (Searcher*)param;
-        SCOPED_MEM(&s->mem);
-        s->search_worker();
-    };
-
-    thread = create_thread(fun, this);
-    if (thread == NULL) return false;
-
-    ok = true;
+    message_queue.add([&](auto it) {
+        it->type = SM_START_SEARCH;
+        it->start_search.opts = opts->copy();
+        it->start_search.file_queue = copy_string_list(file_queue);
+    });
     return true;
 }
 
-bool Searcher::start_replace(ccstr _replace_with) {
-    SCOPED_MEM(&mem);
-    replace_with = cp_strdup(_replace_with);
+void Searcher::start_replace(ccstr replace_with) {
+    message_queue.add([&](auto it) {
+        it->type = SM_START_REPLACE;
+        it->start_replace.replace_with = cp_strdup(replace_with);
+    });
+}
 
-    auto fun = [](void *param) {
-        auto s = (Searcher*)param;
-        SCOPED_MEM(&s->mem);
-        s->replace_worker();
-    };
-
-    thread = create_thread(fun, this);
-    return thread != NULL;
+void Searcher::cancel() {
+    message_queue.add([&](auto it) {
+        it->type = SM_CANCEL;
+    });
 }
 
 List<Replace_Part> *parse_search_replacement(ccstr replace_text) {
@@ -336,7 +376,7 @@ List<Replace_Part> *parse_search_replacement(ccstr replace_text) {
 }
 
 ccstr Searcher::get_replacement_text(Searcher_Result_Match *sr, ccstr replace_text) {
-    if (opts.literal) return replace_text;
+    if (opts->literal) return replace_text;
     if (!sr->groups) return replace_text;
 
     auto chars = new_list(char);
@@ -361,33 +401,6 @@ ccstr Searcher::get_replacement_text(Searcher_Result_Match *sr, ccstr replace_te
 
     chars->append('\0');
     return chars->items;
-}
-
-void Searcher::replace_worker() {
-    int off = 0;
-
-    For (&search_results) {
-        // would these ever happen
-        if (!it.filepath) continue;
-        if (!it.results || !it.results->len) continue;
-
-        File_Replacer fr;
-        if (!fr.init(it.filepath, "search_and_replace")) continue;
-
-        For (it.results) {
-            if (fr.done()) break;
-
-            auto newtext = get_replacement_text(&it, replace_with);
-            fr.goto_next_replacement(new_cur2(it.match_off, -1));
-            fr.do_replacement(new_cur2(it.match_off + it.match_len, -1), newtext);
-        }
-
-        fr.finish();
-    }
-
-    state = SEARCH_REPLACE_DONE;
-    close_thread_handle(thread);
-    thread = NULL;
 }
 
 // ========================

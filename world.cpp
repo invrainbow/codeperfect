@@ -602,10 +602,15 @@ void World::init() {
 
     indexer.init();
     t.log("init indexer");
+
     dbg.init();
     t.log("init debugger");
+
     history.init();
     t.log("init history");
+
+    searcher.init();
+    t.log("init searcher");
 
     navigation_queue.init(LIST_FIXED, _countof(_navigation_queue), _navigation_queue);
 
@@ -1616,7 +1621,7 @@ bool is_command_enabled(Command cmd) {
     case CMD_GO_TO_NEXT_SEARCH_RESULT:
     case CMD_GO_TO_PREVIOUS_SEARCH_RESULT:
         if (world.searcher.state == SEARCH_SEARCH_DONE)
-            if (world.searcher.search_results.len)
+            if (world.searcher.search_results->len)
                 return true;
         return false;
 
@@ -2826,7 +2831,7 @@ void handle_command(Command cmd, bool from_menu) {
     case CMD_GO_TO_NEXT_SEARCH_RESULT:
     case CMD_GO_TO_PREVIOUS_SEARCH_RESULT:
         if (world.searcher.state == SEARCH_SEARCH_DONE)
-            if (world.searcher.search_results.len)
+            if (world.searcher.search_results->len)
                 move_search_result(cmd == CMD_GO_TO_NEXT_SEARCH_RESULT, 1);
         break;
 
@@ -4144,9 +4149,9 @@ void move_search_result(bool forward, int count) {
      */
 
     auto &wnd = world.wnd_search_and_replace;
-    auto &results = world.searcher.search_results;
+    auto results = world.searcher.search_results;
 
-    if (!results.len) return;
+    if (!results->len) return;
 
     // at the end after all the calculations:
     // - scroll to the selected file/result
@@ -4155,7 +4160,7 @@ void move_search_result(bool forward, int count) {
         wnd.scroll_file = wnd.sel_file;
         wnd.scroll_result = wnd.sel_result;
 
-        auto &file = results[wnd.sel_file];
+        auto &file = results->at(wnd.sel_file);
         auto result = file.results->at(wnd.sel_result);
         goto_file_and_pos(file.filepath, result.match_start, true);
     };
@@ -4165,8 +4170,8 @@ void move_search_result(bool forward, int count) {
             wnd.sel_file = 0;
             wnd.sel_result = 0;
         } else {
-            wnd.sel_file = results.len-1;
-            wnd.sel_result = results[wnd.sel_file].results->len-1;
+            wnd.sel_file = results->len-1;
+            wnd.sel_result = results->at(wnd.sel_file).results->len-1;
         }
         if (--count == 0) return;
     }
@@ -4179,10 +4184,10 @@ void move_search_result(bool forward, int count) {
             wnd.sel_result = 0;
         } else {
             if (wnd.sel_file == 0)
-                wnd.sel_file = results.len-1;
+                wnd.sel_file = results->len-1;
             else
                 wnd.sel_file--;
-            wnd.sel_result = results[wnd.sel_file].results->len-1;
+            wnd.sel_result = results->at(wnd.sel_file).results->len-1;
         }
         if (--count == 0) return;
     }
@@ -4193,12 +4198,12 @@ void move_search_result(bool forward, int count) {
     // express position as index of all search results & do the math on that
 
     int total = 0;
-    For (&results)
+    For (results)
         total += it.results->len;
 
     int index = 0;
     for (int i = 0; i < wnd.sel_file; i++)
-        index += results[i].results->len;
+        index += results->at(i).results->len;
     index += wnd.sel_result;
 
     if (forward)
@@ -4209,7 +4214,7 @@ void move_search_result(bool forward, int count) {
 
     // now convert back to file+result
 
-    Fori (&results) {
+    Fori (results) {
         if (index < it.results->len) {
             wnd.sel_file = i;
             wnd.sel_result = index;
