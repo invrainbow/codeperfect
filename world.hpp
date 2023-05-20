@@ -513,6 +513,12 @@ struct World {
 
     struct Debugger dbg;
 
+    Pool *all_pools;
+    Lock all_pools_lock;
+
+    struct Wnd_Pool_Viewer : Wnd {
+    } wnd_pool_viewer;
+
     u32 next_editor_id;
 
     FT_Node *file_tree;

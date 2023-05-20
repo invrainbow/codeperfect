@@ -447,7 +447,7 @@ struct Message_Queue {
     List<T> messages;
 
     void init() {
-        mem.init();
+        mem.init("message_queue_mem");
         lock.init();
         {
             SCOPED_MEM(&mem);

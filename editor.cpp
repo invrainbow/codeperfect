@@ -1350,7 +1350,7 @@ void Editor::init() {
     mem.init("editor mem");
 
     if (world.vim.on) {
-        vim.mem.init();
+        vim.mem.init("vim_mem");
         SCOPED_MEM(&vim.mem);
         // TODO: set a limit on command len?
         vim.command_buffer = new_list(Vim_Command_Input);
@@ -5162,7 +5162,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             if (macro->active)
                 macro->mem.reset();
             else
-                macro->mem.init();
+                macro->mem.init("macro_mem");
             macro->active = true;
             {
                 SCOPED_MEM(&macro->mem);

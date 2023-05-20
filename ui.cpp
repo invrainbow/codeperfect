@@ -2141,7 +2141,7 @@ void UI::open_project_settings() {
 
     {
         wnd.pool.cleanup();
-        wnd.pool.init();
+        wnd.pool.init("project_settings");
         SCOPED_MEM(&wnd.pool);
         wnd.tmp = project_settings.copy();
     }
@@ -2610,6 +2610,7 @@ void UI::draw_everything() {
 
             im::Separator();
 
+            im::MenuItem("Pool viewer", NULL, &world.wnd_pool_viewer.show);
             im::MenuItem("History viewer", NULL, &world.wnd_history.show);
             im::MenuItem("Show mouse position", NULL, &world.wnd_mouse_pos.show);
             im::MenuItem("Style editor", NULL, &world.wnd_style_editor.show);
@@ -2776,6 +2777,53 @@ void UI::draw_everything() {
 
     if (is_running) {
         im::PopStyleColor();
+    }
+
+    if (world.wnd_pool_viewer.show) {
+        begin_window("Pools", &world.wnd_pool_viewer, ImGuiWindowFlags_AlwaysAutoResize, false, true);
+
+        SCOPED_LOCK(&world.all_pools_lock);
+
+        Table<int> amounts; amounts.init();
+        Table<int> counts; counts.init();
+
+        for (auto it = world.all_pools; it; it = it->next) {
+            amounts.set(it->name, amounts.get(it->name) + it->mem_allocated);
+            counts.set(it->name, counts.get(it->name) + 1);
+        }
+
+        auto entries = amounts.entries();
+
+        entries->sort([&](auto pa, auto pb) -> int {
+            auto a = *pa;
+            auto b = *pb;
+            return b->value - a->value;
+        });
+
+        int flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_BordersH | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterV | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersInner;
+        if (im::BeginTable("pools", 3, flags)) {
+            im::TableSetupColumn("name");
+            im::TableSetupColumn("amount allocated (mb)");
+            im::TableSetupColumn("# pools");
+            im::TableHeadersRow();
+
+            For (entries) {
+                im::TableNextRow();
+
+                im::TableSetColumnIndex(0);
+                im::Text("%s", it->name);
+
+                im::TableSetColumnIndex(1);
+                im::Text("%.2f", (it->value / 1024.0f / 1024.0f));
+
+                im::TableSetColumnIndex(2);
+                im::Text("%d", counts.get(it->name));
+            }
+
+            im::EndTable();
+        }
+
+        im::End();
     }
 
     if (world.wnd_options.show) {
@@ -5568,7 +5616,7 @@ void UI::draw_everything() {
         case SEARCH_SEARCH_DONE: {
             if (!wnd.files_open) {
                 wnd.mem.cleanup();
-                wnd.mem.init();
+                wnd.mem.init("search_wnd");
                 SCOPED_MEM(&wnd.mem);
                 wnd.files_open = new_array(bool, world.searcher.search_results.len);
                 wnd.set_file_open = new_array(bool, world.searcher.search_results.len);
@@ -6092,7 +6140,7 @@ void UI::draw_everything() {
                             if (!gofile) break;
 
                             wnd.pool.cleanup();
-                            wnd.pool.init();
+                            wnd.pool.init("tree_viewer");
 
                             {
                                 SCOPED_MEM(&wnd.pool);
@@ -7931,7 +7979,7 @@ void UI::draw_everything() {
         } else {
             if (im::Button("start tracking")) {
                 wnd.mem.cleanup();
-                wnd.mem.init();
+                wnd.mem.init("gpu_debugger");
                 {
                     SCOPED_MEM(&wnd.mem);
                     wnd.logs = new_list(Drawn_Quad);

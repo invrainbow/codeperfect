@@ -201,8 +201,8 @@ List<ccstr> *list_go_files(ccstr subfolder) {
 }
 
 void Jblow_Tests::run() {
-    mem.init();
-    thread_mem.init();
+    mem.init("jblow_tests_mem");
+    thread_mem.init("jblow_thread_mem");
 
     {
         SCOPED_MEM(&mem);
@@ -212,7 +212,7 @@ void Jblow_Tests::run() {
     lock.init();
 
     Pool pool;
-    pool.init();
+    pool.init("jblow_tests_local");
     defer { pool.cleanup(); };
     SCOPED_MEM(&pool);
 

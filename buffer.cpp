@@ -502,7 +502,7 @@ void Buffer::init(Pool *_mem, int _lang, bool _use_history, bool use_search) {
         search_tree->type = AVL_SEARCH_RESULT;
 
         // now initialize search_mem
-        search_mem.init();
+        search_mem.init("search_mem");
     }
 
     initialized = true;

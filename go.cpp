@@ -366,7 +366,7 @@ void Type_Renderer::write_type(Gotype *t, Type_Renderer_Handler custom_handler, 
 void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
     ptr0(this);
 
-    mem.init();
+    mem.init("module_resolver_mem");
     {
         SCOPED_MEM(&mem);
         gomodcache = cp_strdup(_gomodcache);
@@ -1599,7 +1599,7 @@ void Go_Indexer::background_thread() {
             index_print("Cleaning up unused memory...");
 
             Pool new_pool;
-            new_pool.init();
+            new_pool.init("final_mem");
 
             Go_Index *new_index = NULL;
 

@@ -1056,7 +1056,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
 
     {
         stdout_mem.cleanup();
-        stdout_mem.init();
+        stdout_mem.init("stdout_mem");
         stdout_line_buffer.len = 0;
 
         {
@@ -1417,7 +1417,7 @@ void Debugger::do_everything() {
             watches.remove(args.watch_idx);
             if (!watches.len) {
                 watches_mem.cleanup();
-                watches_mem.init();
+                watches_mem.init("watches_mem");
             }
             break;
         }

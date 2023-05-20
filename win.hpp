@@ -272,7 +272,7 @@ struct Window {
 
     bool init(int width, int height, ccstr title) {
         ptr0(this);
-        mem.init();
+        mem.init("window");
         {
             SCOPED_MEM(&mem);
             events.init();

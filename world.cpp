@@ -496,11 +496,11 @@ void World::init() {
     vim.on = options.enable_vim_mode;
 
     if (vim.on) {
-        vim.mem.init();
+        vim.mem.init("vim_mem");
         SCOPED_MEM(&vim.mem);
         vim.yank_register.init();
-        vim.dotrepeat.mem_working.init();
-        vim.dotrepeat.mem_finished.init();
+        vim.dotrepeat.mem_working.init("vim_dotrepeat_working");
+        vim.dotrepeat.mem_finished.init("vim_dotrepeat_finished");
     }
 
     if (make_testing_headless) {
@@ -639,6 +639,7 @@ void World::init() {
     // if (!use_nvim) world.wnd_history.show = true;
 
     show_frame_index = false;
+    all_pools_lock.init();
 #endif
 
     t.log("rest of shit");
@@ -1398,7 +1399,7 @@ bool handle_unsaved_files() {
 void rename_identifier_thread(void *param) {
     auto &wnd = world.wnd_rename_identifier;
     wnd.thread_mem.cleanup();
-    wnd.thread_mem.init();
+    wnd.thread_mem.init("rename_identifier_thread");
     SCOPED_MEM(&wnd.thread_mem);
 
     defer {
@@ -2070,7 +2071,7 @@ void do_find_interfaces() {
     auto thread_proc = [](void *param) {
         auto &wnd = world.wnd_find_interfaces;
         wnd.thread_mem.cleanup();
-        wnd.thread_mem.init();
+        wnd.thread_mem.init("find_interfaces_thread");
         SCOPED_MEM(&wnd.thread_mem);
 
         defer { cancel_find_interfaces(); };
@@ -2159,7 +2160,7 @@ void init_goto_symbol() {
     };
 
     wnd.fill_thread_pool.cleanup();
-    wnd.fill_thread_pool.init();
+    wnd.fill_thread_pool.init("goto_symbol_thread");
 
     wnd.fill_time_started_ms = current_time_milli();
     wnd.fill_thread = create_thread(worker, NULL);
@@ -2184,7 +2185,7 @@ void do_find_implementations() {
     auto thread_proc = [](void *param) {
         auto &wnd = world.wnd_find_implementations;
         wnd.thread_mem.cleanup();
-        wnd.thread_mem.init();
+        wnd.thread_mem.init("find_implementations_thread");
         SCOPED_MEM(&wnd.thread_mem);
 
         defer { cancel_find_implementations(); };
@@ -2269,7 +2270,7 @@ void initiate_find_references(cur2 pos) {
     auto thread_proc = [](void *param) {
         auto &wnd = world.wnd_find_references;
         wnd.thread_mem.cleanup();
-        wnd.thread_mem.init();
+        wnd.thread_mem.init("find_references_thread");
         SCOPED_MEM(&wnd.thread_mem);
 
         // kinda confusing that cancel_find_references is responsible for wnd.done = true
@@ -3098,7 +3099,7 @@ void handle_command(Command cmd, bool from_menu) {
         };
 
         wnd.fill_thread_pool.cleanup();
-        wnd.fill_thread_pool.init();
+        wnd.fill_thread_pool.init("generate_implementation_thread");
 
         wnd.fill_time_started_ms = current_time_milli();
         wnd.fill_running = true;
@@ -3149,7 +3150,7 @@ void handle_command(Command cmd, bool from_menu) {
         auto thread_proc = [](void *param) {
             auto &wnd = world.wnd_callee_hierarchy;
             wnd.thread_mem.cleanup();
-            wnd.thread_mem.init();
+            wnd.thread_mem.init("view_callee_hierarchy_thread");
             SCOPED_MEM(&wnd.thread_mem);
 
             defer { cancel_callee_hierarchy(); };
@@ -3231,7 +3232,7 @@ void handle_command(Command cmd, bool from_menu) {
         auto thread_proc = [](void *param) {
             auto &wnd = world.wnd_caller_hierarchy;
             wnd.thread_mem.cleanup();
-            wnd.thread_mem.init();
+            wnd.thread_mem.init("view_caller_hierarchy_thread");
             SCOPED_MEM(&wnd.thread_mem);
 
             defer { cancel_caller_hierarchy(); };
@@ -3367,7 +3368,7 @@ void handle_command(Command cmd, bool from_menu) {
 
         // or reset?
         nav.mem.cleanup();
-        nav.mem.init();
+        nav.mem.init("ast_navigation");
 
         Parser_It *it = NULL;
         {

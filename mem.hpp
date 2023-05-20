@@ -81,7 +81,13 @@ struct Pool_Block {
     s32 size;
 };
 
+struct Pool;
+
+void add_pool(Pool *pool);
+void remove_pool(Pool *pool);
+
 struct Pool {
+    bool initialized;
     List<Pool_Block*> obsolete_blocks;
     List<Pool_Block*> used_blocks;
     List<Pool_Block*> unused_blocks;
@@ -90,6 +96,7 @@ struct Pool {
     s32 blocksize;
     ccstr name;
     u64 mem_allocated;
+    Pool *prev, *next;
 
     bool owns_address(void *addr) {
         auto check_block = [&](Pool_Block *block) -> bool {
@@ -122,8 +129,10 @@ struct Pool {
         return ret;
     }
 
-    void init(ccstr _name = NULL, u32 override_blocksize = 0) {
+    void init(ccstr _name, u32 override_blocksize = 0) {
         ptr0(this);
+
+        memhpp_assert_stub(_name);
 
         name = _name;
         blocksize = !override_blocksize ? POOL_DEFAULT_BUCKET_SIZE : override_blocksize;
@@ -132,6 +141,9 @@ struct Pool {
         unused_blocks.init(LIST_MALLOC, 32);
 
         request_new_block();
+        add_pool(this);
+
+        initialized = true;
     }
 
     Pool_Block *alloc_block(s32 blocksize) {
@@ -148,6 +160,10 @@ struct Pool {
     }
 
     void cleanup() {
+        if (!initialized) return;
+
+        remove_pool(this);
+
         For (&unused_blocks) free_block(it);
         For (&used_blocks) free_block(it);
         For (&obsolete_blocks) free_block(it);
@@ -162,6 +178,8 @@ struct Pool {
         obsolete_blocks.cleanup();
         used_blocks.cleanup();
         unused_blocks.cleanup();
+
+        initialized = false;
     }
 
     void request_new_block() {

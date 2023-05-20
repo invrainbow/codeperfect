@@ -763,7 +763,7 @@ int realmain(int argc, char **argv) {
 
 #ifdef DEBUG_BUILD
     {
-        Pool mem; mem.init();
+        Pool mem; mem.init("tmp");
         mem.owns_address(0);
         mem.cleanup();
     }
@@ -773,7 +773,7 @@ int realmain(int argc, char **argv) {
     gargv = argv;
 
     Pool tmpmem;
-    tmpmem.init();
+    tmpmem.init("tmpmem");
     SCOPED_MEM(&tmpmem);
 
     Timer t;
