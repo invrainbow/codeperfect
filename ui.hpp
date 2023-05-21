@@ -334,6 +334,8 @@ vec3f rgb_hex(ccstr s);
 vec4f rgba(vec3f color, float alpha = 1.0);
 vec4f rgba(ccstr hex, float alpha = 1.0);
 
+extern const vec4f COLOR_TRANSPARENT;
+
 #define PANE_RESIZER_WIDTH 8
 
 enum {

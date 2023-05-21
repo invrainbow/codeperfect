@@ -28,6 +28,8 @@ void open_ft_node(FT_Node *it);
 UI ui;
 Global_Colors global_colors;
 
+const vec4f RGBA_TRANSPARENT = rgba("#000000", 0.0);
+
 ccstr get_menu_command_key(Command cmd);
 bool menu_command(Command cmd, bool selected = false);
 
@@ -7843,36 +7845,35 @@ void UI::draw_everything() {
             return get_mouse_flags(rect);
         };
 
-        if (world.vim.on) {
-            auto editor = get_current_editor();
-            if (editor) {
-                if (editor->is_modifiable()) {
-                    ccstr mode_str = NULL;
-                    switch (world.vim_mode()) {
-                    case VI_NORMAL: mode_str = "NORMAL"; break;
-                    case VI_INSERT: mode_str = "INSERT"; break;
-                    case VI_REPLACE: mode_str = "REPLACE"; break;
-                    // case VI_OPERATOR: mode_str = "OPERATOR"; break;
-                    // case VI_CMDLINE: mode_str = "CMDLINE"; break;
-                    case VI_VISUAL:
-                        switch (editor->vim.visual_type) {
-                        case SEL_CHAR: mode_str = "VISUAL"; break;
-                        case SEL_LINE: mode_str = "VISUAL LINE"; break;
-                        case SEL_BLOCK: mode_str = "VISUAL BLOCK"; break;
-                        }
-                        break;
-                    default: mode_str = "UNKNOWN"; break;
-                    }
-                    draw_status_piece(LEFT, mode_str, rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
-                } else {
-                    draw_status_piece(LEFT, "READONLY", rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
-                }
+        auto curr_editor = get_current_editor();
 
-                if (world.vim.macro_state == MACRO_RECORDING)
-                    draw_status_piece(LEFT, cp_sprintf("Recording @%c", world.vim.macro_record.macro), rgba("#000000", 0), rgba(global_colors.foreground, 0.5));
-                else if (world.vim.macro_state == MACRO_RUNNING)
-                    draw_status_piece(LEFT, cp_sprintf("Running @%c (Ctrl+C to stop)", world.vim.macro_run.macro), rgba("#000000", 0), rgba(global_colors.foreground, 0.5));
+        if (world.vim.on && curr_editor) {
+            if (curr_editor->is_modifiable()) {
+                ccstr mode_str = NULL;
+                switch (world.vim_mode()) {
+                case VI_NORMAL: mode_str = "NORMAL"; break;
+                case VI_INSERT: mode_str = "INSERT"; break;
+                case VI_REPLACE: mode_str = "REPLACE"; break;
+                // case VI_OPERATOR: mode_str = "OPERATOR"; break;
+                // case VI_CMDLINE: mode_str = "CMDLINE"; break;
+                case VI_VISUAL:
+                    switch (curr_editor->vim.visual_type) {
+                    case SEL_CHAR: mode_str = "VISUAL"; break;
+                    case SEL_LINE: mode_str = "VISUAL LINE"; break;
+                    case SEL_BLOCK: mode_str = "VISUAL BLOCK"; break;
+                    }
+                    break;
+                default: mode_str = "UNKNOWN"; break;
+                }
+                draw_status_piece(LEFT, mode_str, rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
+            } else {
+                draw_status_piece(LEFT, "READONLY", rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
             }
+
+            if (world.vim.macro_state == MACRO_RECORDING)
+                draw_status_piece(LEFT, cp_sprintf("Recording @%c", world.vim.macro_record.macro), rgba("#000000", 0), rgba(global_colors.foreground, 0.5));
+            else if (world.vim.macro_state == MACRO_RUNNING)
+                draw_status_piece(LEFT, cp_sprintf("Running @%c (Ctrl+C to stop)", world.vim.macro_run.macro), rgba("#000000", 0), rgba(global_colors.foreground, 0.5));
         }
 
         if (world.show_frame_index) {
@@ -7917,13 +7918,13 @@ void UI::draw_everything() {
             world.wnd_index_log.show ^= 1;
         }
 
-        auto curr_editor = get_current_editor();
         if (curr_editor) {
             auto cur = curr_editor->cur;
-
-            auto s = cp_sprintf("%d,%d", cur.y+1, cur.x+1);
-
-            draw_status_piece(RIGHT, s, rgba(global_colors.white, 0.0), rgba("#aaaaaa"));
+            {
+                auto s = cp_sprintf("%d,%d", cur.y+1, cur.x+1);
+                s = cp_sprintf("%8s", s);
+                draw_status_piece(RIGHT, s, RGBA_TRANSPARENT, rgba("#aaaaaa"));
+            }
 
             do {
                 if (!world.vim.on) break;
@@ -7950,8 +7951,15 @@ void UI::draw_everything() {
                 }
 
                 status_area_right -= 5;
-                draw_status_piece(RIGHT, r.finish(), rgba(global_colors.white, 0.0), rgba("#aaaaaa"));
+                draw_status_piece(RIGHT, r.finish(), RGBA_TRANSPARENT, rgba("#aaaaaa"));
             } while (0);
+
+            auto search_tree = curr_editor->buf->search_tree;
+            int search_result_count = search_tree->get_size();
+            if (search_result_count) {
+                auto s = cp_sprintf("Search: [%d/%d]", curr_editor->file_search.current_idx + 1, search_result_count);
+                draw_status_piece(RIGHT, s, RGBA_TRANSPARENT, rgba("#a89f7e"));
+            }
         }
     }
 
