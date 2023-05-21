@@ -1867,70 +1867,69 @@ void UI::draw_debugger() {
 
     auto can_show_stuff = (world.dbg.state_flag != DLV_STATE_INACTIVE && state && !world.dbg.exiting);
 
-    {
+    do {
         im::SetNextWindowDockID(dock_bottom_id, ImGuiCond_Once);
         im::Begin("Call Stack");
+        defer { im::End(); };
 
-        if (can_show_stuff) {
-            im_push_mono_font();
-            defer { im_pop_font(); };
+        if (!can_show_stuff) break;
 
-            for (int i = 0; i < state->goroutines->len; i++) {
-                auto &goroutine = state->goroutines->at(i);
+        im_push_mono_font();
+        defer { im_pop_font(); };
 
-                int tree_flags = ImGuiTreeNodeFlags_OpenOnArrow;
+        for (int i = 0; i < state->goroutines->len; i++) {
+            auto &goroutine = state->goroutines->at(i);
 
-                bool is_current = (state->current_goroutine_id == goroutine.id);
-                if (is_current) {
-                    tree_flags |= ImGuiTreeNodeFlags_Bullet;
-                    im::SetNextItemOpen(true);
-                    im::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(255, 100, 100));
-                }
+            int tree_flags = ImGuiTreeNodeFlags_OpenOnArrow;
 
-                auto open = im::TreeNodeEx(
-                    (void*)&goroutine, tree_flags,
-                    "%s (%s)", goroutine.curr_func_name, goroutine.breakpoint_hit ? "BREAKPOINT HIT" : "PAUSED"
-                );
-
-                if (is_current) im::PopStyleColor();
-
-                if (im::IsItemClicked() && world.dbg.state_flag == DLV_STATE_PAUSED) {
-                    world.dbg.push_call(DLVC_SET_CURRENT_FRAME, [&](auto call) {
-                        call->set_current_frame.goroutine_id = goroutine.id;
-                        call->set_current_frame.frame = 0;
-                    });
-                }
-
-                if (open) {
-                    if (goroutine.fresh) {
-                        for (int j = 0; j < goroutine.frames->len; j++) {
-                            auto &frame = goroutine.frames->items[j];
-
-                            int tree_flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-                            if (state->current_goroutine_id == goroutine.id && state->current_frame == j)
-                                tree_flags |= ImGuiTreeNodeFlags_Selected;
-
-                            im::TreeNodeEx(&frame, tree_flags, "%s (%s:%d)", frame.func_name, cp_basename(frame.filepath), frame.lineno);
-                            if (im::IsItemClicked()) {
-                                world.dbg.push_call(DLVC_SET_CURRENT_FRAME, [&](auto call) {
-                                    call->set_current_frame.goroutine_id = goroutine.id;
-                                    call->set_current_frame.frame = j;
-                                });
-                            }
-                        }
-                    } else {
-                        im::Text("Loading...");
-                    }
-
-                    im::TreePop();
-                }
+            bool is_current = (state->current_goroutine_id == goroutine.id);
+            if (is_current) {
+                tree_flags |= ImGuiTreeNodeFlags_Bullet;
+                im::SetNextItemOpen(true);
+                im::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(255, 100, 100));
             }
+
+            auto open = im::TreeNodeEx(
+                (void*)&goroutine, tree_flags,
+                "%s (%s)", goroutine.curr_func_name, goroutine.breakpoint_hit ? "BREAKPOINT HIT" : "PAUSED"
+            );
+
+            if (is_current) im::PopStyleColor();
+
+            if (im::IsItemClicked() && world.dbg.state_flag == DLV_STATE_PAUSED) {
+                world.dbg.push_call(DLVC_SET_CURRENT_FRAME, [&](auto call) {
+                    call->set_current_frame.goroutine_id = goroutine.id;
+                    call->set_current_frame.frame = 0;
+                });
+            }
+
+            if (!open) continue;
+
+            if (goroutine.fresh) {
+                for (int j = 0; j < goroutine.frames->len; j++) {
+                    auto &frame = goroutine.frames->items[j];
+
+                    int tree_flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                    if (state->current_goroutine_id == goroutine.id && state->current_frame == j)
+                        tree_flags |= ImGuiTreeNodeFlags_Selected;
+
+                    im::TreeNodeEx(&frame, tree_flags, "%s (%s:%d)", frame.func_name, cp_basename(frame.filepath), frame.lineno);
+                    if (im::IsItemClicked()) {
+                        world.dbg.push_call(DLVC_SET_CURRENT_FRAME, [&](auto call) {
+                            call->set_current_frame.goroutine_id = goroutine.id;
+                            call->set_current_frame.frame = j;
+                        });
+                    }
+                }
+            } else {
+                im::Text("Loading...");
+            }
+
+            im::TreePop();
         }
+    } while (0);
 
-        im::End();
-    }
-
-    {
+    do {
         im::SetNextWindowDockID(dock_bottom_right_id, ImGuiCond_Once);
 
         {
@@ -1938,80 +1937,79 @@ void UI::draw_debugger() {
             im::Begin("Local Variables");
             im::PopStyleVar();
         }
+        defer { im::End(); };
 
-        if (can_show_stuff) {
-            im_push_mono_font();
-            defer { im_pop_font(); };
+        if (!can_show_stuff) break;
 
-            auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
-            if (im::BeginTable("vars", 3, flags)) {
-                im::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide);
-                im::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
-                im::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide);
-                im::TableHeadersRow();
+        im_push_mono_font();
+        defer { im_pop_font(); };
 
-                bool loading = false;
-                bool done = false;
-                Dlv_Frame *frame = NULL;
+        auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
+        if (im::BeginTable("vars", 3, flags)) {
+            im::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide);
+            im::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
+            im::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide);
+            im::TableHeadersRow();
 
-                do {
-                    if (state->current_goroutine_id == -1) break;
-                    if (state->current_frame == -1) break;
+            bool loading = false;
+            bool done = false;
+            Dlv_Frame *frame = NULL;
 
-                    auto goroutine = state->goroutines->find([&](auto it) { return it->id == state->current_goroutine_id; });
-                    if (!goroutine) break;
+            do {
+                if (state->current_goroutine_id == -1) break;
+                if (state->current_frame == -1) break;
 
-                    loading = true;
+                auto goroutine = state->goroutines->find([&](auto it) { return it->id == state->current_goroutine_id; });
+                if (!goroutine) break;
 
-                    if (!goroutine->fresh) break;
-                    if (state->current_frame >= goroutine->frames->len) break;
+                loading = true;
 
-                    frame = &goroutine->frames->items[state->current_frame];
-                    if (!frame->fresh) {
-                        frame = NULL;
-                        break;
-                    }
+                if (!goroutine->fresh) break;
+                if (state->current_frame >= goroutine->frames->len) break;
 
-                    int index = 0;
-
-                    if (frame->locals) {
-                        Fori (frame->locals) {
-                            Draw_Debugger_Var_Args a; ptr0(&a);
-                            a.var = &frame->locals->items[i];
-                            a.is_child = false;
-                            a.watch = NULL;
-                            a.index_type = INDEX_NONE;
-                            a.locals_index = index++;
-                            draw_debugger_var(&a);
-                        }
-                    }
-
-                    if (frame->args) {
-                        Fori (frame->args) {
-                            Draw_Debugger_Var_Args a; ptr0(&a);
-                            a.var = &frame->args->items[i];
-                            a.is_child = false;
-                            a.watch = NULL;
-                            a.index_type = INDEX_NONE;
-                            a.locals_index = index++;
-                            draw_debugger_var(&a);
-                        }
-                    }
-                } while (0);
-
-                im::EndTable();
-
-                if (frame) {
-                    if (isempty(frame->locals) && isempty(frame->args))
-                        im::Text("No variables to show.");
-                } else if (loading) {
-                    im::Text("Loading...");
+                frame = &goroutine->frames->items[state->current_frame];
+                if (!frame->fresh) {
+                    frame = NULL;
+                    break;
                 }
+
+                int index = 0;
+
+                if (frame->locals) {
+                    Fori (frame->locals) {
+                        Draw_Debugger_Var_Args a; ptr0(&a);
+                        a.var = &frame->locals->items[i];
+                        a.is_child = false;
+                        a.watch = NULL;
+                        a.index_type = INDEX_NONE;
+                        a.locals_index = index++;
+                        draw_debugger_var(&a);
+                    }
+                }
+
+                if (frame->args) {
+                    Fori (frame->args) {
+                        Draw_Debugger_Var_Args a; ptr0(&a);
+                        a.var = &frame->args->items[i];
+                        a.is_child = false;
+                        a.watch = NULL;
+                        a.index_type = INDEX_NONE;
+                        a.locals_index = index++;
+                        draw_debugger_var(&a);
+                    }
+                }
+            } while (0);
+
+            im::EndTable();
+
+            if (frame) {
+                if (isempty(frame->locals) && isempty(frame->args))
+                    im::Text("No variables to show.");
+            } else if (loading) {
+                im::Text("Loading...");
             }
         }
-
-        im::End();
-    }
+    } while (0);
 
     {
         im::SetNextWindowDockID(dock_bottom_right_id, ImGuiCond_Once);
