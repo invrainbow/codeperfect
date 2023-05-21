@@ -1789,6 +1789,7 @@ Parsed_File *parse_file(ccstr filepath, Parse_Lang lang, bool use_latest) {
 
         auto parser = new_ts_parser(lang);
         if (!parser) return NULL;
+        defer { ts_parser_delete(parser); };
 
         auto tree = ts_parser_parse(parser, NULL, input);
         if (!tree) return NULL;
@@ -1815,12 +1816,9 @@ Ast_Node *new_ast_node(TSNode node, Parser_It *it) {
 void Go_Indexer::free_parsed_file(Parsed_File *file) {
     if (file->it) file->it->cleanup();
 
-    // do we even need to/can we even free tree, if we're using our custom pool memory?
-    /*
     if (file->tree)
         if (!file->tree_belongs_to_editor)
             ts_tree_delete(file->tree);
-    */
 }
 
 // returns -1 if pos before ast, 0 if inside, 1 if after

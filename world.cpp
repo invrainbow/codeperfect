@@ -6,7 +6,7 @@
 #include "glcrap.hpp"
 #include "jblow_tests.hpp"
 
-World world;
+World world = {0};
 
 u64 post_insert_dotrepeat_time = 0;
 int gargc = 0;
