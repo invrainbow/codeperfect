@@ -66,6 +66,7 @@ void Searcher::search_thread() {
 
             switch (msg->type) {
             case SM_START_SEARCH: {
+                state = SEARCH_SEARCH_IN_PROGRESS;
                 cleanup_previous_search();
                 {
                     cycle_mem.init("searcher_cycle_mem");
@@ -85,7 +86,6 @@ void Searcher::search_thread() {
                 search_start_time_milli = current_time_milli();
                 search_match_buffer->len = 0;
                 search_result_buffer->len = 0;
-                state = SEARCH_SEARCH_IN_PROGRESS;
                 break;
             }
             case SM_START_REPLACE: {
@@ -125,7 +125,7 @@ void Searcher::search_thread() {
             }
 
             // otherwise, do one unit of work - search a single file
-            auto filepath = *search_file_queue->last(); // pop();
+            auto filepath = search_file_queue->pop();
 
             auto fm = map_file_into_memory(filepath);
             if (!fm) break;
@@ -182,7 +182,7 @@ void Searcher::search_thread() {
 
                     auto prevoff = sr.match_off;
 
-                    int to_left = min((PREVIEW_LEN - sr.preview_len) / 2, min(sr.preview_start.x, 10));
+                    int to_left = min(relu_sub(PREVIEW_LEN, sr.preview_len) / 2, min(sr.preview_start.x, 10));
 
                     prevoff -= to_left;
                     sr.preview_start.x -= to_left;
