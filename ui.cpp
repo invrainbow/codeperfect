@@ -1890,7 +1890,7 @@ void UI::draw_debugger() {
             }
 
             auto open = im::TreeNodeEx(
-                (void*)&goroutine, tree_flags,
+                (void*)(uptr)goroutine.id, tree_flags,
                 "%s (%s)", goroutine.curr_func_name, goroutine.breakpoint_hit ? "BREAKPOINT HIT" : "PAUSED"
             );
 
