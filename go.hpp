@@ -804,7 +804,7 @@ struct Go_Reference {
 };
 
 struct Go_File {
-    Pool pool;
+    Pool *pool;
     bool use_pool;
 
     ccstr filename;
@@ -815,7 +815,10 @@ struct Go_File {
     u64 hash;
 
     void cleanup() {
-        if (use_pool) pool.cleanup();
+        if (use_pool) {
+            cp_assert(pool);
+            pool->cleanup();
+        }
     }
 
     Go_File *copy();
@@ -824,7 +827,7 @@ struct Go_File {
 };
 
 struct Go_Package {
-    Pool pool;
+    Pool *pool;
     bool use_pool;
 
     Go_Package_Status status;
@@ -835,10 +838,12 @@ struct Go_Package {
     bool checked_for_outdated_hash;
 
     void cleanup() {
-        if (use_pool)
-            pool.cleanup();
-        else
+        if (use_pool) {
+            cp_assert(pool);
+            pool->cleanup();
+        } else {
             For (files) it.cleanup();
+        }
     }
 
     Go_Package *copy();

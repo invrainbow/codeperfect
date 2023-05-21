@@ -513,10 +513,12 @@ struct World {
 
     struct Debugger dbg;
 
-    Pool *all_pools;
+    Pool* _all_pools[2048];
+    List<Pool*> all_pools;
     Lock all_pools_lock;
 
     struct Wnd_Pool_Viewer : Wnd {
+        bool only_show_significant_pools;
     } wnd_pool_viewer;
 
     u32 next_editor_id;

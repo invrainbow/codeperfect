@@ -2670,11 +2670,12 @@ void UI::draw_everything() {
                     Go_File file; ptr0(&file);
 
                     file.use_pool = true;
-                    file.pool.init("file pool");
-                    defer { file.pool.cleanup(); };
+                    file.pool = new_object(Pool);
+                    file.pool->init("file pool");
+                    defer { file.pool->cleanup(); };
 
                     {
-                        SCOPED_MEM(&file.pool);
+                        SCOPED_MEM(file.pool);
                         file.filename = cp_basename(editor->filepath);
                         file.scope_ops = new_list(Go_Scope_Op);
                         file.decls = new_list(Godecl);
@@ -2694,7 +2695,7 @@ void UI::draw_everything() {
                     Ast_Node root; ptr0(&root);
                     root.init(ts_tree_root_node(tree), &it);
 
-                    world.indexer.process_tree_into_gofile(&file, &root, file.filename, NULL, &file.pool);
+                    world.indexer.process_tree_into_gofile(&file, &root, file.filename, NULL, file.pool);
                 } while (0);
             }
 
@@ -2781,14 +2782,18 @@ void UI::draw_everything() {
     }
 
     if (world.wnd_pool_viewer.show) {
+        auto &wnd = world.wnd_pool_viewer;
+
         begin_window("Pools", &world.wnd_pool_viewer, ImGuiWindowFlags_AlwaysAutoResize, false, true);
+
+        im::Checkbox("Only show significant pools", &wnd.only_show_significant_pools);
 
         SCOPED_LOCK(&world.all_pools_lock);
 
         Table<int> amounts; amounts.init();
         Table<int> counts; counts.init();
 
-        for (auto it = world.all_pools; it; it = it->next) {
+        For (&world.all_pools) {
             amounts.set(it->name, amounts.get(it->name) + it->mem_allocated);
             counts.set(it->name, counts.get(it->name) + 1);
         }
@@ -2809,6 +2814,10 @@ void UI::draw_everything() {
             im::TableHeadersRow();
 
             For (entries) {
+                if (wnd.only_show_significant_pools)
+                    if (it->value / 1024.0f / 1024.0f < 0.5f)
+                        break;
+
                 im::TableNextRow();
 
                 im::TableSetColumnIndex(0);

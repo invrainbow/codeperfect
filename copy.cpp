@@ -244,30 +244,21 @@ Gotype *Gotype::copy() {
 
 Go_Package *Go_Package::copy() {
     auto ret = clone(this);
-    ret->import_path = cp_strdup(import_path);
-    ret->package_name = cp_strdup(package_name);
 
-    auto new_files = new_object(List<Go_File>);
-    new_files->init(LIST_POOL, max(ret->files->len, 1));
-    For (ret->files) {
-        auto gofile = new_files->append();
-        memcpy(gofile, &it, sizeof(Go_File));
+    auto do_copy = [&]() {
+        ret->import_path = cp_strdup(import_path);
+        ret->package_name = cp_strdup(package_name);
+        ret->files = copy_list(files);
+    };
 
-        Pool new_pool;
-        new_pool.init("file pool", 512);
-
-        {
-            SCOPED_MEM(&new_pool);
-            gofile->scope_ops = copy_list(gofile->scope_ops);
-            gofile->decls = copy_list(gofile->decls);
-            gofile->imports = copy_list(gofile->imports);
-            gofile->references = copy_list(gofile->references);
-        }
-
-        gofile->cleanup();
-        gofile->pool = new_pool;
+    if (use_pool) {
+        ret->pool = new_object(Pool);
+        ret->pool->init("go_package");
+        SCOPED_MEM(ret->pool);
+        do_copy();
+    } else {
+        do_copy();
     }
-    ret->files = new_files;
 
     return ret;
 }
@@ -290,16 +281,23 @@ Go_Scope_Op *Go_Scope_Op::copy() {
 Go_File *Go_File::copy() {
     auto ret = clone(this);
 
-    ptr0(&ret->pool);
-    ret->pool.init();
+    auto do_copy = [&]() {
+        ret->filename = cp_strdup(filename);
+        ret->scope_ops = copy_list(scope_ops);
+        ret->decls = copy_list(decls);
+        ret->imports = copy_list(imports);
+        ret->references = copy_list(references);
+    };
 
-    SCOPED_MEM(&ret->pool);
+    if (use_pool) {
+        ret->pool = new_object(Pool);
+        ret->pool->init("go_file");
+        SCOPED_MEM(ret->pool);
+        do_copy();
+    } else {
+        do_copy();
+    }
 
-    ret->filename = cp_strdup(filename);
-    ret->scope_ops = copy_list(scope_ops);
-    ret->decls = copy_list(decls);
-    ret->imports = copy_list(imports);
-    ret->references = copy_list(references);
     return ret;
 }
 

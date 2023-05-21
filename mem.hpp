@@ -97,7 +97,6 @@ struct Pool {
     ccstr name;
     u64 mem_allocated;
     bool disable_alignment;
-    Pool *prev, *next;
 
     bool owns_address(void *addr) {
         auto check_block = [&](Pool_Block *block) -> bool {
@@ -142,9 +141,9 @@ struct Pool {
         unused_blocks.init(LIST_MALLOC, 32);
 
         request_new_block();
-        add_pool(this);
-
         initialized = true;
+
+        add_pool(this);
     }
 
     Pool_Block *alloc_block(s32 blocksize) {

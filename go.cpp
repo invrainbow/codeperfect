@@ -632,11 +632,11 @@ Goresult *Goresult::wrap(Godecl *new_decl) { return make_goresult(new_decl, ctx)
 Goresult *Goresult::wrap(Gotype *new_gotype) { return make_goresult(new_gotype, ctx); }
 
 Pool *Go_Indexer::get_package_pool(Go_Package *pkg) {
-    return pkg->use_pool ? &pkg->pool : &final_mem;
+    return pkg->use_pool ? pkg->pool : &final_mem;
 }
 
 Pool *Go_Indexer::get_file_pool(Go_Package *pkg, Go_File *file) {
-    return file->use_pool ? &file->pool : &pkg->pool;
+    return file->use_pool ? file->pool : pkg->pool;
 }
 
 // @Write
@@ -645,12 +645,16 @@ Go_File *Go_Indexer::get_ready_file_in_package(Go_Package *pkg, ccstr filename) 
     if (!file) {
         file = pkg->files->append();
         file->use_pool = !pkg->use_pool;
+        if (file->use_pool) {
+            SCOPED_MEM(&final_mem);
+            file->pool = new_object(Pool);
+        }
     }
 
     if (file->use_pool) {
-        file->pool.cleanup();
-        file->pool.init("go_file");
-        file->pool.disable_alignment = true;
+        file->pool->cleanup();
+        file->pool->init("go_file");
+        file->pool->disable_alignment = true;
     }
 
     SCOPED_MEM(get_file_pool(pkg, file));
@@ -1420,10 +1424,11 @@ void Go_Indexer::background_thread() {
 
         bool queue_had_stuff = (package_queue.len > 0);
 
+        Pool scratch_mem;
+        scratch_mem.init("scratch_mem");
+
         for (int items_processed = 0; items_processed < 10 && package_queue.len > 0; items_processed++) {
-            Pool scratch_mem;
-            scratch_mem.init("scratch_mem");
-            defer { scratch_mem.cleanup(); };
+            scratch_mem.reset();
             SCOPED_MEM(&scratch_mem);
 
             // pop package from end of queue
@@ -1441,18 +1446,20 @@ void Go_Indexer::background_thread() {
             // we don't actually want to create the package
             auto get_ready_package = [&]() {
                 if (pkg) {
-                    pkg->pool.cleanup();
                     if (pkg->use_pool) {
-                        pkg->pool.init("go_package");
-                        pkg->pool.disable_alignment = true;
+                        pkg->pool->cleanup();
+                        pkg->pool->init("go_package");
+                        pkg->pool->disable_alignment = true;
                     }
                 } else {
                     auto idx = index.packages->len;
                     pkg = index.packages->append();
                     pkg->use_pool = !index_has_module_containing(import_path);
                     if (pkg->use_pool) {
-                        pkg->pool.init("go_package");
-                        pkg->pool.disable_alignment = true;
+                        SCOPED_MEM(&final_mem);
+                        pkg->pool = new_object(Pool);
+                        pkg->pool->init("go_package");
+                        pkg->pool->disable_alignment = true;
                     }
                     package_lookup.set(import_path, idx);
                 }
@@ -1546,6 +1553,8 @@ void Go_Indexer::background_thread() {
 
             index_print("Processed %s in %dms.", import_path, t.read_total() / 1000000);
         }
+
+        scratch_mem.cleanup();
 
         if (!package_queue.len) {
             int i = 0;
@@ -9442,9 +9451,10 @@ void Go_File::read(Index_Stream *s) {
     };
 
     if (use_pool) {
-        pool.init("go_file");
-        pool.disable_alignment = true;
-        SCOPED_MEM(&pool);
+        pool = new_object(Pool);
+        pool->init("go_file");
+        pool->disable_alignment = true;
+        SCOPED_MEM(pool);
         read();
     } else {
         read();
@@ -9459,9 +9469,10 @@ void Go_Package::read(Index_Stream *s) {
     };
 
     if (use_pool) {
-        pool.init("go_package");
-        pool.disable_alignment = true;
-        SCOPED_MEM(&pool);
+        pool = new_object(Pool);
+        pool->init("go_package");
+        pool->disable_alignment = true;
+        SCOPED_MEM(pool);
         read();
     } else {
         read();
