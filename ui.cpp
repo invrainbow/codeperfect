@@ -3792,7 +3792,7 @@ void UI::draw_everything() {
         auto &wnd = world.wnd_index_log;
 
         im::SetNextWindowDockID(dock_bottom_id, ImGuiCond_Once);
-        begin_window("Index Log", &wnd);
+        begin_window("Index Log", &wnd, 0, false, true);
 
         im_push_mono_font();
 
