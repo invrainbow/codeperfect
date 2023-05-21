@@ -258,33 +258,42 @@ void crawl_path_into_ftnode(ccstr path, FT_Node *parent) {
             auto fullpath = path_join(path, ent->name);
             if (exclude_from_file_tree(fullpath)) break;
 
-            auto file = new_object(FT_Node);
-            file->name = cp_strdup(ent->name);
-            file->is_directory = (ent->type & FILE_TYPE_DIRECTORY);
-            file->num_children = 0;
-            file->parent = parent;
-            file->children = NULL;
-            file->depth = parent->depth + 1;
-            file->open = false;
-            file->next = NULL;
+            FT_Node *file = NULL;
 
-            if (!last_child) {
-                parent->children = last_child = file;
-            } else {
-                last_child->next = file;
-                file->prev = last_child;
-                last_child = file;
+            {
+                SCOPED_MEM(&world.file_tree_mem);
+
+                file = new_object(FT_Node);
+                file->name = cp_strdup(ent->name);
+                file->is_directory = (ent->type & FILE_TYPE_DIRECTORY);
+                file->num_children = 0;
+                file->parent = parent;
+                file->children = NULL;
+                file->depth = parent->depth + 1;
+                file->open = false;
+                file->next = NULL;
+
+                if (!last_child) {
+                    parent->children = last_child = file;
+                } else {
+                    last_child->next = file;
+                    file->prev = last_child;
+                    last_child = file;
+                }
+
+                parent->num_children++;
             }
 
-            parent->num_children++;
-            if (file->is_directory)
-                crawl_path_into_ftnode(fullpath, file);
+            if (file->is_directory) crawl_path_into_ftnode(fullpath, file);
         } while (0);
 
         return true;
     });
 
-    parent->children = sort_ft_nodes(parent->children);
+    {
+        SCOPED_MEM(&world.file_tree_mem);
+        parent->children = sort_ft_nodes(parent->children);
+    }
 }
 
 void fill_file_tree() {
@@ -295,8 +304,12 @@ void fill_file_tree() {
     auto t = create_thread([](void*) {
         defer { world.file_tree_busy = false; };
 
-        SCOPED_MEM(&world.file_tree_mem);
         world.file_tree_mem.reset();
+
+        Pool pool;
+        pool.init("fill_file_tree_thread");
+        defer { pool.cleanup(); };
+        SCOPED_MEM(&pool);
 
         // invalidate pointers
         world.file_explorer.selection = NULL;
@@ -306,10 +319,13 @@ void fill_file_tree() {
         world.file_explorer.dragging_source = NULL;
         world.file_explorer.dragging_dest = NULL;
 
-        world.file_tree = new_object(FT_Node);
-        world.file_tree->is_directory = true;
-        world.file_tree->depth = 0;
-        world.file_tree->open = true;
+        {
+            SCOPED_MEM(&world.file_tree_mem);
+            world.file_tree = new_object(FT_Node);
+            world.file_tree->is_directory = true;
+            world.file_tree->depth = 0;
+            world.file_tree->open = true;
+        }
 
         GHGitIgnoreInit(world.current_path); // why do we need this here?
         crawl_path_into_ftnode(world.current_path, world.file_tree);

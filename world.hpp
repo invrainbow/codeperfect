@@ -37,15 +37,15 @@ enum Fps_Limit {
 };
 
 struct FT_Node {
-    bool is_directory;
+    bool is_directory : 1;
+    bool open : 1;
     ccstr name;
-    i32 num_children;
-    i32 depth;
+    i16 num_children;
+    u8 depth;
     FT_Node *parent;
     FT_Node *children;
     FT_Node *prev;
     FT_Node *next;
-    bool open;
 };
 
 enum Main_Thread_Message_Type {
