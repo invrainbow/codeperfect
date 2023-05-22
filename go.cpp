@@ -1494,9 +1494,8 @@ void Go_Indexer::background_thread() {
             Timer t; t.init();
 
             auto source_files = list_source_files(resolved_path, true);
-            if (!source_files || !source_files->len) {
-                if (pkg)
-                    remove_package(pkg);
+            if (isempty(source_files)) {
+                if (pkg) remove_package(pkg);
                 continue;
             }
 
