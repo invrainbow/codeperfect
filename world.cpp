@@ -1982,8 +1982,8 @@ void init_command_info_table() {
     command_info_table[CMD_NEW_FILE] = k(CP_MOD_PRIMARY, CP_KEY_N, "New File");
     command_info_table[CMD_SAVE_FILE] = k(CP_MOD_PRIMARY, CP_KEY_S, "Save File");
     command_info_table[CMD_SAVE_ALL] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_S, "Save All");
-    command_info_table[CMD_SEARCH] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_F, "Search", true);
-    command_info_table[CMD_SEARCH_AND_REPLACE] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_H, "Search and Replace", true);
+    command_info_table[CMD_SEARCH] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_F, "Search...", true);
+    command_info_table[CMD_SEARCH_AND_REPLACE] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_H, "Search and Replace...", true);
     command_info_table[CMD_FILE_EXPLORER] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_E, "File Explorer", true);
     command_info_table[CMD_GO_TO_FILE] = k(CP_MOD_PRIMARY, CP_KEY_P, "Go To File", true);
     command_info_table[CMD_GO_TO_SYMBOL] = k(CP_MOD_PRIMARY, CP_KEY_T, "Go To Symbol", true);
@@ -2002,8 +2002,8 @@ void init_command_info_table() {
     command_info_table[CMD_FIND_NEXT] = k(0, CP_KEY_F3, "Find: Go To Next", true);
     command_info_table[CMD_FIND_PREVIOUS] = k(CP_MOD_SHIFT, CP_KEY_F3, "Find: Go To Previous", true);
     command_info_table[CMD_FIND_CLEAR] = k(CP_MOD_CTRL, CP_KEY_SLASH, "Find: Clear");
-    command_info_table[CMD_GO_TO_NEXT_SEARCH_RESULT] = k(0, CP_KEY_F4, "Go To Next Search Result", true);
-    command_info_table[CMD_GO_TO_PREVIOUS_SEARCH_RESULT] = k(CP_MOD_SHIFT, CP_KEY_F4, "Go To Previous Search Result", true);
+    command_info_table[CMD_GO_TO_NEXT_SEARCH_RESULT] = k(0, CP_KEY_F4, "Search: Go To Next", true);
+    command_info_table[CMD_GO_TO_PREVIOUS_SEARCH_RESULT] = k(CP_MOD_SHIFT, CP_KEY_F4, "Search: Go To Previous", true);
 
     command_info_table[CMD_FIND_REFERENCES] = k(CP_MOD_PRIMARY | CP_MOD_ALT, CP_KEY_R, "Find References");
     command_info_table[CMD_FORMAT_FILE] = k(CP_MOD_ALT | CP_MOD_SHIFT, CP_KEY_F, "Format File");
