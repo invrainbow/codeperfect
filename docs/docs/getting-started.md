@@ -4,17 +4,13 @@ title: "Getting Started"
 
 ## Install
 
-CodePerfect currently supports Windows (x64) and Mac (x64, arm64);
-[download](https://codeperfect95.com/download) and unzip the appropriate binary.
+CodePerfect currently supports MacOS. (Windows and Linux support coming soon!)
 
-### Windows
+### Install on MacOS
 
-Move the unzipped folder anywhere. A popular choice is your Program Files
-folder. Run `CodePerfect.exe`.
-
-### macOS
-
-Drag `CodePerfect.app` into your Applications folder and run it.
+1. [Download](https://codeperfect95.com/download) the appropriate binary for
+   your architecture.
+2. Unzip and drag `CodePerfect.app` into your Applications folder and run it.
 
 :::info
 
@@ -26,20 +22,23 @@ You'll only need to do this once.
 
 ## Setup
 
-CodePerfect requires Go version 1.13+. You can use
-the [official installer](https://go.dev/dl/) for your platform, or a
-package manager like
-[brew](https://formulae.brew.sh/formula/go) or
+CodePerfect requires Go version 1.13+. You can use the
+[official installer](https://go.dev/dl/) for your platform, or a package manager
+like [brew](https://formulae.brew.sh/formula/go) or
 [choco](https://community.chocolatey.org/packages/golang).
 
 ### Find Go installation (automatic)
 
-By default, CodePerfect uses whatever `go` binary your terminal does. It detects go by running
+By default, CodePerfect uses whatever `go` binary your terminal does, which it detects
+by running `which go` in `bash`. The way to make the `go` binary findable is
+to ensure it's in your `PATH`.
 
-- macOS: `which go` in `bash`
-- Windows: `where go` in `cmd`
+:::note
 
-The way to make the `go` binary findable is to ensure it's in your `PATH`.
+If you use the official installer, it should set your system `PATH` for you. If
+you used a package manager, you may or may not need to set the `PATH` manually.
+
+:::
 
 ### Find Go installation (manual)
 
@@ -48,13 +47,6 @@ Create a file `~/.cpgobin`, and put the full absolute path inside.
 
 This is the path to the go binary itself, not the folder containing it. E.g. you
 want `/opt/homebrew/bin/go`, not `/opt/homebrew/bin`.
-
-:::note
-
-If you use the official installer, it should set your system `PATH` for you. If
-you used a package manager, you may or may not need to set the `PATH` manually.
-
-:::
 
 ## Projects
 
@@ -88,7 +80,7 @@ find your dependencies, and if you have un-downloaded dependencies, the indexer
 will naturally be unable to find them. You can ensure they've been downloaded:
 
 ```
-go mod tidy
+go mod download
 ```
 
 ### Create a new project
@@ -125,13 +117,13 @@ as your code and dependencies change. If it's ever broken or giving you
 incorrect results, however, there are two fixes you can try. (And please
 [report the bug](https://github.com/codeperfect95/issue-tracker) to us!)
 
-- Run `Tools` &gt; `Rescan Index`. This looks for missing and changed packages,
-  and processes them. Most of the time, this should fix your problem. This also
-  runs when you restart CodePerfect.
+- `Tools` &gt; `Rescan Index` looks for missing and changed packages, and
+  processes them. Most of the time, this should fix your problem. This also runs
+  when you restart CodePerfect.
 
-- More drastically, run `Tools` &gt; `Obliterate and Recreate Index`. This will
-  completely re-index everything, as if you were opening a folder for the first
-  time.
+- `Tools` &gt; `Obliterate and Recreate Index` is a more drastic option that
+  will completely re-index everything, as if you were opening a folder for the
+  first time.
 
 ## Automatic updates
 

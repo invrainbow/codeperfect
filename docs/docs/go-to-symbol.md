@@ -3,7 +3,7 @@ title: "Go to Symbol"
 ---
 
 CodePerfect indexes every toplevel declaration in your code. To jump to one,
-press `Primary+T`.
+press `Cmd+T`.
 
 ![](/go-to-symbol.png)
 
@@ -20,5 +20,5 @@ feature will be temporarily disabled.
 
 | Command                    | Shortcut    |
 | -------------------------- | ----------- |
-| Toggle Go To Symbol window | `Primary+T` |
+| Toggle Go To Symbol window | `Cmd+T` |
 | Select file                | `Enter`     |

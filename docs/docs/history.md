@@ -12,5 +12,5 @@ and `Tab`.
 
 | Command    | Shortcut                                             |
 | ---------- | ---------------------------------------------------- |
-| Go Back    | `Primary+Minus`, or `C-o` in Vim mode                |
-| Go Forward | `Primary+Shift+Minus`, or `C-i` or `Tab` in Vim mode |
+| Go Back    | `Cmd+Minus`, or `C-o` in Vim mode                |
+| Go Forward | `Cmd+Shift+Minus`, or `C-i` or `Tab` in Vim mode |

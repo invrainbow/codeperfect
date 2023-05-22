@@ -10,16 +10,13 @@ performs a few types of completions:
   - Possible completions for the thing that precedes it. For values this
     includes fields and methods. For packages this lists all public
     declarations.
-
   - [Postfix completions](postfix-completion).
 
 - When you type lone identifiers, it looks for:
 
   - Identifiers declared in the current scope, as well as toplevels in other
     packages you might want to use.
-
   - Currently imported packages and importable packages.
-
   - Language keywords.
 
 ## Additional ergonomics
@@ -31,7 +28,7 @@ function.
 
 :::note
 
-The `(` inserted after selecting a function can be turned on/off in Tools &gt;
+The `(` inserted after selecting a function can be toggled in Tools &gt;
 Options &gt; Code Intelligence.
 
 :::
@@ -39,7 +36,7 @@ Options &gt; Code Intelligence.
 ## Fuzzy search
 
 All completions support fuzzy search, so you don't need to type the whole word
-or even a strict substring. For instance, you could type `of` to match
+or even a strict substring. E.g. you could type `of` to match
 `OpenFile`.
 
 ## Keyboard shortcuts

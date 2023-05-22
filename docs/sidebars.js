@@ -66,7 +66,7 @@ const sidebars = {
     {
       type: "category",
       label: "Overview",
-      items: ["getting-started", "getting-license", "platform-differences"],
+      items: ["getting-started", "getting-license"],
     },
     {
       type: "category",
@@ -77,6 +77,7 @@ const sidebars = {
         "go-to-symbol",
         "history",
         "tree-based-navigation",
+        "search-and-replace",
       ],
     },
     {
@@ -85,8 +86,9 @@ const sidebars = {
       items: [
         "panes-and-tabs",
         "vim-keybindings",
-        "format-document",
+        "format-file",
         "toggle-comment",
+        "find-and-replace",
       ],
     },
     {
@@ -98,7 +100,6 @@ const sidebars = {
         "parameter-hints",
         "postfix-completion",
         "find-interfaces",
-        "find-implementations",
         "find-references",
       ],
     },

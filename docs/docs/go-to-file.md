@@ -3,7 +3,7 @@ title: "Go to File"
 ---
 
 CodePerfect lets you fuzzy-search for a file and open it. To do this, press
-`Primary+P`.
+`Cmd+P`.
 
 ![](/go-to-file.png)
 
@@ -11,5 +11,5 @@ CodePerfect lets you fuzzy-search for a file and open it. To do this, press
 
 | Command                  | Shortcut    |
 | ------------------------ | ----------- |
-| Toggle Go To File window | `Primary+P` |
+| Toggle Go To File window | `Cmd+P` |
 | Select file              | `Enter`     |

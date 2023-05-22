@@ -7,6 +7,6 @@ your cursor over it, and run `Navigate` &gt; `Go to Definition`.
 
 ## Keyboard shortcuts
 
-| Command          | Shortcut                               |
-| ---------------- | -------------------------------------- |
-| Go to Definition | `gd` in Vim Normal mode or `Primary+G` |
+| Command          | Shortcut                   |
+| ---------------- | -------------------------- |
+| Go to Definition | `Cmd+G` (`gd` in Vim mode) |

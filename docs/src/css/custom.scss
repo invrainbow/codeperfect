@@ -22,6 +22,12 @@ pre code {
   white-space: pre;
 }
 
+.admonition code {
+  background: white;
+  box-shadow: 0 0 #0000, 0 0 #0000, 0 1px 2px 0 rgb(0 0 0 / 0.1),
+    0 1px 1px -1px rgb(0 0 0 / 0.1);
+}
+
 kbd {
   background: #f6f8fa;
   border: 1px solid rgba(175, 184, 193, 0.2);
@@ -188,6 +194,7 @@ a.navbar__link > span > svg {
   .menu__link--active {
     background: none !important;
     color: black !important;
+    font-weight: bold !important;
   }
 
   .theme-doc-sidebar-item-category {

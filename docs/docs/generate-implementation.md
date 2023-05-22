@@ -18,7 +18,7 @@ Move your text cursor on top of a type that you want to generate methods for:
 
 Here, the cursor is on top of the `Foo` type.
 
-Run `Refactor` &gt; `Generate Implementation`. This will present you with a menu
+Run `Generate Implementation`. This will present you with a menu
 to select an interface (fuzzy-search enabled). For this example, we'll select
 `io.Reader`:
 

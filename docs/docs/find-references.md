@@ -3,6 +3,10 @@ title: "Find References"
 ---
 
 CodePerfect can find all references to an identifier or struct field. Move your
-cursor over the identifier and run `Navigate` &gt; `Find References`.
+cursor over the identifier and run `Find References`.
 
-This will open results in a new panel.
+:::caution
+
+This is currently not able to find references to imports.
+
+:::

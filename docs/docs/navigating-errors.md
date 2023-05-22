@@ -2,8 +2,8 @@
 
 If the build fails, errors will be displayed in the Build Results window.
 
-You can navigate between errors using `Go` &gt; `Go to Previous Error` and `Go`
-&gt; `Go to Next Error`.
+You can navigate between errors using `Go to Previous Error` and
+`Go to Next Error`.
 
 ## Keyboard shortcuts
 

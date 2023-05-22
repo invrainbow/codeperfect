@@ -9,14 +9,12 @@ You can navigate by traversing the current file's syntax tree. Run the
 - Press `Down` or `Right` to move to the next sibling.
 - Press `Shift+Up` or `Shift+Left` to move to the parent.
 - Press `Shift+Down` or `Shift+Right` to move to the first child.
-
 - The `h` `j` `k` `l` keys can be used instead of the arrow keys.
-
 - Press `Escape` to leave tree-based navigation.
 
 ## Vim integration
 
-For ergonomic reasons, if Vim keybindings are enabled, the `s`, `c`, and `x`
+For ergonomic reasons, if Vim keybindings are enabled, the `s` `c` `x`
 keys behave as if the selected node were visual-selected in Vim.
 
 ## Keyboard shortcuts
