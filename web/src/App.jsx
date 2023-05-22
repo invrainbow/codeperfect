@@ -1,59 +1,55 @@
 import {
-  IconMenu2,
-  IconCheck,
-  IconDownload,
-  IconTag,
-  IconChevronRight,
-  IconChevronDown,
-  IconClockHour4,
-  IconX,
-  IconBooks,
-  IconTelescope,
-  IconHexagons,
-  IconSearch,
-  IconRobot,
+  IconArrowRight,
   IconBinaryTree,
-  IconBulb,
-  IconBug,
-  IconTags,
-  IconWand,
-  IconDiamond,
-  IconCommand,
-  IconEdit,
-  IconTools,
   IconBrain,
-  IconMessages,
+  IconBulb,
+  IconCalendar,
+  IconCheck,
+  IconChevronRight,
   IconCircleCheck,
   IconCircleMinus,
-  IconArrowRight,
-  IconCalendarTime,
-  IconShoppingCart,
-  IconUsers,
+  IconClockHour4,
+  IconCommand,
+  IconDiamond,
+  IconDownload,
+  IconEdit,
+  IconHexagons,
+  IconMenu2,
+  IconMessages,
+  IconRobot,
+  IconSearch,
+  IconTag,
+  IconTags,
+  IconTelescope,
+  IconTools,
+  IconWand,
+  IconX,
 } from "@tabler/icons";
 
 import { AiFillApple } from "@react-icons/all-files/ai/AiFillApple";
-import { AiFillWindows } from "@react-icons/all-files/ai/AiFillWindows";
-import { SiVim } from "@react-icons/all-files/si/SiVim";
-import { FaLinux } from "@react-icons/all-files/fa/FaLinux";
-import { FaTwitter } from "@react-icons/all-files/fa/FaTwitter";
 import { FaDiscord } from "@react-icons/all-files/fa/FaDiscord";
+import { FaTwitter } from "@react-icons/all-files/fa/FaTwitter";
+import { SiVim } from "@react-icons/all-files/si/SiVim";
+// import { AiFillWindows } from "@react-icons/all-files/ai/AiFillWindows";
+// import { FaLinux } from "@react-icons/all-files/fa/FaLinux";
 
-import posthog from "posthog-js";
 import cx from "classnames";
+import posthog from "posthog-js";
 import React from "react";
 import { Helmet } from "react-helmet";
 import { twMerge } from "tailwind-merge";
+import Marquee from "react-fast-marquee";
 
+import _ from "lodash";
 import {
   BrowserRouter,
   Link,
-  Outlet,
   Navigate,
+  Outlet,
   Route,
   Routes,
   useLocation,
 } from "react-router-dom";
-import _ from "lodash";
 import "./index.css";
 
 posthog.init("phc_kIt8VSMD8I2ScNhnjWDU2NmrK9kLIL3cHWpkgCX3Blw", {
@@ -62,7 +58,7 @@ posthog.init("phc_kIt8VSMD8I2ScNhnjWDU2NmrK9kLIL3cHWpkgCX3Blw", {
 
 const SUPPORT_EMAIL = "support@codeperfect95.com";
 const CURRENT_BUILD = process.env.REACT_APP_BUILD_VERSION;
-const CURRENT_BUILD_RELEASE_DATE = "March 20, 2023";
+const CURRENT_BUILD_RELEASE_DATE = "May 22, 2023";
 
 const isDev = process.env.REACT_APP_CPENV === "development";
 const isStaging = process.env.REACT_APP_CPENV === "staging";
@@ -71,13 +67,8 @@ const BASE_LINKS = {
   docs: "https://docs.codeperfect95.com",
   gettingStarted: "https://docs.codeperfect95.com/getting-started",
   changelog: "https://docs.codeperfect95.com/changelog",
+
   issueTracker: "https://github.com/codeperfect95/issue-tracker",
-
-  buyPersonalMonthly: "https://buy.stripe.com/aEU5kx2aTaso4TK008",
-  buyPersonalYearly: "https://buy.stripe.com/fZefZb2aTdEAbi8aEN",
-  buyProMonthly: "https://buy.stripe.com/6oE28ldTB5843PG9AK",
-  buyProYearly: "https://buy.stripe.com/28o8wJ3eXfMI4TK5kv",
-
   twitter: "https://twitter.com/codeperfect95",
   discord: "https://discord.gg/WkFY44BY7a",
   substack: "https://codeperfect95.substack.com/",
@@ -90,10 +81,9 @@ const BASE_LINKS = {
 };
 
 const DEV_LINKS = {
-  buyPersonalMonthly: "https://buy.stripe.com/test_4gw8xrb10g8D7QsbIP",
-  buyPersonalYearly: "https://buy.stripe.com/test_8wMfZT3yy2hN1s45ks",
-  buyProMonthly: "https://buy.stripe.com/test_6oEdRL1qq5tZ5Ik6oy",
-  buyProYearly: "https://buy.stripe.com/test_3cs6pj9WW3lR3Ac7sB",
+  docs: "http://localhost:3000",
+  gettingStarted: "http://localhost:3000/getting-started",
+  changelog: "http://localhost:3000/changelog",
 };
 
 const STAGING_LINKS = {
@@ -165,89 +155,6 @@ function Icon({ block, noshift, icon: IconComponent, ...props }) {
   );
 }
 
-const FEATURES = _.shuffle([
-  {
-    label: "Integrated Debugger",
-    desc: "Full Delve integration gives you full debugging powers.",
-    icon: IconBug,
-  },
-  {
-    label: "Code Intelligence",
-    desc: "Go to definition, find all usages, parameter hints, autocomplete, all the table stakes.",
-    icon: IconBulb,
-  },
-  {
-    label: "Smart Autocomplete",
-    desc: "Context-specific suggestions as you type. ",
-    icon: IconBrain,
-  },
-  {
-    label: "Postfix Completions",
-    desc: "Macros that work intelligently on your Go expressions.",
-    icon: IconRobot,
-  },
-  {
-    label: "Global Fuzzy Selector",
-    desc: "Works on files, symbols, commands, and completions.",
-    icon: IconTelescope,
-  },
-  {
-    label: "Tree-Based Navigation",
-    desc: "Use the power of our integrated parser to directly walk the AST.",
-    icon: IconBinaryTree,
-  },
-  {
-    label: "Auto Format",
-    desc: "Automatically format your code on save, with zero configuration.",
-    icon: IconWand,
-  },
-  {
-    label: "Integrated Build",
-    desc: "Build and jump to/fix each error with ergonomic shortcuts.",
-    icon: IconTools,
-  },
-  {
-    label: "Rename Identifier",
-    desc: "Rename any symbol across your entire codebase.",
-    icon: IconEdit,
-  },
-  {
-    label: "Command Palette",
-    desc: "Press Primary+K to run any command or action.",
-    icon: IconCommand,
-  },
-  {
-    label: "Generate Function",
-    desc: "Take a call to a non-existent function and generate its signature.",
-    icon: IconDiamond,
-  },
-  {
-    label: "Fast Project-Wide Grep",
-    desc: "Fast search (and replace) runs in milliseconds on large codebases.",
-    icon: IconSearch,
-  },
-  {
-    label: "Manage Interfaces",
-    desc: "Find implementations and interfaces and generate implementations.",
-    icon: IconHexagons,
-  },
-  {
-    label: "Organize Imports",
-    desc: "Intelligently add/remove imports with our native import organizer.",
-    icon: IconBooks,
-  },
-  {
-    label: "Manage Struct Tags",
-    desc: "Add/remove struct tags automatically.",
-    icon: IconTags,
-  },
-  {
-    label: "Vim Integration",
-    desc: "First-class Vim support, integrated with everything else.",
-    icon: SiVim,
-  },
-]);
-
 const BAD_FEATURES = [
   "Electron",
   "JavaScript",
@@ -273,7 +180,7 @@ function Home() {
             className="btn btn1 justify-center flex md:inline-flex text-center"
           >
             <Icon size={18} className="mr-1" icon={IconDownload} />
-            Download
+            Download for Mac
           </A>
           <A
             href={LINKS.docs}
@@ -286,7 +193,7 @@ function Home() {
       </div>
 
       <div className="bg-neutral-900 border-gray-100 p-8 py-12 md:pb-24 relative z-10 flex items-center justify-center">
-        <div className="max-w-screen-2xl flex flex-col lg:flex-row items-center gap-8 md:gap-16">
+        <div className="max-w-screen-2xl flex flex-col lg:flex-row items-center gap-8 md:gap-12">
           <div className="lg:w-1/3 md:mx-0">
             <div className="text-[160%] md:text-[225%] font-semibold text-black leading-tight">
               {BAD_FEATURES.map((name) => (
@@ -323,27 +230,39 @@ function Home() {
       </div>
 
       <div className="batteries-included z-10 px-4 md:px-12 py-12 md:py-20">
-        <h1 className="title text-3xl md:text-4xl mb-6 md:mb-12 text-center">
-          <div className="block md:inline-block">Batteries included,</div>
-          <span className="hidden md:inline-block">&nbsp;</span>
-          <div className="block md:inline-block">zero configuration.</div>
-        </h1>
-        <div className="max-w-screen-lg md:gap-x-12 mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mt-4 md:mt-0 md:p-0">
-            {FEATURES.map((it) => (
-              <div
-                className="bg-white hover:scale-[103%] shadow-sm rounded p-3 md:p-4 transition-all select-none"
-                key={it.label}
-              >
-                <Icon stroke={1.25} size={26} icon={it.icon} />
-                <div className="title leading-none text-neutral-700 mt-0.5 md:mt-0.5">
-                  {it.label}
+        <div className="max-w-screen-lg mx-auto flex gap-8 items-center">
+          <div className="w-1/3">
+            <h1 className="title text-3xl md:text-4xl">
+              <div>Batteries included,</div>
+              <div>zero configuration.</div>
+            </h1>
+            <div className="max-w-screen-sm mx-auto mt-4 mb-6 text-lg">
+              <p>
+                CodePerfect comes with a full IDE out of the box. Get the best
+                of both worlds: Vim's speed, an IDE's power.
+              </p>
+            </div>
+            <A
+              href="/features"
+              className="btn btn2 btn-lg btn-no-hover justify-center flex md:inline-flex text-center group"
+            >
+              View Features
+              <Icon
+                size={18}
+                className="ml-1.5 relative top-[1px] group-hover:translate-x-1 transition"
+                icon={IconChevronRight}
+              />
+            </A>
+          </div>
+
+          <div className="flex-1">
+            <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-lg font-medium rounded p-6 font-mono">
+              {FEATURE_LIST.map((it) => (
+                <div className="flex-shrink leading-none text-center text-neutral-300 hover:text-neutral-400 transition-colors">
+                  {it.name}
                 </div>
-                <div className="mt-2 font-sans text-neutral-500 leading-snug">
-                  {it.desc}
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -476,11 +395,11 @@ const BUYING_QUESTIONS = [
 
 function BuyLicenseSection({ label, children }) {
   return (
-    <div className="bg-white shadow rounded-lg overflow-hidden">
-      <div className="leading-none p-4 border-b border-neutral-200 flex gap-2 items-center font-bold">
+    <div className="bg-white shadow rounded-lg overflow-hidden p-4">
+      <div className="leading-none mb-3 text-neutral-500 border-neutral-100 flex gap-2 items-center font-bold text-sm">
         {label}
       </div>
-      <div className="p-4">{children}</div>
+      {children}
     </div>
   );
 }
@@ -520,7 +439,7 @@ function BuySelectable({ selected, label, children, onClick }) {
     <button
       onClick={onClick}
       className={cx(
-        "font-inherit rounded-lg text-left p-5 relative flex flex-col bg-white transition-colors shadow",
+        "font-inherit rounded-lg text-left p-4 relative flex flex-col bg-white transition-colors shadow",
         {
           "border border-neutral-300 bg-neutral-50 ": !selected,
           "border border-neutral-500": selected,
@@ -529,7 +448,7 @@ function BuySelectable({ selected, label, children, onClick }) {
     >
       <div
         className={cx(
-          "absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-neutral-500 text-white transition-opacity",
+          "absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-neutral-600 text-white transition-opacity",
           {
             "opacity-100": selected,
             "opacity-0": !selected,
@@ -553,7 +472,7 @@ function BuyLicense() {
     },
     {
       key: "business",
-      label: "Business",
+      label: "Pro",
       features: [
         { label: <b>Everything in Personal</b> },
         { label: "Company can pay" },
@@ -566,7 +485,7 @@ function BuyLicense() {
       label: "Enterprise",
       custom: true,
       features: [
-        { label: <b>Everything in Business</b> },
+        { label: <b>Everything in Pro</b> },
         { label: "Volume pricing" },
         { label: "Team licensing" },
         { label: "Other custom requests" },
@@ -597,7 +516,7 @@ function BuyLicense() {
       key: "sub_only",
       label: "Subscription Only",
       points: [
-        '"Rent" the software',
+        "Use software during susbcription",
         "Automatic updates",
         "Lose access when subscription ends",
       ],
@@ -698,7 +617,7 @@ function BuyLicense() {
         <div className="flex gap-8 items-start">
           <div className="flex-1 flex flex-col gap-4">
             <BuyLicenseSection label="1. Select Plan">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-4">
                 {PLAN_INFO.map(({ label, features, key }) => (
                   <BuySelectable
                     key={key}
@@ -729,7 +648,7 @@ function BuyLicense() {
             {plan !== "enterprise" && (
               <>
                 <BuyLicenseSection label="2. Select Product">
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-3 gap-4">
                     {PRODUCT_INFO.map(({ key, label, points }) => (
                       <BuySelectable
                         key={key}
@@ -750,7 +669,7 @@ function BuyLicense() {
                 </BuyLicenseSection>
                 {product !== "license_only" && (
                   <BuyLicenseSection label="3. Select Billing Period">
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-4">
                       {PERIOD_INFO.map(({ key, label, subtitle }) => (
                         <BuySelectable
                           key={key}
@@ -786,7 +705,7 @@ function BuyLicense() {
                   </span>
                 </div>
                 {plan === "enterprise" ? (
-                  <div className="pt-4 text-neutral-300 leading-tight">
+                  <div className="pt-4 text-neutral-300">
                     Please get in touch with our support team to discuss your
                     options.
                   </div>
@@ -800,25 +719,17 @@ function BuyLicense() {
                         <BuySummaryPoint good text="Perpetual license" />
                       )}
                       {isSub ? (
-                        <>
-                          <BuySummaryPoint good text="Automatic updates" />
-                          <BuySummaryPoint
-                            good
-                            text={
-                              period === "monthly"
-                                ? "Monthly billing"
-                                : "Annual billing"
-                            }
-                          />
-                        </>
+                        <BuySummaryPoint good text="Automatic updates" />
                       ) : (
                         <BuySummaryPoint text="No updates after 3 months" />
                       )}
                       {!isLicense && (
                         <BuySummaryPoint text="Lose access after subscription" />
                       )}
-                      {plan === "individual" && (
+                      {plan === "individual" ? (
                         <BuySummaryPoint text="Company cannot pay" />
+                      ) : (
+                        <BuySummaryPoint good text="Company can pay" />
                       )}
                     </div>
                   </>
@@ -827,7 +738,7 @@ function BuyLicense() {
                   {plan === "enterprise" ? (
                     <div>
                       <A
-                        className="group btn btn2 btn-no-hover btn-lg inline-flex gap-2 items-center justify-center"
+                        className="group btn btn2 btn-no-hover btn-lg flex gap-2 items-center justify-center"
                         href={`mailto:${SUPPORT_EMAIL}`}
                       >
                         <Icon size={16} icon={IconMessages} />
@@ -863,7 +774,7 @@ function BuyLicense() {
                       </div>
                       <div className="mt-6">
                         <A
-                          className="group btn btn2 btn-no-hover btn-lg inline-flex gap-2 items-center justify-center"
+                          className="group btn btn2 btn-no-hover btn-lg flex gap-2 items-center justify-center"
                           style={{ paddingLeft: "40px", paddingRight: "40px" }}
                           href={paymentLink}
                         >
@@ -904,8 +815,8 @@ const faqs = [
     a: (
       <>
         <p>
-          There isn't any one thing. CodePerfect manages to be fast compared to
-          modern software by declining to copy what makes modern software slow.
+          There isn't any one thing. CodePerfect gets its speed largely by
+          declining to copy what makes modern software slow.
         </p>
 
         <p>
@@ -915,6 +826,15 @@ const faqs = [
           <A href={LINKS.nonPessimized}>non-pessimized</A> code that just
           executes the actual CPU instructions that do the thing it's supposed
           to.
+        </p>
+
+        <p>
+          We try to limit use of third-party libraries and frameworks in order
+          to own our entire stack, and maintain visibility into every line of
+          code that goes into the final product. Much of the slowness of modern
+          software comes not from this slow algorithm or that inefficient data
+          structure, but rather from all the invisible bloat hidden inside the
+          mainstream default software stack.
         </p>
 
         <p>
@@ -928,48 +848,24 @@ const faqs = [
     ),
   },
   {
-    q: "How does it compare with Jetbrains or VSCode?",
-    a: (
-      <>
-        <p>
-          Jetbrains has more features, VSCode is free and customizable, and
-          CodePerfect is fast.
-        </p>
-
-        <p>
-          Right now we're targeting people who want an IDE as fast as Vim, but
-          comes with code intelligence and other IDE features to program
-          productively. Our users spend a lot of time in their editor, and get
-          significant value and joy from a seamless, latency-free workflow.
-        </p>
-        <p>
-          In exchange, CodePerfect has fewer features, is not free, and provides
-          limited customization.
-        </p>
-      </>
-    ),
-  },
-  {
     q: "What's the long term goal?",
     a: (
       <>
-        <p>We are trying to build the best power tool for programming.</p>
         <p>
-          New programming tools today tend to have ambitious goals like making
-          programming more collaborative, or involve less code, or more
-          integrated with third-party tools. Ours is more boring: to build the
-          best tool for editing, compiling, and debugging code. CodePerfect is
-          tightly integrated and optimized around that workflow.
+          We are trying to build the best power tool for the specific task of
+          programming: editing, compiling, and debugging code. CodePerfect is
+          tightly integrated and optimized around performing that task.
         </p>
 
         <p>
           We want to be <A href="https://sesuperhuman.com">Superhuman</A> for
-          programming. Business people are in their email all day, and small
-          improvements add up. Same with an IDE.
+          programming. Just like many professionals spend hours each day in
+          their email, software engineers spend hours each day in their IDE, and
+          all the little UX improvements add up.
         </p>
         <p>
-          A big part of this is building a smooth experience. Up to a point,
-          that means speed, or low latency, so that's a big initial focus.
+          A big part of having a smooth UX is speed, or low latency, so that's a
+          big initial focus.
         </p>
       </>
     ),
@@ -988,8 +884,338 @@ const faqs = [
   },
 ];
 
+const UNSORTED_FEATURE_LIST = [
+  {
+    name: "Autocomplete",
+    body: (
+      <p>
+        Like any IDE, CodePerfect provides automatic completion to help you
+        write code. Press <code>Ctrl+Space</code> to show all declared
+        identifiers in the current scope, or press <code>.</code> after an
+        identifier to see fields and methods.
+      </p>
+    ),
+    icon: IconBrain,
+  },
+  {
+    name: "Command Palette",
+    body: (
+      <>
+        <p>
+          Every action in CodePerfect can be run as a command through the
+          command palette. Just press <code>Cmd+K</code> anywhere to bring it
+          up.
+        </p>
+        <p>
+          The command palette supports fuzzy search so you can access commands
+          quickly. It also displays the keyboard shortcut for future ease of
+          use.
+        </p>
+      </>
+    ),
+    icon: IconCommand,
+  },
+  {
+    name: "Global Fuzzy Finder",
+    body: (
+      <>
+        <p>
+          Use fuzzy search to jump to any file or symbol. Press{" "}
+          <code>Cmd+P</code> any time to open the file finder, and{" "}
+          <code>Cmd+T</code> to open the symbol finder.
+        </p>
+        <p>
+          We know opening files is a critical part of the developer workflow, so
+          we specially made sure it was lag-free. From opening the finder, to
+          typing each key, to selecting a file, there's no latency at any step.
+        </p>
+      </>
+    ),
+    icon: IconTelescope,
+  },
+  {
+    name: "Format File",
+    body: (
+      <>
+        <p>
+          CodePerfect allows you to format your file at any time, as well as the
+          option to automatically format on save.
+        </p>
+        <p>
+          We use our in-memory index to organize your imports, removing unused
+          imports and detecting which imports are needed to resolve undeclared
+          symbols. This yields greater accuracy and speed.
+        </p>
+      </>
+    ),
+    icon: IconWand,
+  },
+  {
+    name: "Postfix Completion",
+    body: (
+      <>
+        <p>
+          CodePerfect provides several macros in the autocomplete menu after you
+          type <code>.</code> after an expression.
+        </p>
+        <p>
+          These macros range from the powerful <code>.check!</code>, which
+          assigns variables to the expression's return values, checks whether{" "}
+          <code>err != nil</code>, and returns the zero-value of the current
+          function's return type if so; to the straightforward{" "}
+          <code>.ifnotnil</code>, which expands <code>x.ifnotnil!</code> to
+        </p>
+        <pre>
+          if x != nil &#123;{"\n  "}
+          {"// "}cursor here{"\n"}&#125;
+        </pre>
+      </>
+    ),
+    icon: IconRobot,
+  },
+  {
+    name: "Jump to Definition",
+    body: (
+      <>
+        <p>
+          CodePerfect can jump to the definition of any declared symbol. Either
+          move your cursor over it and press <code>Cmd+G</code> (or{" "}
+          <code>gd</code> in Vim mode), or hold down <code>Cmd</code> and click
+          it.
+        </p>
+      </>
+    ),
+    icon: IconBulb,
+  },
+  {
+    name: "Manage Interfaces",
+    body: (
+      <>
+        <p>
+          CodePerfect provides several facilities for navigating and working
+          with interfaces:
+        </p>
+        <ul>
+          <li>Given a type, list the interfaces it implements</li>
+          <li>Given an interface, list the types that implement it</li>
+          <li>Generate implementation of interface for type</li>
+        </ul>
+      </>
+    ),
+    icon: IconHexagons,
+  },
+  {
+    name: "Build & Debug",
+    body: (
+      <>
+        <p>
+          CodePerfect is designed to make the edit-build-debug loop as seamless
+          as possible.
+        </p>
+        <p>
+          Trigger a build, jump to the first error, write a fix, jump to next
+          error, fix, rebuild. Everything is done with ergonomic hotkeys. Error
+          positions are preserved as you edit code. The entire experience is
+          frictionless.
+        </p>
+        <p>
+          When you're ready to debug, CodePerfect integrates with Delve to
+          provide a seamless debugging experience.
+        </p>
+      </>
+    ),
+    icon: IconTools,
+  },
+  {
+    name: "Project-Wide Live Search",
+    body: (
+      <>
+        <p>
+          Press <code>Cmd+Shift+F</code> to open project-wide search. Grepping a
+          whole folder is fast enough on modern machines that we display results
+          in realtime after each keystroke. It's like a faster, completely-local
+          Algolia.
+        </p>
+        <p>
+          When you see the result you want, use <code>Up</code> and{" "}
+          <code>Down</code> to navigate results and <code>Enter</code> to
+          select.
+        </p>
+        <p>
+          We also support project-wide replace in the same window; press{" "}
+          <code>Cmd+Shift+H</code>.
+        </p>
+      </>
+    ),
+    icon: IconSearch,
+  },
+  {
+    name: "Rename Anything",
+    body: (
+      <>
+        <p>
+          CodePerfect can rename almost anything that's declared within your
+          project. Just hover over an identifier and run the <code>Rename</code>{" "}
+          command (or press <code>F12</code>). This works on any identifier, not
+          just the actual declaration. It also works on struct field names.
+        </p>
+      </>
+    ),
+    icon: IconEdit,
+  },
+  {
+    name: "Tree-Based Navigation",
+    body: (
+      <>
+        <p>
+          You can traverse your code by traversing its AST. Press{" "}
+          <code>Ctrl+Alt+A</code> to enter tree-based navigation. Then,
+        </p>
+        <ul>
+          <li>
+            <code>Down</code> or <code>Right</code> to move to next sibling node
+          </li>
+          <li>
+            <code>Up</code> or <code>Left</code> to move to previous sibling
+            node
+          </li>
+          <li>
+            <code>Shift+Down</code> or <code>Shift+Right</code> to move inward
+            to child node
+          </li>
+          <li>
+            <code>Shift+Up</code> or <code>Shift+Left</code> to move outward to
+            parent node
+          </li>
+        </ul>
+        <p>
+          For Vim users, <code>h</code> <code>j</code> <code>k</code>{" "}
+          <code>l</code> can be used instead of the arrow keys.
+        </p>
+      </>
+    ),
+    icon: IconBinaryTree,
+  },
+  {
+    name: "Vim Keybindings",
+    body: (
+      <>
+        <p>CodePerfect supports Vim keybindings out of the box.</p>
+        <p>
+          We support most of the commonly used commands, and made a conscious
+          effort to iron out any obvious wrinkles that pop up during the course
+          of actually using the keybindings to edit code. So
+        </p>
+      </>
+    ),
+    icon: SiVim,
+  },
+  {
+    name: "Generate Function",
+    body: (
+      <>
+        <p>
+          Sometimes you're coding and you wish that a function or method
+          existed, so you make a note to implement it later.
+        </p>
+        <p>
+          With CodePerfect, you can write a function call, and CodePerfect can
+          generate the function signature based on the types of the parameters.
+          For instance, if you have
+        </p>
+        <pre>
+          x := 0{"\n"}y := false{"\n"}calculate(x, y)
+        </pre>
+        <p>
+          you can hover over <code>calculate</code> and run{" "}
+          <code>Generate Function From Call</code>. It will generate
+        </p>
+        <pre>func calculate(v0 int, v1 bool)</pre>
+      </>
+    ),
+    icon: IconDiamond,
+  },
+  {
+    name: "Find References",
+    body: (
+      <>
+        <p>
+          Find References works as it does in other IDEs. Hover over the name
+          and press <code>Cmd+Alt+R</code> or run <code>Find References</code>{" "}
+          in the command palette.
+        </p>
+      </>
+    ),
+    icon: IconTags,
+  },
+  {
+    name: "Manage Struct Tags",
+    body: (
+      <>
+        <p>
+          CodePerfect comes with commands to let you generate, add and remove
+          tags from structs.
+        </p>
+        <p>Just open the command palette and search for `struct`.</p>
+      </>
+    ),
+    icon: IconTags,
+  },
+];
+
+const FEATURE_LIST = _.sortBy(UNSORTED_FEATURE_LIST, "name");
+
+function Features() {
+  const onScroll = (name) => {
+    const elem = document.querySelector(`[data-feature-name="${name}"]`);
+    if (elem) {
+      elem.scrollIntoView();
+    }
+  };
+
+  return (
+    <div className="max-w-screen-lg flex mx-auto my-16 gap-12 features">
+      <div className="w-[200px]">
+        <div className="sticky top-8">
+          {FEATURE_LIST.map((it) => (
+            <div className="mb-3 last:mb-0 leading-none">
+              <button
+                onClick={() => onScroll(it.name)}
+                className="p-0 leading-none font-medium text-neutral-600 hover:text-neutral-900"
+                key={it.name}
+              >
+                {it.name}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="flex-1">
+        <div className="title text-3xl md:text-5xl mb-4">Features</div>
+        <div className="mb-8">
+          This is a brief overview of the features inside CodePerfect. For a
+          more complete and in-depth list, see the full{" "}
+          <A href={LINKS.docs}>docs</A>.
+        </div>
+        <div className="bg-white p-8 rounded-lg shadow-lg">
+          {FEATURE_LIST.map((it) => (
+            <div
+              data-feature-name={it.name}
+              key={it.name}
+              className="mt-6 pt-6 border-t border-neutral-100 first:mt-0 first:pt-0 first:border-0"
+            >
+              <div className="mb-4 font-bold text-lg">{it.name}</div>
+              {it.body}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FAQ() {
-  const [states, setStates] = React.useState({});
+  // const [states, setStates] = React.useState({});
 
   return (
     <div className="bg-white md:bg-transparent py-12 px-6 md:px-4 md:py-24 md:max-w-screen-sm mx-auto">
@@ -1002,23 +1228,10 @@ function FAQ() {
             className="prose md:bg-white border-b border-neutral-200 last:border-0 md:border-0 md:rounded-lg md:shadow-sm"
             key={it.q}
           >
-            <button
-              onClick={() => setStates({ ...states, [i]: !states[i] })}
-              className="text-left pb-4 md:p-5 font-bold w-full flex justify-between items-center"
-            >
-              <div>{it.q}</div>
-              <div className="flex items-center justify-center">
-                <Icon
-                  size={20}
-                  icon={IconChevronDown}
-                  className={cx(
-                    "transition/-transform origin-center",
-                    states[i] && "rotate-180"
-                  )}
-                />
-              </div>
-            </button>
-            {states[i] && <div className="pb-4 md:p-5 md:pt-0">{it.a}</div>}
+            <div className="text-left pb-4 md:p-5 font-bold w-full flex justify-between items-center">
+              {it.q}
+            </div>
+            <div className="pb-4 md:p-5 md:pt-0">{it.a}</div>
           </div>
         ))}
       </div>
@@ -1028,12 +1241,14 @@ function FAQ() {
 
 function Download() {
   const links = [
+    /*
     {
       platform: "windows-x64",
       icon: AiFillWindows,
       label: "Windows",
       disabledText: "Temporarily unavailable.",
     },
+    */
     {
       platform: "mac-x64",
       icon: AiFillApple,
@@ -1044,18 +1259,20 @@ function Download() {
       icon: AiFillApple,
       label: "macOS M1",
     },
+    /*
     {
       platform: "linux-x64",
       icon: FaLinux,
       label: "Linux",
       disabledText: "Coming soon!",
     },
+    */
   ];
 
   return (
     <div className="my-12 md:my-28 px-6 md:px-0">
       <div className="md:px-4 md:text-center text-3xl md:text-5xl title leading-none">
-        Download CodePerfect
+        CodePerfect for Mac
       </div>
       <div className="text-center mt-2">
         <A
@@ -1114,13 +1331,19 @@ function Download() {
               </WithTooltip>
             </div>
           ))}
+          <div className="mt-4">
+            <span className="rounded-full text-sm font-semibold bg-neutral-200 text-neutral-500 py-1.5 px-4 inline-flex items-center gap-1.5">
+              <Icon icon={IconCalendar} size={20} />
+              <span className="relative" style={{ top: 1 }}>
+                Windows &amp; Linux coming soon!
+              </span>
+            </span>
+          </div>
         </p>
         <div className="flex items-center justify-center">
-          <div className="max-w-screen-xl mt-4 flex items-start md:items-center gap-2">
-            <span>
-              (CodePerfect is free to evaluate for 7 days. After that you'll
-              need a <A href="/buy">license</A> to keep using it.)
-            </span>
+          <div className="mt-8">
+            CodePerfect is free to evaluate for 7 days. After that you'll need a{" "}
+            <A href="/buy">license</A>.
           </div>
         </div>
       </div>
@@ -1208,10 +1431,11 @@ function Header() {
   const links = [
     [LINKS.docs, "Docs"],
     [LINKS.changelog, "Changelog"],
-    [LINKS.discord, "Discord"],
+    ["/features", "Features"],
     ["/faq", "FAQ"],
     ["/buy", "Buy"],
     ["/download", "Download"],
+    [LINKS.discord, <Icon size={24} icon={FaDiscord} />],
   ];
 
   return (
@@ -1242,11 +1466,11 @@ function Header() {
               <div className="invert z-40 relative">
                 <Logo onClick={() => setShowMenu(false)} />
               </div>
-              <div className="mt-2">
+              <div className="mt-2 flex items-center">
                 {links.map(([url, label]) => (
                   <A
                     key={url}
-                    className="block text-neutral-100 no-underline whitespace-nowrap md:hidden leading-none py-2"
+                    className="flex text-neutral-100 no-underline whitespace-nowrap md:hidden leading-none py-2 items-center"
                     onClick={() => setShowMenu(false)}
                     href={url}
                   >
@@ -1257,11 +1481,11 @@ function Header() {
             </div>
           )}
         </div>
-        <div className="hidden md:flex items-baseline gap-x-8">
+        <div className="hidden md:flex items-center gap-x-8">
           {links.map(([url, label]) => (
             <A
               key={url}
-              className="text-[95%] text-neutral-700 no-underline whitespace-nowrap hidden md:inline-block"
+              className="text-[95%] text-neutral-700 no-underline whitespace-nowrap hidden md:inline-flex"
               href={url}
             >
               {label}
@@ -1288,8 +1512,9 @@ function Footer() {
         </div>
         <div className="flex flex-col md:flex-row md:items-start gap-y-3 md:gap-x-14 leading-none">
           <FootSection>
+            <FootLink href="/features">Features</FootLink>
             <FootLink href="/buy">Buy License</FootLink>
-            <FootLink href="/download">Download</FootLink>
+            <FootLink href="/download">Download for Mac</FootLink>
           </FootSection>
           <FootSection>
             <FootLink href={LINKS.docs}>Docs</FootLink>
@@ -1341,6 +1566,7 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route path="download" element={<Download />} />
             <Route path="faq" element={<FAQ />} />
+            <Route path="features" element={<Features />} />
             <Route path="buy" element={<BuyLicense />} />
             <Route path="payment-done" element={<PaymentDone />} />
             <Route path="portal-done" element={<PortalDone />} />

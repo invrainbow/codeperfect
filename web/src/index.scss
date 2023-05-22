@@ -38,6 +38,7 @@
   ol,
   blockquote,
   center,
+  pre,
   form {
     &:not(:first-child) {
       @apply mt-4;
@@ -62,14 +63,17 @@
   }
 
   code {
-    background: #eef2ee;
-    color: #383;
     @apply rounded-md px-1.5 py-0.5;
     margin-bottom: 1px;
     display: inline-block;
   }
+  pre {
+    @apply rounded-md px-3 py-2;
+  }
   code,
   pre {
+    background: #eef2ee;
+    color: #383;
     font-size: 82.5%;
   }
 
@@ -250,6 +254,15 @@
       &::after {
         @apply bg-neutral-300;
       }
+    }
+  }
+
+  .features {
+    code {
+      @apply leading-none py-0.5 px-1;
+    }
+    pre {
+      @apply py-2 px-3 rounded;
     }
   }
 }
