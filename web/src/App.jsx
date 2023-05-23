@@ -38,7 +38,6 @@ import posthog from "posthog-js";
 import React from "react";
 import { Helmet } from "react-helmet";
 import { twMerge } from "tailwind-merge";
-import Marquee from "react-fast-marquee";
 
 import _ from "lodash";
 import {
