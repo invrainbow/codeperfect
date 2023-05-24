@@ -1524,6 +1524,7 @@ void Go_Indexer::background_thread() {
                 process_tree_into_gofile(file, pf->root, filepath, &pkgname, get_file_pool(pkg, file));
 
                 if (pkgname) {
+                    SCOPED_MEM(&final_mem);
                     if (str_ends_with(filename, "_test.go")) {
                         if (!test_package_name)
                             test_package_name = cp_strdup(pkgname);

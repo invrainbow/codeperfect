@@ -52,7 +52,8 @@ enum Parse_Lang {
 // version 43: redo mem, shrink Go_Type
 // version 44: add disable_alignment
 // version 45: make enums u8
-#define GO_INDEX_VERSION 45
+// version 46: fix package names
+#define GO_INDEX_VERSION 46
 
 enum {
     CUSTOM_HASH_BUILTINS = 1,
