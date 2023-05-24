@@ -3079,10 +3079,12 @@ void handle_command(Command cmd, bool from_menu) {
             break;
         }
 
+        world.generate_implementation_mem.reset();
+
         if (!ind.acquire_lock(IND_READING, true)) break;
         defer { ind.release_lock(IND_READING); };
 
-        world.generate_implementation_mem.reset();
+        ind.reload_all_editors();
 
         auto gofile = ind.find_gofile_from_ctx(result->decl->ctx);
         if (!gofile) break;
@@ -3825,7 +3827,7 @@ done_writing:
 
     // we now know that src and dest accurately reflect what's on disk
 
-    Buffer buf; buf.init(MEM, 0, false, false);
+    Buffer buf; buf.init(MEM, LANG_GO, false, false);
     defer { buf.cleanup(); };
 
     auto filepath = ind.ctx_to_filepath(dest->ctx);

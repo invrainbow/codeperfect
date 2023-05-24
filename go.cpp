@@ -4920,8 +4920,6 @@ Gotype *Go_Indexer::get_closest_function(ccstr filepath, cur2 pos) {
 
 // this fills possible types
 void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selected_interface) {
-    reload_all_editors();
-
     For (index.packages) {
         if (it.status != GPS_READY) continue;
 
