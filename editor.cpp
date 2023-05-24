@@ -993,7 +993,8 @@ void Editor::reload_file(bool because_of_file_watcher) {
 
     if (!check_file(fm)) return;
 
-    buf->read(fm);
+    auto uchars = cstr_to_ustr((ccstr)fm->data, fm->len);
+    replace_buf_contents(uchars);
     buf->dirty = false;
 }
 
@@ -2278,28 +2279,21 @@ bool Editor::optimize_imports() {
 void Editor::format_on_save() {
     if (lang != LANG_GO) return; // any more checks needed?
 
-    auto old_uchars = buf->get_uchars(new_cur2(0, 0), buf->end_pos());
-
     GHFmtStart();
-
     {
-        List<char> line;
-        line.init();
-
-        For (old_uchars) {
+        auto line = new_list(char);
+        For (buf->get_uchars(new_cur2(0, 0), buf->end_pos())) {
             if (it == '\n') {
-                line.append('\0');
-                GHFmtAddLine(line.items);
-                line.len = 0;
+                line->append('\0');
+                GHFmtAddLine(line->items);
+                line->len = 0;
                 continue;
             }
-
             char tmp[4];
-            line.concat(tmp, uchar_to_cstr(it, tmp));
+            line->concat(tmp, uchar_to_cstr(it, tmp));
         }
-
-        line.append('\0');
-        GHFmtAddLine(line.items);
+        line->append('\0');
+        GHFmtAddLine(line->items);
     }
 
     auto new_contents = gh_fmt_finish();
@@ -2312,53 +2306,62 @@ void Editor::format_on_save() {
     auto new_uchars = cstr_to_ustr(new_contents);
     cp_assert(new_uchars);
 
-    {
-        auto a = new_dstr(old_uchars);
-        auto b = new_dstr(new_uchars);
-        auto diffs = diff_main(a, b);
+    replace_buf_contents(new_uchars);
+}
 
-        // for some reason we couldn't diff, just apply the entire file :(
-        if (!diffs) {
-            buf->apply_edit(new_cur2(0, 0), buf->end_pos(), new_uchars->items, new_uchars->len);
-        } else {
-            auto cur = new_cur2(0, 0);
+void Editor::replace_buf_contents(List<uchar> *new_contents) {
+    auto old_uchars = buf->get_uchars(new_cur2(0, 0), buf->end_pos());
 
-            auto advance_cur = [&](cur2 c, DString s) -> cur2 {
-                for (int i = 0, len = s.len(); i < len; i++) {
-                    if (s.get(i) == '\n') {
-                        c.y++;
-                        c.x = 0;
-                        continue;
-                    }
-                    c.x++;
-                }
-                return c;
-            };
+    auto a = new_dstr(old_uchars);
+    auto b = new_dstr(new_contents);
+    auto diffs = diff_main(a, b);
 
-            SCOPED_BATCH_CHANGE(buf);
-            For (diffs) {
-                switch (it.type) {
-                case DIFF_INSERT: {
-                    auto uchars = cstr_to_ustr(it.s.str());
-                    cur = buf->insert(cur, uchars->items, uchars->len);
-                    break;
-                }
-                case DIFF_DELETE:
-                    buf->remove(cur, advance_cur(cur, it.s));
-                    break;
-                case DIFF_SAME:
-                    cur = advance_cur(cur, it.s);
-                    break;
-                }
+    auto adjust_cursor = [&]() {
+        if (cur.y >= buf->lines.len)
+            cur = buf->end_pos();
+        if (cur.x > buf->lines[cur.y].len)
+            cur.x = buf->lines[cur.y].len;
+    };
+
+    // for some reason we couldn't diff, just apply the entire file :(
+    if (!diffs) {
+        buf->apply_edit(new_cur2(0, 0), buf->end_pos(), new_contents->items, new_contents->len);
+        adjust_cursor();
+        return;
+    }
+
+    auto cur = new_cur2(0, 0);
+
+    auto advance_cur = [&](cur2 c, DString s) -> cur2 {
+        for (int i = 0, len = s.len(); i < len; i++) {
+            if (s.get(i) == '\n') {
+                c.y++;
+                c.x = 0;
+                continue;
             }
+            c.x++;
+        }
+        return c;
+    };
+
+    SCOPED_BATCH_CHANGE(buf);
+    For (diffs) {
+        switch (it.type) {
+        case DIFF_INSERT: {
+            auto uchars = cstr_to_ustr(it.s.str());
+            cur = buf->insert(cur, uchars->items, uchars->len);
+            break;
+        }
+        case DIFF_DELETE:
+            buf->remove(cur, advance_cur(cur, it.s));
+            break;
+        case DIFF_SAME:
+            cur = advance_cur(cur, it.s);
+            break;
         }
     }
 
-    // we need to adjust cursor manually
-    if (cur.y >= buf->lines.len)
-        cur = buf->end_pos();
-    if (cur.x > buf->lines[cur.y].len)
-        cur.x = buf->lines[cur.y].len;
+    adjust_cursor();
 }
 
 void Editor::handle_save(bool about_to_close) {
