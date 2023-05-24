@@ -1119,9 +1119,9 @@ int realmain(int argc, char **argv) {
 
         {
             ImFontConfig config;
-            config.OversampleH = 4;
-            config.OversampleV = 3;
-            world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(ui.base_font->data->get_data(), ui.base_font->data->get_len(), CODE_FONT_SIZE);
+            config.OversampleH = 3;
+            config.OversampleV = 2;
+            world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(ui.base_font->data->get_data(), ui.base_font->data->get_len(), CODE_FONT_SIZE, &config);
             cp_assert(world.ui.im_font_mono);
 
             t.log("load im_font_mono");
