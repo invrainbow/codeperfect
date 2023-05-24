@@ -173,7 +173,7 @@ function Home() {
         <div className="md:text-center text-[130%] text-gray-600 leading-normal">
           A power tool with a small resource footprint.
         </div>
-        <div className="mt-8 md:mt-8 md:text-center flex gap-4 md:justify-center">
+        <div className="mt-8 md:mt-8 md:text-center flex flex-col md:flex-row gap-4 md:justify-center">
           <A
             href="/download"
             className="btn btn1 justify-center flex md:inline-flex text-center"
@@ -228,9 +228,9 @@ function Home() {
         </div>
       </div>
 
-      <div className="batteries-included z-10 px-4 md:px-12 py-12 md:py-20">
-        <div className="max-w-screen-lg mx-auto flex gap-8 items-center">
-          <div className="w-1/3">
+      <div className="batteries-included z-10 px-6 md:px-12 py-12 md:py-20">
+        <div className="max-w-screen-lg mx-auto flex flex-col md:flex-row gap-8 items-center">
+          <div className="md:w-1/3">
             <h1 className="title text-3xl md:text-4xl">
               <div>Batteries included,</div>
               <div>zero configuration.</div>
@@ -254,7 +254,7 @@ function Home() {
             </A>
           </div>
 
-          <div className="flex-1">
+          <div className="hidden md:block flex-1">
             <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-lg font-medium rounded p-6 font-mono">
               {FEATURE_LIST.map((it) => (
                 <div className="flex-shrink leading-none text-center text-neutral-300 hover:text-neutral-400 transition-colors">
@@ -613,10 +613,10 @@ function BuyLicense() {
         Buy License
       </div>
       <div className="md:max-w-screen-xl mx-auto md:mb-16">
-        <div className="flex gap-8 items-start">
-          <div className="flex-1 flex flex-col gap-4">
+        <div className="flex flex-col md:flex-row gap-4 md:gap-8 md:items-start">
+          <div className="flex-1 flex flex-col gap-4 px-4 md:px-0">
             <BuyLicenseSection label="1. Select Plan">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {PLAN_INFO.map(({ label, features, key }) => (
                   <BuySelectable
                     key={key}
@@ -647,7 +647,7 @@ function BuyLicense() {
             {plan !== "enterprise" && (
               <>
                 <BuyLicenseSection label="2. Select Product">
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {PRODUCT_INFO.map(({ key, label, points }) => (
                       <BuySelectable
                         key={key}
@@ -668,7 +668,7 @@ function BuyLicense() {
                 </BuyLicenseSection>
                 {product !== "license_only" && (
                   <BuyLicenseSection label="3. Select Billing Period">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {PERIOD_INFO.map(({ key, label, subtitle }) => (
                         <BuySelectable
                           key={key}
@@ -692,110 +692,108 @@ function BuyLicense() {
               </>
             )}
           </div>
-          <div className="shadow-lg rounded-lg bg-neutral-800 p-8 w-[350px]">
-            <div className="max-w-screen-md mx-auto">
-              <div className="flex flex-col">
-                <div className="leading-none">
-                  <span className="text-white font-bold text-xl leading-none">
-                    CodePerfect
-                  </span>
-                  <span className="text-neutral-300 text-lg ml-1.5">
-                    {planInfo.label}
-                  </span>
+          <div className="shadow-lg rounded-lg bg-neutral-800 p-8 mx-4 md:m-0 w-auto md:w-[350px]">
+            <div className="flex flex-col">
+              <div className="leading-none">
+                <span className="text-white font-bold text-xl leading-none">
+                  CodePerfect
+                </span>
+                <span className="text-neutral-300 text-lg ml-1.5">
+                  {planInfo.label}
+                </span>
+              </div>
+              {plan === "enterprise" ? (
+                <div className="pt-4 text-neutral-300">
+                  Please get in touch with our support team to discuss your
+                  options.
                 </div>
+              ) : (
+                <>
+                  <div className="mb-6 text-amber-300 font-bold">
+                    {productInfo.label}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {isLicense && (
+                      <BuySummaryPoint good text="Perpetual license" />
+                    )}
+                    {isSub ? (
+                      <BuySummaryPoint good text="Automatic updates" />
+                    ) : (
+                      <BuySummaryPoint text="No updates after 3 months" />
+                    )}
+                    {!isLicense && (
+                      <BuySummaryPoint text="Lose access after subscription" />
+                    )}
+                    {plan === "individual" ? (
+                      <BuySummaryPoint text="Company cannot pay" />
+                    ) : (
+                      <BuySummaryPoint good text="Company can pay" />
+                    )}
+                  </div>
+                </>
+              )}
+              <div className="mt-6 pt-6 border-t border-neutral-500 border-dashed">
                 {plan === "enterprise" ? (
-                  <div className="pt-4 text-neutral-300">
-                    Please get in touch with our support team to discuss your
-                    options.
+                  <div>
+                    <A
+                      className="group btn btn2 btn-no-hover btn-lg flex gap-2 items-center justify-center"
+                      href={`mailto:${SUPPORT_EMAIL}`}
+                    >
+                      <Icon size={16} icon={IconMessages} />
+                      <span>Contact support</span>
+                    </A>
                   </div>
                 ) : (
                   <>
-                    <div className="mb-6 text-amber-300 font-bold">
-                      {productInfo.label}
-                    </div>
-                    <div className="flex flex-col gap-1">
+                    <div className="text-white border-neutral-400 border rounded-lg p-4">
                       {isLicense && (
-                        <BuySummaryPoint good text="Perpetual license" />
+                        <BuyLineItem
+                          label="License"
+                          value={formatMoney(licensePrice)}
+                        />
                       )}
-                      {isSub ? (
-                        <BuySummaryPoint good text="Automatic updates" />
-                      ) : (
-                        <BuySummaryPoint text="No updates after 3 months" />
+                      {isSub && (
+                        <BuyLineItem
+                          label={
+                            period === "monthly"
+                              ? "Monthly subscription"
+                              : "Annual subscription"
+                          }
+                          value={`${formatMoney(subPrice)}/${
+                            period === "monthly" ? "mo" : "yr"
+                          }`}
+                        />
                       )}
-                      {!isLicense && (
-                        <BuySummaryPoint text="Lose access after subscription" />
-                      )}
-                      {plan === "individual" ? (
-                        <BuySummaryPoint text="Company cannot pay" />
-                      ) : (
-                        <BuySummaryPoint good text="Company can pay" />
-                      )}
+                      <BuyLineItem
+                        label="Due today"
+                        total
+                        value={formatMoney(licensePrice + subPrice)}
+                      />
+                    </div>
+                    <div className="mt-6">
+                      <A
+                        className="group btn btn2 btn-no-hover btn-lg flex gap-2 items-center justify-center"
+                        style={{ paddingLeft: "40px", paddingRight: "40px" }}
+                        href={paymentLink}
+                      >
+                        Checkout
+                        <Icon
+                          className="group-hover:translate-x-1 transform transition-transform"
+                          icon={IconArrowRight}
+                        />
+                      </A>
                     </div>
                   </>
                 )}
-                <div className="mt-6 pt-6 border-t border-neutral-500 border-dashed">
-                  {plan === "enterprise" ? (
-                    <div>
-                      <A
-                        className="group btn btn2 btn-no-hover btn-lg flex gap-2 items-center justify-center"
-                        href={`mailto:${SUPPORT_EMAIL}`}
-                      >
-                        <Icon size={16} icon={IconMessages} />
-                        <span>Contact support</span>
-                      </A>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="text-white border-neutral-400 border rounded-lg p-4">
-                        {isLicense && (
-                          <BuyLineItem
-                            label="License"
-                            value={formatMoney(licensePrice)}
-                          />
-                        )}
-                        {isSub && (
-                          <BuyLineItem
-                            label={
-                              period === "monthly"
-                                ? "Monthly subscription"
-                                : "Annual subscription"
-                            }
-                            value={`${formatMoney(subPrice)}/${
-                              period === "monthly" ? "mo" : "yr"
-                            }`}
-                          />
-                        )}
-                        <BuyLineItem
-                          label="Due today"
-                          total
-                          value={formatMoney(licensePrice + subPrice)}
-                        />
-                      </div>
-                      <div className="mt-6">
-                        <A
-                          className="group btn btn2 btn-no-hover btn-lg flex gap-2 items-center justify-center"
-                          style={{ paddingLeft: "40px", paddingRight: "40px" }}
-                          href={paymentLink}
-                        >
-                          Checkout
-                          <Icon
-                            className="group-hover:translate-x-1 transform transition-transform"
-                            icon={IconArrowRight}
-                          />
-                        </A>
-                      </div>
-                    </>
-                  )}
-                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-      <div className="bg-zinc-50 border-y border-t-neutral-200 border-b-neutral-100 py-12 mt-16">
-        <div className="md:max-w-screen-xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-6">
+      <div className="bg-zinc-50 border-y border-t-neutral-200 border-b-neutral-100 md:py-12 mt-8 md:mt-16">
+        <div className="md:max-w-screen-xl mx-auto grid grid-cols-1 md:grid-cols-3 md:gap-6">
           {BUYING_QUESTIONS.map((it) => (
-            <div className="">
+            <div className="border-b border-neutral-200 md:border-0 last:border-0 p-6 md:p-0">
               <div className="text-neutral-700 text-lg font-semibold mb-2">
                 {it.title}
               </div>
@@ -887,12 +885,17 @@ const UNSORTED_FEATURE_LIST = [
   {
     name: "Autocomplete",
     body: (
-      <p>
-        Like any IDE, CodePerfect provides automatic completion to help you
-        write code. Press <code>Ctrl+Space</code> to show all declared
-        identifiers in the current scope, or press <code>.</code> after an
-        identifier to see fields and methods.
-      </p>
+      <>
+        <p>
+          <img src={asset("/feature-autocomplete.png")} alt="autocomplete" />
+        </p>
+        <p>
+          Like any IDE, CodePerfect provides automatic completion to help you
+          write code. Press <code>Ctrl+Space</code> to show all declared
+          identifiers in the current scope, or press <code>.</code> after an
+          identifier to see fields and methods.
+        </p>
+      </>
     ),
     icon: IconBrain,
   },
@@ -900,6 +903,12 @@ const UNSORTED_FEATURE_LIST = [
     name: "Command Palette",
     body: (
       <>
+        <p>
+          <img
+            src={asset("/feature-command-palette.png")}
+            alt="command palette"
+          />
+        </p>
         <p>
           Every action in CodePerfect can be run as a command through the
           command palette. Just press <code>Cmd+K</code> anywhere to bring it
@@ -919,13 +928,16 @@ const UNSORTED_FEATURE_LIST = [
     body: (
       <>
         <p>
+          <img src={asset("/feature-goto-file.png")} alt="goto file" />
+        </p>
+        <p>
           Use fuzzy search to jump to any file or symbol. Press{" "}
           <code>Cmd+P</code> any time to open the file finder, and{" "}
           <code>Cmd+T</code> to open the symbol finder.
         </p>
         <p>
-          We know opening files is a critical part of the developer workflow, so
-          we specially made sure it was lag-free. From opening the finder, to
+          We know navigation is a critical part of the developer workflow, so we
+          specially made sure it was lag-free. From opening the finder, to
           typing each key, to selecting a file, there's no latency at any step.
         </p>
       </>
@@ -953,6 +965,9 @@ const UNSORTED_FEATURE_LIST = [
     name: "Postfix Completion",
     body: (
       <>
+        <p>
+          <img src={asset("/feature-postfix.png")} alt="postfix" />
+        </p>
         <p>
           CodePerfect provides several macros in the autocomplete menu after you
           type <code>.</code> after an expression.
@@ -991,6 +1006,12 @@ const UNSORTED_FEATURE_LIST = [
     body: (
       <>
         <p>
+          <img
+            src={asset("/feature-generate-implementation.png")}
+            alt="generate implementation"
+          />
+        </p>
+        <p>
           CodePerfect provides several facilities for navigating and working
           with interfaces:
         </p>
@@ -1026,7 +1047,7 @@ const UNSORTED_FEATURE_LIST = [
     icon: IconTools,
   },
   {
-    name: "Project-Wide Live Search",
+    name: "Global Live Search",
     body: (
       <>
         <p>
@@ -1099,15 +1120,31 @@ const UNSORTED_FEATURE_LIST = [
     name: "Vim Keybindings",
     body: (
       <>
-        <p>CodePerfect supports Vim keybindings out of the box.</p>
         <p>
-          We support most of the commonly used commands, and made a conscious
-          effort to iron out any obvious wrinkles that pop up during the course
-          of actually using the keybindings to edit code. So
+          CodePerfect supports Vim keybindings out of the box. Go to{" "}
+          <code>Tools</code> &gt; <code>Options</code> &gt;{" "}
+          <code>Editor Settings</code> to enable them.
+        </p>
+        <p>
+          Vim keybindings are a work in progress, but we currently support most
+          of the commonly used commands, and the development team currently uses
+          it for everyday text editing.
         </p>
       </>
     ),
     icon: SiVim,
+  },
+  {
+    name: "Video Game Performance",
+    body: (
+      <>
+        <p>
+          CodePerfect was designed from the ground up with performance in mind.
+          Instant startup, no latency, 144 frames a second, runs as smooth as a
+          video game.
+        </p>
+      </>
+    ),
   },
   {
     name: "Generate Function",
@@ -1139,6 +1176,12 @@ const UNSORTED_FEATURE_LIST = [
     body: (
       <>
         <p>
+          <img
+            src={asset("/feature-find-references.png")}
+            alt="find references"
+          />
+        </p>
+        <p>
           Find References works as it does in other IDEs. Hover over the name
           and press <code>Cmd+Alt+R</code> or run <code>Find References</code>{" "}
           in the command palette.
@@ -1153,9 +1196,9 @@ const UNSORTED_FEATURE_LIST = [
       <>
         <p>
           CodePerfect comes with commands to let you generate, add and remove
-          tags from structs.
+          tags from structs. Just search the command palette for{" "}
+          <code>struct</code>.
         </p>
-        <p>Just open the command palette and search for `struct`.</p>
       </>
     ),
     icon: IconTags,
@@ -1168,19 +1211,21 @@ function Features() {
   const onScroll = (name) => {
     const elem = document.querySelector(`[data-feature-name="${name}"]`);
     if (elem) {
-      elem.scrollIntoView();
+      elem.scrollIntoView({
+        behavior: "smooth",
+      });
     }
   };
 
   return (
-    <div className="max-w-screen-lg flex mx-auto my-16 gap-12 features">
-      <div className="w-[200px]">
+    <div className="max-w-screen-lg flex mx-auto mt-8 border-b border-neutral-100 md:border-0 md:my-16 gap-12 features">
+      <div className="w-[175px] hidden md:block">
         <div className="sticky top-8">
           {FEATURE_LIST.map((it) => (
             <div className="mb-3 last:mb-0 leading-none">
               <button
                 onClick={() => onScroll(it.name)}
-                className="p-0 leading-none font-medium text-neutral-600 hover:text-neutral-900"
+                className="p-0 leading-none font-medium text-neutral-600 hover:text-neutral-900 text-left"
                 key={it.name}
               >
                 {it.name}
@@ -1190,20 +1235,24 @@ function Features() {
         </div>
       </div>
       <div className="flex-1">
-        <div className="title text-3xl md:text-5xl mb-4">Features</div>
-        <div className="mb-8">
-          This is a brief overview of the features inside CodePerfect. For a
-          more complete and in-depth list, see the full{" "}
-          <A href={LINKS.docs}>docs</A>.
+        <div className="px-5 md:px-0">
+          <div className="title text-3xl md:text-5xl mb-4">Features</div>
+          <div className="mb-8">
+            This is a brief overview of the features inside CodePerfect. For a
+            more complete and in-depth list, see the full{" "}
+            <A href={LINKS.docs}>docs</A>.
+          </div>
         </div>
-        <div className="bg-white p-8 rounded-lg shadow-lg">
+        <div className="">
           {FEATURE_LIST.map((it) => (
             <div
               data-feature-name={it.name}
               key={it.name}
-              className="mt-6 pt-6 border-t border-neutral-100 first:mt-0 first:pt-0 first:border-0"
+              className="bg-white md:rounded-lg md:shadow-lg md:mt-8 p-6 border-b last:border-0 border-neutral-100 md:border-0 md:p-8 md:first:mt-0"
             >
-              <div className="mb-4 font-bold text-lg">{it.name}</div>
+              <div className="mb-4 font-bold text-lg leading-none">
+                {it.name}
+              </div>
               {it.body}
             </div>
           ))}
@@ -1221,16 +1270,14 @@ function FAQ() {
       <div className="md:px-4 md:text-center text-3xl md:text-5xl title mb-8">
         FAQ
       </div>
-      <div className="flex flex-col gap-4 md:gap-4">
+      <div className="flex flex-col md:gap-4">
         {faqs.map((it, i) => (
           <div
-            className="prose md:bg-white border-b border-neutral-200 last:border-0 md:border-0 md:rounded-lg md:shadow-sm"
+            className="prose md:bg-white border-b border-neutral-100 last:border-0 md:border-0 md:rounded-lg md:shadow-sm group py-6 first:pt-0 last:pb-0 md:p-6 md:first:p-6 md:last:p-6"
             key={it.q}
           >
-            <div className="text-left pb-4 md:p-5 font-bold w-full flex justify-between items-center">
-              {it.q}
-            </div>
-            <div className="pb-4 md:p-5 md:pt-0">{it.a}</div>
+            <div className="mb-5 font-bold">{it.q}</div>
+            {it.a}
           </div>
         ))}
       </div>
@@ -1465,11 +1512,11 @@ function Header() {
               <div className="invert z-40 relative">
                 <Logo onClick={() => setShowMenu(false)} />
               </div>
-              <div className="mt-2 flex items-center">
+              <div className="mt-2 flex flex-col md:flex-row md:items-center">
                 {links.map(([url, label]) => (
                   <A
                     key={url}
-                    className="flex text-neutral-100 no-underline whitespace-nowrap md:hidden leading-none py-2 items-center"
+                    className="flex text-neutral-100 no-underline whitespace-nowrap md:hidden leading-none py-2 md:items-center"
                     onClick={() => setShowMenu(false)}
                     href={url}
                   >

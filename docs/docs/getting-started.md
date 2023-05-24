@@ -80,7 +80,7 @@ find your dependencies, and if you have un-downloaded dependencies, the indexer
 will naturally be unable to find them. You can ensure they've been downloaded:
 
 ```
-go mod download
+go mod tidy
 ```
 
 ### Create a new project
