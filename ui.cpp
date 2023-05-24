@@ -2595,12 +2595,7 @@ void UI::draw_everything() {
             im::Separator();
             menu_command(CMD_OPTIONS);
 
-            im::EndMenu();
-        }
-
 #ifdef DEBUG_BUILD
-
-        if (im::BeginMenu("Internal")) {
             im::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
             im::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
 
@@ -2731,10 +2726,9 @@ void UI::draw_everything() {
                 world.window->set_title(cp_sprintf("CodePerfect 95 - %s", world.current_path));
             }
 
+#endif
             im::EndMenu();
         }
-
-#endif
 
         if (im::BeginMenu("Help")) {
             im::MenuItem(cp_sprintf("CodePerfect %s", world.gh_version), NULL, false, false);
