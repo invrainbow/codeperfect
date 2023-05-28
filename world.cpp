@@ -1510,7 +1510,7 @@ void kick_off_rename_identifier() {
 
     if (!handle_unsaved_files()) return;
 
-    world.indexer.reload_all_editors();
+    ind.reload_all_editors();
 
     auto &wnd = world.wnd_rename_identifier;
     wnd.running = true;
@@ -2091,6 +2091,8 @@ void do_find_interfaces() {
         return;
     }
 
+    ind.reload_all_editors();
+
     auto thread_proc = [](void *param) {
         auto &wnd = world.wnd_find_interfaces;
         wnd.thread_mem.cleanup();
@@ -2205,6 +2207,8 @@ void do_find_implementations() {
         return;
     }
 
+    ind.reload_all_editors();
+
     auto thread_proc = [](void *param) {
         auto &wnd = world.wnd_find_implementations;
         wnd.thread_mem.cleanup();
@@ -2288,7 +2292,7 @@ void initiate_find_references(cur2 pos) {
         return;
     }
 
-    world.indexer.reload_all_editors();
+    ind.reload_all_editors();
 
     auto thread_proc = [](void *param) {
         auto &wnd = world.wnd_find_references;

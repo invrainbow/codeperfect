@@ -3063,8 +3063,6 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
 }
 
 List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target, bool search_everywhere) {
-    reload_all_editors();
-
     if (!target->decl) return NULL;
     if (target->decl->type != GODECL_TYPE) return NULL;
     if (target->decl->gotype->type == GOTYPE_INTERFACE) return NULL;
@@ -3151,8 +3149,6 @@ List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target, bool search_every
 }
 
 List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target, bool search_everywhere) {
-    reload_all_editors();
-
     if (!target->decl) return NULL;
     if (target->decl->type != GODECL_TYPE) return NULL;
     if (target->decl->gotype->type != GOTYPE_INTERFACE) return NULL;
