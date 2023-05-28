@@ -3966,7 +3966,8 @@ done_writing:
 
         auto c = editor->cur;
         auto newc = new_cur2(c.x, c.y + cursor_offset);
-        editor->move_cursor(newc);
+        if (c != newc)
+            editor->move_cursor(newc);
     }
 
     // TODO: refresh existing editors if `filepath` is open
