@@ -2596,6 +2596,8 @@ void UI::draw_everything() {
             menu_command(CMD_OPTIONS);
 
 #ifdef DEBUG_BUILD
+            im::Separator();
+
             im::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
             im::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
 
@@ -2834,7 +2836,7 @@ void UI::draw_everything() {
         auto &wnd = world.wnd_options;
         auto &tmp = wnd.tmp;
 
-        begin_window("Options", &wnd, ImGuiWindowFlags_AlwaysAutoResize, false, false);
+        begin_window("Options", &wnd, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking, false, false);
 
         auto &outer_style = im::GetStyle();
         int outer_window_padding = outer_style.WindowPadding.y;
