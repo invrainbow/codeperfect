@@ -2052,7 +2052,7 @@ void init_command_info_table() {
     command_info_table[CMD_FIND_IMPLEMENTATIONS] = k(0, 0, "Find Implementations");
     command_info_table[CMD_FIND_INTERFACES] = k(0, 0, "Find Interfaces");
     command_info_table[CMD_DOCUMENTATION] = k(0, 0, "Documentation");
-    command_info_table[CMD_BUY_LICENSE] = k(0, 0, "Buy a License");
+    command_info_table[CMD_BUY_LICENSE] = k(0, 0, "Buy License...");
     command_info_table[CMD_ENTER_LICENSE] = k(0, 0, "Enter License...");
     command_info_table[CMD_ADD_JSON_TAG] = k(0, 0, "Struct: Add JSON tag");
     command_info_table[CMD_ADD_YAML_TAG] = k(0, 0, "Struct: Add YAML tag");
