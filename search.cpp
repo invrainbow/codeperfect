@@ -320,7 +320,8 @@ bool Searcher::start_search(Searcher_Opts *opts) {
         auto path = stackpaths->pop();
         auto fullpath = path_join(path, node->name);
         if (!node->is_directory) {
-            file_queue->append(fullpath);
+            if (!opts->search_go_files_only || str_ends_with(fullpath, ".go"))
+                file_queue->append(fullpath);
             continue;
         }
         for (auto child = node->children; child; child = child->next) {

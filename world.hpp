@@ -791,6 +791,7 @@ struct World {
         char find_str[256];
         char replace_str[256];
         bool use_regex;
+        bool search_go_files_only;
         bool case_sensitive;
         int sel_file;
         int sel_result;

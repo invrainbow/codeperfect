@@ -78,6 +78,7 @@ struct Searcher_Opts {
     ccstr query;
     bool case_sensitive;
     bool literal;
+    bool search_go_files_only;
 
     Searcher_Opts *copy();
 };

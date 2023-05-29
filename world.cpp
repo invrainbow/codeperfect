@@ -637,8 +637,10 @@ void World::init() {
     fill_file_tree();
     t.log("fill file tree");
 
+    // set defaults
     error_list.height = 125;
     file_explorer.selection = NULL;
+    wnd_search_and_replace.search_go_files_only = true;
 
     {
         SCOPED_MEM(&ui_mem);

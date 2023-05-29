@@ -2356,7 +2356,7 @@ void UI::draw_everything() {
             im::DockBuilderSetNodeSize(dockspace_id, dock_size);
 
             dock_main_id = dockspace_id;
-            dock_sidebar_id = im::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.20f, NULL, &dock_main_id);
+            dock_sidebar_id = im::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.33f, NULL, &dock_main_id);
             dock_bottom_id = im::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.20f, NULL, &dock_main_id);
             dock_bottom_right_id = im::DockBuilderSplitNode(dock_bottom_id, ImGuiDir_Right, 0.66f, NULL, &dock_bottom_id);
 
@@ -5136,7 +5136,7 @@ void UI::draw_everything() {
             search_again = true;
 
         im::SameLine();
-        if (im::Checkbox("Regular expression", &wnd.use_regex))
+        if (im::Checkbox("Regex", &wnd.use_regex))
             search_again = true;
 
         if (wnd.replace) {
@@ -5579,11 +5579,15 @@ void UI::draw_everything() {
 
         im_small_newline();
 
-        if (im::Checkbox("Case-sensitive", &wnd.case_sensitive))
+        if (im::Checkbox("Case sensitive", &wnd.case_sensitive))
             search_again = true;
 
         im::SameLine();
-        if (im::Checkbox("Regular expression", &wnd.use_regex))
+        if (im::Checkbox("Regex", &wnd.use_regex))
+            search_again = true;
+
+        im::SameLine();
+        if (im::Checkbox("Go files only", &wnd.search_go_files_only))
             search_again = true;
 
         im_small_newline();
@@ -5599,6 +5603,7 @@ void UI::draw_everything() {
             opts.case_sensitive = wnd.case_sensitive;
             opts.literal = !wnd.use_regex;
             opts.query = wnd.find_str;
+            opts.search_go_files_only = wnd.search_go_files_only;
             world.searcher.start_search(&opts);
         }
 
