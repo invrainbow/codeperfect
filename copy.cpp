@@ -464,3 +464,9 @@ Searcher_Result_File *Searcher_Result_File::copy() {
     ret->results = copy_list(results);
     return ret;
 }
+
+Searcher_State *Searcher_State::copy() {
+    auto ret = clone(this);
+    ret->results = copy_list(results);
+    return ret;
+}

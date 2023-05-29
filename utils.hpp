@@ -499,6 +499,67 @@ struct Message_Queue {
     }
 };
 
+template <typename T>
+struct State_Passer { // what else to call this?
+    Lock lock;
+    T state;
+    Pool state_mem;
+    int state_id;
+
+    T mt_state;
+    Pool mt_state_mem;
+    int mt_state_id;
+
+    void init() {
+        // can't just ptr0(this), this struct is meant to be inherited
+        ptr0(&state);
+        ptr0(&mt_state);
+        state_id = 0;
+        mt_state_id = 0;
+
+        lock.init();
+        state_mem.init("state_passer_state");
+        mt_state_mem.init("state_passer_mt_state");
+    }
+
+    void cleanup() {
+        lock.cleanup();
+        state_mem.cleanup();
+        mt_state_mem.cleanup();
+    }
+
+    bool copy_state_to_main_thread() {
+        if (mt_state_id == state_id) return false;
+
+        if (lock.try_enter()) {
+            mt_state_mem.reset();
+            SCOPED_MEM(&mt_state_mem);
+            memcpy(&mt_state, state.copy(), sizeof(state));
+            mt_state_id = state_id;
+
+            lock.leave();
+            return true;
+        }
+
+        return false;
+    }
+
+    void update_state(fn<void(T*)> fun) {
+        SCOPED_LOCK(&lock);
+
+        auto draft = state.copy();
+        fun(draft);
+
+        {
+            state_mem.reset();
+            SCOPED_MEM(&state_mem);
+            memcpy(&state, draft->copy(), sizeof(state));
+        }
+
+        state_id++;
+    }
+};
+
 template<typename T>
 bool isempty(List<T> *arr) {
     return !arr || !arr->len;

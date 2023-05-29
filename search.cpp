@@ -7,6 +7,7 @@
 
 bool Searcher::init() {
     ptr0(this);
+    State_Passer::init();
 
     thread_mem.init("searcher_thread_mem");
     message_queue.init();
@@ -38,8 +39,8 @@ void Searcher::search_thread() {
     int replace_current_search_result = 0;
 
     auto cleanup_previous_search = [&]() {
-        if (search_results) {
-            For (search_results) {
+        if (state.results) {
+            For (state.results) {
                 if (!it.results) continue;
                 For (it.results) {
                     it.mark_start->cleanup();
@@ -49,7 +50,6 @@ void Searcher::search_thread() {
                     world.mark_fridge.free(it.mark_end);
                 }
             }
-            search_results = NULL;
         }
         sess.cleanup();
         cycle_mem.cleanup();
@@ -66,13 +66,18 @@ void Searcher::search_thread() {
 
             switch (msg->type) {
             case SM_START_SEARCH: {
-                state = SEARCH_SEARCH_IN_PROGRESS;
+                update_state([&](auto draft) {
+                    draft->type = SEARCH_SEARCH_IN_PROGRESS;
+                    draft->start_time_milli = current_time_milli();
+                });
                 cleanup_previous_search();
+
                 {
                     cycle_mem.init("searcher_cycle_mem");
                     SCOPED_MEM(&cycle_mem);
 
                     opts = msg->start_search.opts->copy();
+
                     search_file_queue = copy_string_list(msg->start_search.file_queue);
 
                     ptr0(&sess);
@@ -83,29 +88,32 @@ void Searcher::search_thread() {
                     if (!sess.init()) break;
                 }
                 search_total_results = 0;
-                search_start_time_milli = current_time_milli();
                 search_match_buffer->len = 0;
                 search_result_buffer->len = 0;
                 break;
             }
             case SM_START_REPLACE: {
-                if (state != SEARCH_SEARCH_DONE) break;
+                if (state.type != SEARCH_SEARCH_DONE) break;
                 {
                     SCOPED_MEM(&cycle_mem);
                     replace_with = cp_strdup(msg->start_replace.replace_with);
                     replace_current_search_result = 0;
                 }
-                state = SEARCH_REPLACE_IN_PROGRESS;
+                update_state([&](auto draft) {
+                    draft->type = SEARCH_REPLACE_IN_PROGRESS;
+                });
                 break;
             }
             case SM_CANCEL:
                 cleanup_previous_search();
-                state = SEARCH_NOTHING_HAPPENING;
+                update_state([&](auto draft) {
+                    draft->type = SEARCH_NOTHING_HAPPENING;
+                });
                 break;
             }
         } while (0);
 
-        switch (state) {
+        switch (state.type) {
         case SEARCH_NOTHING_HAPPENING:
         case SEARCH_SEARCH_DONE:
         case SEARCH_REPLACE_DONE:
@@ -116,11 +124,10 @@ void Searcher::search_thread() {
             // are we done? copy results over to cycle_mem, exit
             if (!search_file_queue->len) {
                 sess.cleanup();
-                {
-                    SCOPED_MEM(&cycle_mem);
-                    search_results = copy_list(search_result_buffer);
-                }
-                state = SEARCH_SEARCH_DONE;
+                update_state([&](auto draft) {
+                    draft->type = SEARCH_SEARCH_DONE;
+                    draft->results = search_result_buffer;
+                });
                 break;
             }
 
@@ -225,12 +232,14 @@ void Searcher::search_thread() {
         }
 
         case SEARCH_REPLACE_IN_PROGRESS: {
-            if (replace_current_search_result >= search_results->len) {
-                state = SEARCH_REPLACE_DONE;
+            if (replace_current_search_result >= state.results->len) {
+                update_state([&](auto draft) {
+                    draft->type = SEARCH_REPLACE_DONE;
+                });
                 break;
             }
 
-            auto &it = search_results->at(replace_current_search_result++);
+            auto &it = state.results->at(replace_current_search_result++);
 
             // would these ever happen
             if (!it.filepath) break;

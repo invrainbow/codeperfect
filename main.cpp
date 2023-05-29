@@ -1275,6 +1275,10 @@ int realmain(int argc, char **argv) {
             // canceled close, keep going
         }
 
+        // update various states
+        world.dbg.copy_state_to_main_thread();
+        world.searcher.copy_state_to_main_thread();
+
         bool was_trace_on = world.trace_next_frame;
         defer { if (was_trace_on) world.trace_next_frame = false; };
 

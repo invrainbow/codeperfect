@@ -270,6 +270,8 @@ enum Save_Var_Mode {
 };
 
 struct Debugger_State {
+    Dlv_State state_flag;
+
     List<Dlv_Goroutine> *goroutines;
     i32 current_goroutine_id;
     i32 current_frame;
@@ -277,16 +279,13 @@ struct Debugger_State {
     Debugger_State *copy();
 };
 
-struct Debugger {
+struct Debugger : State_Passer<Debugger_State> {
     Pool mem;
     Pool loop_mem;
-    Pool state_mem_a;
-    Pool state_mem_b;
     Pool breakpoints_mem;
     Pool watches_mem;
     Pool stdout_mem;
 
-    Lock lock;
     List<Client_Breakpoint> breakpoints;
     List<Dlv_Watch> watches;
     Thread_Handle thread;
@@ -304,15 +303,8 @@ struct Debugger {
     int packetid;
 
     int debuggee_pid;
-    int state_id;
 
-    Dlv_State state_flag;
     bool exiting;
-
-    Debugger_State *state;
-    bool which_state_pool;
-
-    bool waiting_for_dlv_state;
 
     // shit for piping stuff out of stdout
     Thread_Handle pipe_stdout_thread;
@@ -367,7 +359,7 @@ struct Debugger {
     void pause_and_resume(fn<void()> f);
     void halt_when_already_running();
     void select_frame(u32 goroutine_id, u32 frame);
-    void mutate_state(fn<void(Debugger_State *draft)> cb);
+    void update_state_flag(Dlv_State new_state_flag);
 
     void pipe_stdout_into_our_buffer();
 

@@ -1614,13 +1614,13 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
                             *selection = world.dbg.watches[next].value;
                     } else {
                         do {
-                            auto state = world.dbg.state;
-                            auto goroutine = state->goroutines->find([&](auto it) { return it->id == state->current_goroutine_id; });
+                            auto &state = world.dbg.mt_state;
+                            auto goroutine = state.goroutines->find([&](auto it) { return it->id == state.current_goroutine_id; });
                             if (!goroutine)
                                 break;
-                            if (state->current_frame >= goroutine->frames->len)
+                            if (state.current_frame >= goroutine->frames->len)
                                 break;
-                            auto frame = &goroutine->frames->items[state->current_frame];
+                            auto frame = &goroutine->frames->items[state.current_frame];
 
                             auto next = args->locals_index;
                             if (next >= frame->locals->len + frame->args->len)
@@ -1862,10 +1862,10 @@ void UI::draw_debugger() {
     world.wnd_debugger.focused = im_is_window_focused();
 
     auto &dbg = world.dbg;
-    auto state = dbg.state;
+    auto &state = dbg.mt_state;
     auto &wnd = world.wnd_debugger;
 
-    auto can_show_stuff = (world.dbg.state_flag != DLV_STATE_INACTIVE && state && !world.dbg.exiting);
+    auto can_show_stuff = (state.state_flag != DLV_STATE_INACTIVE && !dbg.exiting);
 
     do {
         im::SetNextWindowDockID(dock_bottom_id, ImGuiCond_Once);
@@ -1877,12 +1877,12 @@ void UI::draw_debugger() {
         im_push_mono_font();
         defer { im_pop_font(); };
 
-        for (int i = 0; i < state->goroutines->len; i++) {
-            auto &goroutine = state->goroutines->at(i);
+        for (int i = 0; i < state.goroutines->len; i++) {
+            auto &goroutine = state.goroutines->at(i);
 
             int tree_flags = ImGuiTreeNodeFlags_OpenOnArrow;
 
-            bool is_current = (state->current_goroutine_id == goroutine.id);
+            bool is_current = (state.current_goroutine_id == goroutine.id);
             if (is_current) {
                 tree_flags |= ImGuiTreeNodeFlags_Bullet;
                 im::SetNextItemOpen(true);
@@ -1896,8 +1896,8 @@ void UI::draw_debugger() {
 
             if (is_current) im::PopStyleColor();
 
-            if (im::IsItemClicked() && world.dbg.state_flag == DLV_STATE_PAUSED) {
-                world.dbg.push_call(DLVC_SET_CURRENT_FRAME, [&](auto call) {
+            if (im::IsItemClicked() && state.state_flag == DLV_STATE_PAUSED) {
+                dbg.push_call(DLVC_SET_CURRENT_FRAME, [&](auto call) {
                     call->set_current_frame.goroutine_id = goroutine.id;
                     call->set_current_frame.frame = 0;
                 });
@@ -1910,12 +1910,12 @@ void UI::draw_debugger() {
                     auto &frame = goroutine.frames->items[j];
 
                     int tree_flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-                    if (state->current_goroutine_id == goroutine.id && state->current_frame == j)
+                    if (state.current_goroutine_id == goroutine.id && state.current_frame == j)
                         tree_flags |= ImGuiTreeNodeFlags_Selected;
 
                     im::TreeNodeEx(&frame, tree_flags, "%s (%s:%d)", frame.func_name, cp_basename(frame.filepath), frame.lineno);
                     if (im::IsItemClicked()) {
-                        world.dbg.push_call(DLVC_SET_CURRENT_FRAME, [&](auto call) {
+                        dbg.push_call(DLVC_SET_CURRENT_FRAME, [&](auto call) {
                             call->set_current_frame.goroutine_id = goroutine.id;
                             call->set_current_frame.frame = j;
                         });
@@ -1956,18 +1956,18 @@ void UI::draw_debugger() {
             Dlv_Frame *frame = NULL;
 
             do {
-                if (state->current_goroutine_id == -1) break;
-                if (state->current_frame == -1) break;
+                if (state.current_goroutine_id == -1) break;
+                if (state.current_frame == -1) break;
 
-                auto goroutine = state->goroutines->find([&](auto it) { return it->id == state->current_goroutine_id; });
+                auto goroutine = state.goroutines->find([&](auto it) { return it->id == state.current_goroutine_id; });
                 if (!goroutine) break;
 
                 loading = true;
 
                 if (!goroutine->fresh) break;
-                if (state->current_frame >= goroutine->frames->len) break;
+                if (state.current_frame >= goroutine->frames->len) break;
 
-                frame = &goroutine->frames->items[state->current_frame];
+                frame = &goroutine->frames->items[state.current_frame];
                 if (!frame->fresh) {
                     frame = NULL;
                     break;
@@ -2032,15 +2032,15 @@ void UI::draw_debugger() {
                 im::TableHeadersRow();
 
                 bool some_watch_being_edited = false;
-                For (&world.dbg.watches) {
+                For (&dbg.watches) {
                     if (it.editing) {
                         some_watch_being_edited = true;
                         break;
                     }
                 }
 
-                for (int k = 0; k < world.dbg.watches.len; k++) {
-                    auto &it = world.dbg.watches[k];
+                for (int k = 0; k < dbg.watches.len; k++) {
+                    auto &it = dbg.watches[k];
                     if (it.deleted) continue;
 
                     Draw_Debugger_Var_Args a; ptr0(&a);
@@ -2406,7 +2406,7 @@ void UI::draw_everything() {
     // now that we have the panes area, recalculate view sizes
     recalculate_view_sizes();
 
-    bool is_running = world.dbg.state_flag != DLV_STATE_INACTIVE;
+    bool is_running = world.dbg.mt_state.state_flag != DLV_STATE_INACTIVE;
 
     if (is_running) {
         im::PushStyleColor(ImGuiCol_MenuBarBg, to_imcolor(rgba("#30571C")));
@@ -2539,7 +2539,7 @@ void UI::draw_everything() {
         }
 
         if (im::BeginMenu("Debug")) {
-            if (world.dbg.state_flag == DLV_STATE_PAUSED)
+            if (world.dbg.mt_state.state_flag == DLV_STATE_PAUSED)
                 menu_command(CMD_CONTINUE);
             else
                 menu_command(CMD_START_DEBUGGING);
@@ -2550,7 +2550,7 @@ void UI::draw_everything() {
             menu_command(CMD_STEP_OVER);
             menu_command(CMD_STEP_INTO);
             menu_command(CMD_STEP_OUT);
-            // menu_command(CMD_RUN_TO_CURSOR); world.dbg.state_flag == DLV_STATE_PAUSED
+            // menu_command(CMD_RUN_TO_CURSOR); world.dbg.mt_state.state_flag == DLV_STATE_PAUSED
 
             im::Separator();
 
@@ -2756,7 +2756,7 @@ void UI::draw_everything() {
         // draw debugger
         {
             ccstr dbgstate = NULL;
-            switch (world.dbg.state_flag) {
+            switch (world.dbg.mt_state.state_flag) {
             case DLV_STATE_PAUSED: dbgstate = "PAUSED"; break;
             case DLV_STATE_STARTING: dbgstate = "STARTING"; break;
             case DLV_STATE_RUNNING: dbgstate = "RUNNING"; break;
@@ -5527,7 +5527,7 @@ void UI::draw_everything() {
     // Don't show the debugger UI if we're still starting up, because we're
     // still building, and the build could fail.  Might regret this, can always
     // change later.
-    if (world.dbg.state_flag != DLV_STATE_INACTIVE && world.dbg.state_flag != DLV_STATE_STARTING) {
+    if (world.dbg.mt_state.state_flag != DLV_STATE_INACTIVE && world.dbg.mt_state.state_flag != DLV_STATE_STARTING) {
         draw_debugger();
         fstlog("debugger");
     }
@@ -5602,10 +5602,10 @@ void UI::draw_everything() {
             world.searcher.start_search(&opts);
         }
 
-        switch (world.searcher.state) {
+        switch (world.searcher.mt_state.type) {
         case SEARCH_SEARCH_IN_PROGRESS:
             // wait 100ms before showing "searching..." to avoid flicker
-            if (current_time_milli() - world.searcher.search_start_time_milli > 100) {
+            if (current_time_milli() - world.searcher.mt_state.start_time_milli > 100) {
                 im::Text("Searching...");
                 im::SameLine();
                 if (im::Button("Cancel")) {
@@ -5618,7 +5618,7 @@ void UI::draw_everything() {
                 wnd.mem.cleanup();
                 wnd.mem.init("search_wnd");
 
-                auto len = world.searcher.search_results->len;
+                auto len = world.searcher.mt_state.results->len;
                 SCOPED_MEM(&wnd.mem);
                 wnd.files_open = new_array(bool, len);
                 wnd.set_file_open = new_array(bool, len);
@@ -5631,7 +5631,7 @@ void UI::draw_everything() {
                     world.searcher.start_replace(wnd.replace_str);
 
             int index = 0;
-            auto search_results = world.searcher.search_results;
+            auto search_results = world.searcher.mt_state.results;
             int num_files = search_results->len;
 
             Fori (search_results) {
@@ -7147,13 +7147,13 @@ void UI::draw_everything() {
             Dlv_Frame *current_frame = NULL;
             bool is_current_goroutine_on_current_file = false;
 
-            if (world.dbg.state_flag == DLV_STATE_PAUSED) {
-                current_goroutine_id = world.dbg.state->current_goroutine_id;
-                For (world.dbg.state->goroutines) {
+            if (world.dbg.mt_state.state_flag == DLV_STATE_PAUSED) {
+                current_goroutine_id = world.dbg.mt_state.current_goroutine_id;
+                For (world.dbg.mt_state.goroutines) {
                     if (it.id == current_goroutine_id) {
                         current_goroutine = &it;
                         if (current_goroutine->fresh) {
-                            current_frame = &current_goroutine->frames->at(world.dbg.state->current_frame);
+                            current_frame = &current_goroutine->frames->at(world.dbg.mt_state.current_frame);
                             if (are_filepaths_equal(editor->filepath, current_frame->filepath))
                                 is_current_goroutine_on_current_file = true;
                         } else {
@@ -7280,7 +7280,7 @@ void UI::draw_everything() {
                 };
 
                 auto find_breakpoint_stopped_at_this_line = [&]() -> int {
-                    if (world.dbg.state_flag == DLV_STATE_PAUSED) {
+                    if (world.dbg.mt_state.state_flag == DLV_STATE_PAUSED) {
                         if (is_current_goroutine_on_current_file) {
                             if (current_frame) {
                                 if (current_frame->lineno == y + 1)
@@ -7296,7 +7296,7 @@ void UI::draw_everything() {
 
                     For (&breakpoints_for_this_editor) {
                         if (it.line == y + 1) {
-                            bool inactive = (it.pending || world.dbg.state_flag == DLV_STATE_INACTIVE);
+                            bool inactive = (it.pending || world.dbg.mt_state.state_flag == DLV_STATE_INACTIVE);
                             return inactive ? BREAKPOINT_INACTIVE : BREAKPOINT_ACTIVE;
                         }
                     }

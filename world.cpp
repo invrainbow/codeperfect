@@ -955,7 +955,7 @@ Editor* focus_editor_by_id(int editor_id, cur2 pos, bool pos_in_byte_format) {
 
 bool is_build_debug_free() {
     if (world.build.started) return false;
-    if (world.dbg.state_flag != DLV_STATE_INACTIVE) return false;
+    if (world.dbg.mt_state.state_flag != DLV_STATE_INACTIVE) return false;
 
     return true;
 }
@@ -1638,8 +1638,8 @@ bool is_command_enabled(Command cmd) {
 
     case CMD_GO_TO_NEXT_SEARCH_RESULT:
     case CMD_GO_TO_PREVIOUS_SEARCH_RESULT:
-        if (world.searcher.state == SEARCH_SEARCH_DONE)
-            if (world.searcher.search_results->len)
+        if (world.searcher.mt_state.type == SEARCH_SEARCH_DONE)
+            if (world.searcher.mt_state.results->len)
                 return true;
         return false;
 
@@ -1796,16 +1796,16 @@ bool is_command_enabled(Command cmd) {
         return world.indexer.status == IND_READY;
 
     case CMD_START_DEBUGGING:
-        return world.dbg.state_flag == DLV_STATE_INACTIVE;
+        return world.dbg.mt_state.state_flag == DLV_STATE_INACTIVE;
 
     case CMD_CONTINUE:
-        return world.dbg.state_flag == DLV_STATE_PAUSED;
+        return world.dbg.mt_state.state_flag == DLV_STATE_PAUSED;
 
     case CMD_FORMAT_SELECTION:
         return false;
 
     case CMD_DEBUG_TEST_UNDER_CURSOR: {
-        if (world.dbg.state_flag != DLV_STATE_INACTIVE) return false;
+        if (world.dbg.mt_state.state_flag != DLV_STATE_INACTIVE) return false;
 
         auto editor = get_current_editor();
         if (!editor) return false;
@@ -1837,15 +1837,15 @@ bool is_command_enabled(Command cmd) {
     }
 
     case CMD_BREAK_ALL:
-        return world.dbg.state_flag == DLV_STATE_RUNNING;
+        return world.dbg.mt_state.state_flag == DLV_STATE_RUNNING;
 
     case CMD_STOP_DEBUGGING:
-        return world.dbg.state_flag != DLV_STATE_INACTIVE;
+        return world.dbg.mt_state.state_flag != DLV_STATE_INACTIVE;
 
     case CMD_STEP_OVER:
     case CMD_STEP_INTO:
     case CMD_STEP_OUT:
-        return world.dbg.state_flag == DLV_STATE_PAUSED;
+        return world.dbg.mt_state.state_flag == DLV_STATE_PAUSED;
 
     case CMD_UNDO:
     case CMD_REDO:
@@ -2852,8 +2852,8 @@ void handle_command(Command cmd, bool from_menu) {
 
     case CMD_GO_TO_NEXT_SEARCH_RESULT:
     case CMD_GO_TO_PREVIOUS_SEARCH_RESULT:
-        if (world.searcher.state == SEARCH_SEARCH_DONE)
-            if (world.searcher.search_results->len)
+        if (world.searcher.mt_state.type == SEARCH_SEARCH_DONE)
+            if (world.searcher.mt_state.results->len)
                 move_search_result(cmd == CMD_GO_TO_NEXT_SEARCH_RESULT, 1);
         break;
 
@@ -4174,7 +4174,7 @@ void move_search_result(bool forward, int count) {
      */
 
     auto &wnd = world.wnd_search_and_replace;
-    auto results = world.searcher.search_results;
+    auto results = world.searcher.mt_state.results;
 
     if (!results->len) return;
 

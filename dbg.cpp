@@ -243,8 +243,8 @@ void Debugger::eval_watch(Dlv_Watch *watch) {
     watch->fresh = false;
     watch->state = DBGWATCH_PENDING;
 
-    int goroutine_id = state->current_goroutine_id;
-    int frame_id = state->current_frame;
+    int goroutine_id = state.current_goroutine_id;
+    int frame_id = state.current_frame;
 
     Dlv_Var value; ptr0(&value);
     if (eval_expression(watch->expr, goroutine_id, frame_id, &value, SAVE_VAR_NORMAL)) {
@@ -351,8 +351,6 @@ void Debugger::init() {
 
     mem.init("dbg");
     loop_mem.init("dbg loop");
-    state_mem_a.init("dbg state a");
-    state_mem_b.init("dbg state b");
     breakpoints_mem.init("dbg breakpoints");
     watches_mem.init("dbg watches");
     stdout_mem.init("dbg stdout");
@@ -360,13 +358,14 @@ void Debugger::init() {
     SCOPED_MEM(&mem);
 
     stdout_line_buffer.init();
-    lock.init();
     breakpoints.init();
     watches.init();
 
     calls.init();
     calls_lock.init();
     calls_mem.init("dbg calls");
+
+    State_Passer::init();
 
 #if OS_WINBLOWS
     WSADATA wsa;
@@ -376,8 +375,6 @@ void Debugger::init() {
 }
 
 void Debugger::cleanup() {
-    lock.cleanup();
-
     if (thread) {
         kill_thread(thread);
         close_thread_handle(thread);
@@ -517,11 +514,17 @@ void Debugger::halt_when_already_running() {
     if (read_packet(&p))
         handle_new_state(&p);
     else
-        state_flag = DLV_STATE_PAUSED;
+        update_state_flag(DLV_STATE_PAUSED);
+}
+
+void Debugger::update_state_flag(Dlv_State new_state_flag) {
+    update_state([&](auto draft) {
+        draft->state_flag = new_state_flag;
+    });
 }
 
 void Debugger::pause_and_resume(fn<void()> f) {
-    bool was_running = (state_flag == DLV_STATE_RUNNING);
+    bool was_running = (state.state_flag == DLV_STATE_RUNNING);
 
     if (was_running) {
         exec_halt(true);
@@ -1195,19 +1198,6 @@ void Debugger::stop() {
     dlv_proc.cleanup();
 }
 
-void Debugger::mutate_state(fn<void(Debugger_State *draft)> cb) {
-    auto draft = state->copy();
-    cb(draft);
-
-    which_state_pool ^= 1;
-    Pool *mem = which_state_pool ? &state_mem_a : &state_mem_b;
-    mem->reset();
-
-    SCOPED_MEM(mem);
-    state = draft->copy();
-    state_id++;
-};
-
 Dlv_Goroutine *find_goroutine(Debugger_State *state) {
     int goroutine_id = state->current_goroutine_id;
     if (goroutine_id == -1) // halting
@@ -1338,10 +1328,10 @@ bool Debugger::fill_function_args(Debugger_State *draft) {
 void Debugger::jump_to_frame() {
     if (exiting) return;
 
-    auto goroutine = find_goroutine(state);
+    auto goroutine = find_goroutine(&state);
     if (!goroutine) return;
 
-    auto frame = find_frame(goroutine, state->current_frame);
+    auto frame = find_frame(goroutine, state.current_frame);
     if (!frame) return;
 
     world.message_queue.add([&](auto msg) {
@@ -1391,7 +1381,7 @@ void Debugger::do_everything() {
                 cp_strcpy_fixed(watch->expr_tmp, args.expression);
             }
 
-            if (state_flag == DLV_STATE_PAUSED) eval_watch(watch);
+            if (state.state_flag == DLV_STATE_PAUSED) eval_watch(watch);
             break;
         }
         case DLVC_EDIT_WATCH: {
@@ -1409,7 +1399,7 @@ void Debugger::do_everything() {
                 cp_strcpy_fixed(watch->expr_tmp, args.expression);
             }
 
-            if (state_flag == DLV_STATE_PAUSED) eval_watch(watch);
+            if (state.state_flag == DLV_STATE_PAUSED) eval_watch(watch);
             break;
         }
         case DLVC_DELETE_WATCH: {
@@ -1437,8 +1427,8 @@ void Debugger::do_everything() {
             case GO_KIND_INTERFACE:
                 eval_expression(
                     cp_sprintf("*(*\"%s\")(0x%" PRIx64 ")", var->type, var->address),
-                    state->current_goroutine_id,
-                    state->current_frame,
+                    state.current_goroutine_id,
+                    state.current_frame,
                     newvar,
                     var->kind == GO_KIND_STRUCT ? SAVE_VAR_CHILDREN_APPEND : SAVE_VAR_CHILDREN_OVERWRITE
                 );
@@ -1450,8 +1440,8 @@ void Debugger::do_everything() {
                 auto offset = var->kind == GO_KIND_STRING ? strlen(var->value) : var->children->len;
                 eval_expression(
                     cp_sprintf("(*(*\"%s\")(0x%" PRIx64 "))[%d:]", var->type, var->address, offset),
-                    state->current_goroutine_id,
-                    state->current_frame,
+                    state.current_goroutine_id,
+                    state.current_frame,
                     newvar,
                     var->kind == GO_KIND_STRING ? SAVE_VAR_VALUE_APPEND : SAVE_VAR_CHILDREN_APPEND
                 );
@@ -1461,8 +1451,8 @@ void Debugger::do_everything() {
             case GO_KIND_MAP:
                 eval_expression(
                     cp_sprintf("(*(*\"%s\")(0x%" PRIx64 "))[%d:]", var->type, var->address, var->children->len / 2),
-                    state->current_goroutine_id,
-                    state->current_frame,
+                    state.current_goroutine_id,
+                    state.current_frame,
                     newvar,
                     SAVE_VAR_CHILDREN_APPEND
                 );
@@ -1474,23 +1464,22 @@ void Debugger::do_everything() {
 
             if (notfound) break;
 
+            /*
             Pool *mem = NULL;
             if (args.is_watch)
                 mem = &watches_mem;
             else
                 mem = which_state_pool ? &state_mem_a : &state_mem_b;
-
             {
                 SCOPED_MEM(mem);
-                auto ptr = new_object(Dlv_Var);
-                memcpy(ptr, newvar->copy(), sizeof(Dlv_Var));
-                *args.var = ptr;
+                *args.var = newvar->copy();
             }
+            */
             break;
         }
         case DLVC_DELETE_ALL_BREAKPOINTS:
             pause_and_resume([&]() {
-                if (state_flag != DLV_STATE_INACTIVE) {
+                if (state.state_flag != DLV_STATE_INACTIVE) {
                     For (&breakpoints) {
                         send_packet("ClearBreakpoint", [&]() {
                             rend->field("Id", (int)it.dlv_id);
@@ -1504,10 +1493,11 @@ void Debugger::do_everything() {
         case DLVC_SET_CURRENT_FRAME: {
             auto &args = it.set_current_frame;
 
-            if (state->current_goroutine_id != args.goroutine_id)
+            if (state.current_goroutine_id != args.goroutine_id)
                 send_command("switchGoroutine", true, args.goroutine_id);
 
-            mutate_state([&](auto draft) {
+            update_state([&](auto draft) {
+                draft->state_flag = DLV_STATE_PAUSED;
                 draft->current_goroutine_id = args.goroutine_id;
                 draft->current_frame = args.frame;
 
@@ -1516,14 +1506,13 @@ void Debugger::do_everything() {
                 fill_function_args(draft);
             });
 
-            state_flag = DLV_STATE_PAUSED;
             jump_to_frame();
             eval_watches();
             break;
         }
         case DLVC_STOP:
             exiting = true;
-            if (state_flag == DLV_STATE_RUNNING)
+            if (state.state_flag == DLV_STATE_RUNNING)
                 halt_when_already_running();
 
             {
@@ -1534,28 +1523,21 @@ void Debugger::do_everything() {
             }
 
             stop();
-            state_flag = DLV_STATE_INACTIVE;
+            update_state_flag(DLV_STATE_INACTIVE);
             loop_mem.reset();
             break;
 
         case DLVC_START:
         case DLVC_DEBUG_TEST_UNDER_CURSOR: {
             {
-                SCOPED_LOCK(&lock);
+                update_state([&](auto draft) {
+                    ptr0(draft);
+                    draft->state_flag = DLV_STATE_STARTING;
+                    draft->goroutines = new_list(Dlv_Goroutine);
+                    draft->current_goroutine_id = -1;
+                    draft->current_frame = 0;
+                });
 
-                which_state_pool ^= 1;
-                Pool *mem = which_state_pool ? &state_mem_a : &state_mem_b;
-                mem->reset();
-
-                {
-                    SCOPED_MEM(mem);
-                    state = new_object(Debugger_State);
-                    state->goroutines = new_list(Dlv_Goroutine);
-                    state->current_goroutine_id = -1;
-                    state->current_frame = 0;
-                }
-
-                state_flag = DLV_STATE_STARTING;
                 packetid = 0;
                 exiting = false;
             }
@@ -1585,8 +1567,7 @@ void Debugger::do_everything() {
             }
 
             if (!start(debug_profile)) {
-                SCOPED_LOCK(&lock);
-                state_flag = DLV_STATE_INACTIVE;
+                update_state_flag(DLV_STATE_INACTIVE);
                 loop_mem.reset();
                 break;
             }
@@ -1602,14 +1583,13 @@ void Debugger::do_everything() {
             exec_continue(false);
 
             {
-                SCOPED_LOCK(&lock);
                 for (int i = 0; i < breakpoints.len; i++) {
                     auto id = new_ids->at(i);
                     if (id != -1)
                         breakpoints[i].dlv_id = id;
                     breakpoints[i].pending = false;
                 }
-                state_flag = DLV_STATE_RUNNING;
+                update_state_flag(DLV_STATE_RUNNING);
             }
             break;
         }
@@ -1631,14 +1611,14 @@ void Debugger::do_everything() {
                 b.pending = true;
                 bkpt = breakpoints.append(&b);
 
-                if (state_flag != DLV_STATE_INACTIVE) {
+                if (state.state_flag != DLV_STATE_INACTIVE) {
                     auto js = set_breakpoint(bkpt->file, bkpt->line)->js();
                     bkpt->dlv_id = js.num(js.get(0, ".result.Breakpoint.id"));
                 }
 
                 bkpt->pending = false;
             } else {
-                if (state_flag != DLV_STATE_INACTIVE)
+                if (state.state_flag != DLV_STATE_INACTIVE)
                     unset_breakpoint(bkpt->dlv_id);
                 breakpoints.remove(bkpt);
                 if (!breakpoints.len)
@@ -1647,31 +1627,31 @@ void Debugger::do_everything() {
             break;
         }
         case DLVC_BREAK_ALL:
-            if (state_flag == DLV_STATE_RUNNING)
+            if (state.state_flag == DLV_STATE_RUNNING)
                 halt_when_already_running();
             break;
         case DLVC_CONTINUE_RUNNING:
-            if (state_flag == DLV_STATE_PAUSED) {
-                state_flag = DLV_STATE_RUNNING;
+            if (state.state_flag == DLV_STATE_PAUSED) {
+                update_state_flag(DLV_STATE_RUNNING);
                 exec_continue(false);
             }
             break;
         case DLVC_STEP_INTO:
-            if (state_flag == DLV_STATE_PAUSED) {
-                state_flag = DLV_STATE_RUNNING;
+            if (state.state_flag == DLV_STATE_PAUSED) {
+                update_state_flag(DLV_STATE_RUNNING);
                 exec_step_into(false);
             }
             break;
         case DLVC_STEP_OVER:
-            if (state_flag == DLV_STATE_PAUSED) {
-                state_flag = DLV_STATE_RUNNING;
+            if (state.state_flag == DLV_STATE_PAUSED) {
+                update_state_flag(DLV_STATE_RUNNING);
                 exec_step_over(false);
                 step_over_time = current_time_nano();
             }
             break;
         case DLVC_STEP_OUT:
-            if (state_flag == DLV_STATE_PAUSED) {
-                state_flag = DLV_STATE_RUNNING;
+            if (state.state_flag == DLV_STATE_PAUSED) {
+                update_state_flag(DLV_STATE_RUNNING);
                 exec_step_out(false);
             }
             break;
@@ -1679,7 +1659,7 @@ void Debugger::do_everything() {
         }
     }
 
-    if (state_flag != DLV_STATE_RUNNING) return;
+    if (state.state_flag != DLV_STATE_RUNNING) return;
     if (!can_read()) return;
 
     read_something = true;
@@ -1687,7 +1667,7 @@ void Debugger::do_everything() {
     Packet p;
     if (!read_packet(&p)) {
         stop();
-        state_flag = DLV_STATE_INACTIVE;
+        update_state_flag(DLV_STATE_INACTIVE);
         loop_mem.reset();
         return;
     }
@@ -1711,22 +1691,19 @@ void Debugger::do_everything() {
 void Debugger::handle_new_state(Packet *p) {
     Timer t; t.init("step_over", step_over_time);
 
-    // this might lock up main thread
-    SCOPED_LOCK(&lock);
-
     if (!p) return;
 
     auto js = p->js();
 
     if (js.boolean(js.get(0, ".result.State.exited"))) {
         stop();
-        state_flag = DLV_STATE_INACTIVE;
+        update_state_flag(DLV_STATE_INACTIVE);
         loop_mem.reset();
         return;
     }
 
     if (js.boolean(js.get(0, ".result.State.Running"))) {
-        state_flag = DLV_STATE_RUNNING;
+        update_state_flag(DLV_STATE_RUNNING);
         return;
     }
 
@@ -1765,8 +1742,10 @@ void Debugger::handle_new_state(Packet *p) {
         dbg_print("found %d threads with breakpoints", goroutines_with_breakpoint.len);
     }
 
-    mutate_state([&](auto draft) {
+    update_state([&](auto draft) {
         ptr0(draft);
+
+        draft->state_flag = DLV_STATE_PAUSED;
 
         // grab the current goroutine
         auto current_goroutine_idx = js.get(0, ".result.State.currentGoroutine");
@@ -1831,7 +1810,6 @@ void Debugger::handle_new_state(Packet *p) {
         fill_function_args(draft);
     });
 
-    state_flag = DLV_STATE_PAUSED;
     jump_to_frame();
     eval_watches();
 }

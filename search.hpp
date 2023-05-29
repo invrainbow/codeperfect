@@ -82,7 +82,7 @@ struct Searcher_Opts {
     Searcher_Opts *copy();
 };
 
-enum Searcher_State {
+enum Searcher_State_Type {
     SEARCH_NOTHING_HAPPENING = 0,
     SEARCH_SEARCH_IN_PROGRESS,
     SEARCH_SEARCH_DONE,
@@ -137,15 +137,19 @@ struct Searcher_Message {
     } start_replace;
 };
 
-struct Searcher {
+struct Searcher_State {
+    Searcher_State_Type type;
+    u64 start_time_milli;
+    List<Searcher_Result_File> *results;
+
+    Searcher_State *copy();
+};
+
+struct Searcher : State_Passer<Searcher_State> {
     Pool thread_mem;
     Thread_Handle thread;
-    Searcher_State state;
     Message_Queue<Searcher_Message> message_queue;
-
     Searcher_Opts *opts;
-    u64 search_start_time_milli;
-    List<Searcher_Result_File> *search_results;
 
     bool init();
     void search_thread();
