@@ -395,7 +395,7 @@ void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
     // Contains a mapping of import_path -> resolved_path for all modules in
     // this workspace. If this isn't a workspace, then it's a single pair with
     // the current module.
-    Table<ccstr> module_lookup; module_lookup.init();
+    auto module_lookup = new_table(ccstr);
 
     // Module paths that we grabbed from go.work/go.mod. Ultimately, we want
     // to depend on the output of `go list` because that is "what go actually
@@ -412,7 +412,7 @@ void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
         mod.resolved_path = filepath;
         inferred_modules->append(&mod);
 
-        module_lookup.set(import_path, filepath);
+        module_lookup->set(import_path, filepath);
         return true;
     };
 
@@ -512,7 +512,7 @@ void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
         auto parts = split_string(line->items, ' ');
         if (parts->len == 1) {
             import_path = cp_strdup(parts->at(0));
-            resolved_path = module_lookup.get(import_path);
+            resolved_path = module_lookup->get(import_path);
             if (!resolved_path) continue;
 
             {
@@ -3167,16 +3167,15 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target, bool search_
         ccstr package_name;
     };
 
-    Table<Type_Info*> huge_table;
-    huge_table.init();
+    auto huge_table = new_table(Type_Info*);
 
     auto get_type_info = [&](ccstr key) -> Type_Info * {
         bool found = false;
-        auto ret = huge_table.get(key, &found);
+        auto ret = huge_table->get(key, &found);
         if (!found) {
             ret = new_object(Type_Info);
             ret->methods_matched = new_array(bool, methods->len);
-            huge_table.set(key, ret);
+            huge_table->set(key, ret);
         }
         return ret;
     };
@@ -3229,10 +3228,10 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target, bool search_
                     type_info->methods_matched[i] = true;
 
                     bool found = false;
-                    auto info = huge_table.get(type_name, &found);
+                    auto info = huge_table->get(type_name, &found);
                     if (!found) {
                         info = new_object(Type_Info);
-                        huge_table.set(type_name, info);
+                        huge_table->set(type_name, info);
                     }
 
                     info->methods_matched[i] = true;
@@ -3244,7 +3243,7 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target, bool search_
 
     auto ret = new_list(Find_Decl);
 
-    auto entries = huge_table.entries();
+    auto entries = huge_table->entries();
 
     Fori (entries) {
         auto info = it->value;
@@ -3917,12 +3916,12 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
 
 
     {
-        Table<ccstr> dot_names; dot_names.init();
+        auto dot_names = new_table(ccstr);
 
         For (dot_imports) {
             auto import_path = it.import_path;
             auto decls = list_package_decls(import_path, LISTDECLS_PUBLIC_ONLY | LISTDECLS_EXCLUDE_METHODS);
-            For (decls) dot_names.set(it.decl->name, import_path);
+            For (decls) dot_names->set(it.decl->name, import_path);
         }
 
         String_Set included_imports; included_imports.init();
@@ -3932,7 +3931,7 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
             if (it.is_sel) continue;
 
             // is the ref associated with an import path from our crawling of dot imports?
-            auto import_path = dot_names.get(it.name);
+            auto import_path = dot_names->get(it.name);
             if (import_path) {
                 // does the ref actually point to that import path?
                 auto res = find_decl_of_id(it.name, it.start, ctx);
@@ -4415,13 +4414,13 @@ Generate_Func_Sig_Result* Go_Indexer::generate_function_signature(ccstr filepath
 
     auto current_import_path = pkg->import_path;
 
-    Table<ccstr> existing_imports; existing_imports.init();
-    Table<ccstr> existing_imports_r; existing_imports_r.init();
+    auto existing_imports = new_table(ccstr);
+    auto existing_imports_r = new_table(ccstr);
     For (insert_file->imports) {
         auto package_name = get_import_package_name(&it);
         if (!package_name) continue;
-        existing_imports.set(package_name, it.import_path);
-        existing_imports_r.set(it.import_path, package_name);
+        existing_imports->set(package_name, it.import_path);
+        existing_imports_r->set(it.import_path, package_name);
     }
 
     int var_index = 0;
@@ -4479,7 +4478,7 @@ Generate_Func_Sig_Result* Go_Indexer::generate_function_signature(ccstr filepath
                 return true;
             }
 
-            auto pkgname = existing_imports_r.get(import_path);
+            auto pkgname = existing_imports_r->get(import_path);
             if (!pkgname) {
                 auto pkg = find_up_to_date_package(import_path);
                 if (!pkg) {
@@ -4492,13 +4491,13 @@ Generate_Func_Sig_Result* Go_Indexer::generate_function_signature(ccstr filepath
 
                 for (int i = 0;; i++) {
                     name = i ? cp_sprintf("%s%d", base_pkgname, i) : base_pkgname;
-                    if (!existing_imports.get(name)) break;
+                    if (!existing_imports->get(name)) break;
                 }
 
                 pkgname = name;
 
-                existing_imports.set(pkgname, import_path);
-                existing_imports_r.set(import_path, pkgname);
+                existing_imports->set(pkgname, import_path);
+                existing_imports_r->set(import_path, pkgname);
 
                 ret->imports_needed->append(import_path);
                 if (streq(pkgname, pkg->package_name))
@@ -7390,11 +7389,10 @@ Gotype* Go_Indexer::do_generic_subst(Gotype *base, List<Godecl> *params, List<Go
     if (!args) return NULL;
     if (params->len != args->len) return NULL;
 
-    Table<Goresult*> lookup; lookup.init();
-    Fori (params) {
-        lookup.set(it.name, args->at(i));
-    }
-    return walk_gotype_and_replace_ids(base, &lookup);
+    auto lookup = new_table(Goresult*);
+    Fori (params)
+        lookup->set(it.name, args->at(i));
+    return walk_gotype_and_replace_ids(base, lookup);
 }
 
 Goresult *Go_Indexer::_subst_generic_type(Gotype *type, Go_Ctx *ctx) {
@@ -7987,14 +7985,14 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
             auto func_result = result->target->func_sig.result;
             if (!func_result) return NULL;
 
-            Table<Goresult*> lookup; lookup.init();
+            auto lookup = new_table(Goresult*);
             int types_found = 0;
 
             Fori (result->params) {
                 Goresult *arg = NULL;
                 if (i < result->args->len)
                     arg = make_goresult(result->args->at(i), ctx);
-                lookup.set(it.name, arg);
+                lookup->set(it.name, arg);
             }
 
             fn<bool(Goresult*, Goresult*)> unify_types = [&](auto ares, auto bres) {
@@ -8031,7 +8029,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
 
                     if (!check_id_pos()) return NULL;
 
-                    return lookup.get(gotype->id_name, pfound);
+                    return lookup->get(gotype->id_name, pfound);
                 };
 
                 {
@@ -8048,7 +8046,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                             return unify_types(existing_type, other_res);
 
                         ccstr name = (afound ? ares : bres)->gotype->id_name;
-                        lookup.set(name, other_res);
+                        lookup->set(name, other_res);
                         types_found++;
                         return true;
                     }
@@ -8554,14 +8552,14 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                 auto do_substitution = [&]() {
                     bool found_something = false;
                     For (result->params) {
-                        auto res = lookup.get(it.name);
+                        auto res = lookup->get(it.name);
                         if (!res) continue;
 
                         bool found = false;
-                        auto newtype = walk_gotype_and_replace_ids(res->gotype, &lookup, &found);
+                        auto newtype = walk_gotype_and_replace_ids(res->gotype, lookup, &found);
                         if (found) found_something = true;
 
-                        lookup.set(it.name, res->wrap(newtype));
+                        lookup->set(it.name, res->wrap(newtype));
                     }
                     return found_something;
                 };
@@ -8613,7 +8611,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
 
             auto is_done = [&]() {
                 For (result->params) {
-                    auto val = lookup.get(it.name);
+                    auto val = lookup->get(it.name);
                     if (!val) return false;
 
                     bool references_other_type_param = false;
@@ -8621,7 +8619,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                     walk_gotype_and_replace(val->gotype, [&](Gotype* it) -> Gotype* {
                         if (it->type == GOTYPE_ID) {
                             bool found = false;
-                            lookup.get(it->id_name, &found);
+                            lookup->get(it->id_name, &found);
                             if (found) references_other_type_param = true;
                         }
                         return NULL;
@@ -8661,7 +8659,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                 For (func_result) ret->multi_types->append(it.gotype);
             }
 
-            return result->res->wrap(walk_gotype_and_replace_ids(ret, &lookup));
+            return result->res->wrap(walk_gotype_and_replace_ids(ret, lookup));
         };
 
         {
@@ -8942,13 +8940,13 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
             if (!object_type->generic_args->len) return;
             if (recv->generic_args->len != object_type->generic_args->len) return;
 
-            Table<Goresult*> lookup; lookup.init();
+            auto lookup = new_table(Goresult*);
             Fori (recv->generic_args) {
                 if (it->type != GOTYPE_ID)
                     return;
-                lookup.set(it->id_name, object_res->wrap(object_type->generic_args->at(i)));
+                lookup->set(it->id_name, object_res->wrap(object_type->generic_args->at(i)));
             }
-            field_type = walk_gotype_and_replace_ids(field_type, &lookup);
+            field_type = walk_gotype_and_replace_ids(field_type, lookup);
         };
 
         handle_generics();

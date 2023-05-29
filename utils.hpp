@@ -341,6 +341,17 @@ struct Scoped_Table {
     }
 };
 
+void *alloc_table_stub(int size);
+
+template <typename T>
+Table<T> *alloc_table() {
+    auto table = (Table<T>*)alloc_table_stub(sizeof(Table<T>));
+    table->init();
+    return table;
+}
+
+#define new_table(t) alloc_table<t>()
+
 template<typename T>
 bool iszero(T* p) {
     auto ptr = (char*)p;

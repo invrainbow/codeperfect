@@ -3591,16 +3591,16 @@ void do_generate_implementation() {
         dest = wnd.declres;
     }
 
-    Table<ccstr> import_table; import_table.init();
-    Table<ccstr> import_table_r; import_table_r.init();
+    auto import_table = new_table(ccstr);
+    auto import_table_r = new_table(ccstr);
 
     auto dest_gofile = ind.find_gofile_from_ctx(dest->ctx);
     For (dest_gofile->imports) {
         auto package_name = ind.get_import_package_name(&it);
         if (!package_name) continue;
 
-        import_table.set(it.import_path, package_name);
-        import_table_r.set(package_name, it.import_path);
+        import_table->set(it.import_path, package_name);
+        import_table_r->set(package_name, it.import_path);
     }
 
     auto src_gotype = src->decl->gotype;
@@ -3701,7 +3701,7 @@ void do_generate_implementation() {
             auto import_path = declres->ctx->import_path;
 
             bool found = false;
-            auto package_name = import_table.get(import_path, &found);
+            auto package_name = import_table->get(import_path, &found);
             if (!found) {
                 auto pkg = ind.find_up_to_date_package(import_path);
                 if (pkg) {
@@ -3713,7 +3713,7 @@ void do_generate_implementation() {
                         if (i)
                             new_name = cp_sprintf("%s%d", new_name, i);
 
-                        import_table_r.get(new_name, &found);
+                        import_table_r->get(new_name, &found);
                         if (!found) {
                             package_name = new_name;
                             alias_package = i > 0;
@@ -3721,8 +3721,8 @@ void do_generate_implementation() {
                         }
                     }
 
-                    import_table.set(import_path, package_name);
-                    import_table_r.set(package_name, import_path);
+                    import_table->set(import_path, package_name);
+                    import_table_r->set(package_name, import_path);
 
                     Import_To_Add imp; ptr0(&imp);
                     imp.import_path = import_path;

@@ -2786,15 +2786,15 @@ void UI::draw_everything() {
 
         SCOPED_LOCK(&world.all_pools_lock);
 
-        Table<int> amounts; amounts.init();
-        Table<int> counts; counts.init();
+        auto amounts = new_table(int);
+        auto counts = new_table(int);
 
         For (&world.all_pools) {
-            amounts.set(it->name, amounts.get(it->name) + it->mem_allocated);
-            counts.set(it->name, counts.get(it->name) + 1);
+            amounts->set(it->name, amounts->get(it->name) + it->mem_allocated);
+            counts->set(it->name, counts->get(it->name) + 1);
         }
 
-        auto entries = amounts.entries();
+        auto entries = amounts->entries();
 
         entries->sort([&](auto pa, auto pb) -> int {
             auto a = *pa;
@@ -2823,7 +2823,7 @@ void UI::draw_everything() {
                 im::Text("%.2f", (it->value / 1024.0f / 1024.0f));
 
                 im::TableSetColumnIndex(2);
-                im::Text("%d", counts.get(it->name));
+                im::Text("%d", counts->get(it->name));
             }
 
             im::EndTable();
