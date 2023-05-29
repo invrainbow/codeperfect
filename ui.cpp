@@ -5642,7 +5642,7 @@ void UI::draw_everything() {
             Fori (search_results) {
                 auto file_idx = i;
 
-                if (index + it.results->len > 400) {
+                if (index >= 1000) {
                     num_files = file_idx;
                     break;
                 }
@@ -5687,6 +5687,8 @@ void UI::draw_everything() {
 
                     Fori (it.results) {
                         auto result_idx = i;
+
+                        if (index >= 1000) break;
                         defer { index++; };
 
                         auto availwidth = im::GetContentRegionAvail().x;
