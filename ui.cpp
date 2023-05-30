@@ -2604,25 +2604,25 @@ void UI::draw_everything() {
             im::Separator();
 
             im::MenuItem("Tree viewer", NULL, &world.wnd_tree_viewer.show);
+            im::MenuItem("Memory viewer", NULL, &world.wnd_mem_viewer.show);
+            im::MenuItem("History viewer", NULL, &world.wnd_history.show);
+            im::MenuItem("Style editor", NULL, &world.wnd_style_editor.show);
+            im::MenuItem("Poor man's GPU debugger", NULL, &world.wnd_poor_mans_gpu_debugger.show);
+            im::MenuItem("Mouse Info", NULL, &world.wnd_mouse_pos.show);
+            im::MenuItem("Hover Info", NULL, &world.wnd_hover_info.show);
 
             im::Separator();
 
-            im::MenuItem("Pool viewer", NULL, &world.wnd_pool_viewer.show);
-            im::MenuItem("History viewer", NULL, &world.wnd_history.show);
-            im::MenuItem("Show mouse position", NULL, &world.wnd_mouse_pos.show);
-            im::MenuItem("Style editor", NULL, &world.wnd_style_editor.show);
             im::MenuItem("Disable framerate cap", NULL, &world.turn_off_framerate_cap);
-            im::MenuItem("Hover Info", NULL, &world.wnd_hover_info.show);
             im::MenuItem("Show frame index", NULL, &world.show_frame_index);
             im::MenuItem("Show frameskips", NULL, &world.show_frameskips);
-            im::MenuItem("Poor man's GPU debugger", NULL, &world.wnd_poor_mans_gpu_debugger.show);
+
+            im::Separator();
 
             if (im::MenuItem("Flash cursor red")) {
                 auto editor = get_current_editor();
                 if (editor) editor->flash_cursor_error();
             }
-
-            im::Separator();
 
             if (im::MenuItem("Cause intentional crash")) {
                 cp_panic("This is an intentionally caused crash");
@@ -2631,8 +2631,6 @@ void UI::draw_everything() {
             if (im::MenuItem("Restart CodePerfect")) {
                 fork_self();
             }
-
-            im::Separator();
 
             if (im::MenuItem("Delete .last_folder")) {
                 delete_file(path_join(world.configdir, ".last_folder"));
