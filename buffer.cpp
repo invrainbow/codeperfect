@@ -1693,13 +1693,30 @@ void Buffer::apply_edit_avl_tree(Avl_Tree *tree, cur2 start, cur2 old_end, cur2 
     if (!nstart) return;
 
     auto it = nstart;
-    if (it->pos < start) it = tree->successor(it);
+    if (it->pos <= start) it = tree->successor(it);
 
+    // marks between start and old_end that need to be relocated
     Mark *orphan_marks = NULL;
 
     tree->check_tree_integrity();
 
-    while (it && it->pos < old_end) {
+    while (it) {
+        if (it->pos > old_end) break;
+
+        if (it->pos == old_end) {
+            if (start == new_end) {
+                // special case where:
+                //  - there's a node on 10 and on 11
+                //  - user applies start = 10, old_end = 11, new_end = 10
+                //  - 10 is not deleted, but now it will find the node on 11 and try to set it to 10
+                //  - this causes duplicates
+                // so we need to handle this case specifically and just merge it with the previous
+                // in this case, continue this iteration so the old_end node gets orphaned
+            } else {
+                break;
+            }
+        }
+
         if (it->pos < new_end) {
             it = tree->successor(it);
             continue;
@@ -1739,6 +1756,7 @@ void Buffer::apply_edit_avl_tree(Avl_Tree *tree, cur2 start, cur2 old_end, cur2 
 
     tree->check_tree_integrity();
 
+    // relocate orphan marks
     if (tree->type == AVL_MARKS && orphan_marks) {
         auto nend = tree->insert_node(new_end);
         Mark *next = NULL;

@@ -25,21 +25,14 @@ void test_mark_tree() {
     buf.init(&world.frame_mem, 0, false, true);
     buf.read("loldongs", -1);
 
-    /*
-    auto m1 = mt.insert_mark(MARK_BUILD_ERROR, new_cur2(2, 4));
-    auto m2 = mt.insert_mark(MARK_BUILD_ERROR, new_cur2(8, 4));
-    auto m3 = mt.insert_mark(MARK_BUILD_ERROR, new_cur2(12, 4));
-
-    cur2 start = new_cur2(0, 1);
-    cur2 old_end = new_cur2(0, 1);
-    cur2 new_end = new_cur2(0, 2);
-
-    mt.apply_edit(start, old_end, new_end);
+    // test the duplicate bug
+    auto m1 = buf.insert_mark(MARK_BUILD_ERROR, new_cur2(1, 0));
+    auto m2 = buf.insert_mark(MARK_BUILD_ERROR, new_cur2(2, 0));
+    buf.remove(new_cur2(1, 0), new_cur2(2, 0));
 
 	m1->cleanup();
 	m2->cleanup();
-	m3->cleanup();
-    */
+    buf.cleanup();
 }
 
 enum Mtf_Action_Type {
