@@ -26,6 +26,7 @@
 #include "unicode.hpp"
 #include "utils.hpp"
 #include "world.hpp"
+#include "copy.hpp"
 
 #include "binaries.h"
 #include "fzy_match.h"
@@ -1278,6 +1279,47 @@ int realmain(int argc, char **argv) {
         // update various states
         world.dbg.copy_state_to_main_thread();
         world.searcher.copy_state_to_main_thread();
+
+        // update local searcher marks
+        do {
+            auto &srch = world.searcher;
+            if (srch.mt_state_id == world.search_marks_state_id) break;
+
+            if (world.search_marks) {
+                For (world.search_marks) {
+                    For (it.mark_starts) it->cleanup();
+                    For (it.mark_ends) it->cleanup();
+                }
+            }
+
+            {
+                world.search_marks_mem.reset();
+                SCOPED_MEM(&world.search_marks_mem);
+                world.search_marks = new_list(Search_Marks_File);
+            }
+
+            world.search_marks_state_id = srch.mt_state_id;
+
+            bool has_results = false;
+            switch (srch.mt_state.type) {
+            case SEARCH_SEARCH_DONE:
+            case SEARCH_REPLACE_IN_PROGRESS:
+            case SEARCH_REPLACE_DONE:
+                has_results = true;
+                break;
+            }
+
+            if (!has_results) break;
+
+            auto &state = world.searcher.mt_state;
+            For (state.results) {
+                auto editor = find_editor_by_filepath(it.filepath);
+                if (editor)
+                    create_search_marks_for_editor(&it, editor);
+            }
+        } while (0);
+
+        // fill search results
 
         bool was_trace_on = world.trace_next_frame;
         defer { if (was_trace_on) world.trace_next_frame = false; };

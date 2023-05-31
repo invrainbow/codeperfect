@@ -105,9 +105,6 @@ struct Searcher_Result_Match {
 
     int match_offset_in_preview;
 
-    Mark *mark_start;
-    Mark *mark_end;
-
     List<ccstr> *groups;
 
     Searcher_Result_Match *copy();
@@ -132,6 +129,7 @@ struct Searcher_Message {
     struct {
         Searcher_Opts *opts;
         List<ccstr> *file_queue;
+        List<Searcher_Result_File> *locally_searched_results;
     } start_search;
     struct {
         ccstr replace_with;
@@ -152,6 +150,9 @@ struct Searcher : State_Passer<Searcher_State> {
     Message_Queue<Searcher_Message> message_queue;
     Searcher_Opts *opts;
 
+    // used by thread
+    int search_total_results;
+
     bool init();
     void search_thread();
 
@@ -160,6 +161,7 @@ struct Searcher : State_Passer<Searcher_State> {
     void cancel();
 
     ccstr get_replacement_text(Searcher_Result_Match *sr, ccstr replace_text);
+    List<Searcher_Result_Match> *convert_search_results(ccstr buf, int buflen, List<Search_Match> *matches);
 };
 
 bool is_binary(ccstr buf, s32 len);

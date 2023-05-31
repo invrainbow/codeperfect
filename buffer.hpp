@@ -344,8 +344,8 @@ struct Buffer {
     ccstr get_text(cur2 start, cur2 end, int *len = NULL);
     List<uchar>* get_uchars(cur2 start, cur2 end, int limit = -1, cur2 *actual_end = NULL);
 
-    void insert_mark(Mark_Type type, cur2 pos, Mark *out);
-    void delete_mark(Mark *mark);
+    Mark *insert_mark(Mark_Type type, cur2 pos);
+    void internal_delete_mark(Mark *mark);
 
     void apply_edit_to_trees(cur2 start, cur2 oldend, cur2 newend);
     void apply_edit_avl_tree(Avl_Tree *tree, cur2 start, cur2 old_end, cur2 new_end);

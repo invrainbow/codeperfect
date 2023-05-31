@@ -86,6 +86,7 @@ struct Main_Thread_Message {
         ccstr debugger_stdout_line;
         cur2 test_move_cursor;
         int exit_code;
+        List<Mark*> *search_marks;
     };
 };
 
@@ -110,7 +111,7 @@ struct History {
     void actually_go(History_Loc *it);
     bool go_forward(int count = 1);
     bool go_backward(int count = 1);
-    void remove_invalid_marks();
+    void remove_entries_for_editor(int editor_id);
     void save_latest();
     void check_marks(int upper = -1);
 
@@ -362,6 +363,12 @@ enum Goto_Symbol_State {
     GOTO_SYMBOL_ERROR,
 };
 
+struct Search_Marks_File {
+    ccstr filepath;
+    List<Mark*> *mark_starts;
+    List<Mark*> *mark_ends;
+};
+
 struct World {
     Pool world_mem;
     Pool frame_mem;
@@ -385,6 +392,7 @@ struct World {
     Pool callee_hierarchy_mem;
     Pool project_settings_mem;
     Pool fst_mem;
+    Pool search_marks_mem;
 
     Pool workspace_mem_1;
     Pool workspace_mem_2;
@@ -463,6 +471,10 @@ struct World {
 
     Message_Queue<Main_Thread_Message> message_queue;
     Searcher searcher;
+
+    List<Search_Marks_File> *search_marks;
+    int search_marks_state_id;
+
     Go_Indexer indexer;
 
     struct {
@@ -988,3 +1000,5 @@ bool initiate_rename_identifier(cur2 pos);
 void initiate_find_references(cur2 pos);
 
 bool is_imgui_hogging_keyboard();
+void create_search_marks_for_editor(Searcher_Result_File *file, Editor *editor);
+cur2 get_search_mark_pos(ccstr filepath, int index, bool start);

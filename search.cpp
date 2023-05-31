@@ -22,6 +22,78 @@ bool Searcher::init() {
     return !!thread;
 }
 
+List<Searcher_Result_Match> *Searcher::convert_search_results(ccstr buf, int buflen, List<Search_Match> *matches) {
+    int curr_match = 0;
+    cur2 pos; ptr0(&pos);
+
+    Searcher_Result_Match sr; ptr0(&sr);
+    auto results = new_list(Searcher_Result_Match, matches->len);
+
+    // convert temp matches into search results
+    for (int i = 0; i < buflen; i++) {
+        auto it = buf[i];
+
+        auto &next = matches->at(curr_match);
+        if (i == next.start) {
+            if (search_total_results++ > 1000) break;
+
+            sr.match_start = pos;
+            sr.match_off = i;
+
+            if (next.group_starts) {
+                sr.groups = new_list(ccstr, next.group_starts->len);
+                Fori (next.group_starts) {
+                    auto start = it;
+                    auto end = next.group_ends->at(i);
+                    sr.groups->append(cp_strncpy(&buf[start], end-start));
+                }
+            }
+        }
+
+        if (i == next.end) {
+            sr.match_len = i - sr.match_off;
+            sr.match_end = pos;
+            sr.match = cp_strncpy(&buf[sr.match_off], sr.match_len);
+
+            sr.preview_start = sr.match_start;
+            sr.preview_end = sr.match_end;
+            sr.preview_len = sr.match_len;
+
+            sr.match_offset_in_preview = 0;
+
+            auto prevoff = sr.match_off;
+
+            int to_left = min(relu_sub(PREVIEW_LEN, sr.preview_len) / 2, min(sr.preview_start.x, 10));
+
+            prevoff -= to_left;
+            sr.preview_start.x -= to_left;
+            sr.match_offset_in_preview += to_left;
+            sr.preview_len += to_left;
+
+            int to_right = 0;
+            for (int k = i; sr.preview_len + to_right < PREVIEW_LEN && buf[k] != '\n' && k < buflen; k++)
+                to_right++;
+
+            sr.preview_len += to_right;
+            sr.preview_end.x += to_right;
+            sr.preview = cp_strncpy(&buf[prevoff], sr.preview_len);
+
+            results->append(&sr);
+
+            if (++curr_match >= matches->len) break;
+        }
+
+        if (it == '\n') {
+            pos.y++;
+            pos.x = 0;
+        } else {
+            pos.x++;
+        }
+    }
+
+    return results;
+}
+
 void Searcher::search_thread() {
     Search_Session sess; ptr0(&sess);
 
@@ -33,83 +105,158 @@ void Searcher::search_thread() {
     auto search_result_buffer = new_list(Searcher_Result_File);
     auto search_match_buffer = new_list(Search_Match);
     List<ccstr> *search_file_queue = NULL;
-    int search_total_results = 0;
+
+    search_total_results = 0;
 
     ccstr replace_with = NULL;
     int replace_current_search_result = 0;
 
     auto cleanup_previous_search = [&]() {
-        if (state.results) {
-            For (state.results) {
-                if (!it.results) continue;
-                For (it.results) {
-                    it.mark_start->cleanup();
-                    it.mark_end->cleanup();
-
-                    world.mark_fridge.free(it.mark_start);
-                    world.mark_fridge.free(it.mark_end);
-                }
-            }
-        }
         sess.cleanup();
         cycle_mem.cleanup();
     };
 
     while (true) {
-        do {
-            if (!message_queue.len()) break;
+        if (message_queue.len()) {
             auto messages = message_queue.start();
             defer { message_queue.end(); };
 
-            auto msg = messages->last();
-            if (!msg) break;
+            For (messages) {
+                auto msg = &it;
 
-            switch (msg->type) {
-            case SM_START_SEARCH: {
-                update_state([&](auto draft) {
-                    draft->type = SEARCH_SEARCH_IN_PROGRESS;
-                    draft->start_time_milli = current_time_milli();
-                });
-                cleanup_previous_search();
+                switch (msg->type) {
+                /*
+                case SM_FILL_FILE_MARKS: {
+                    auto &args = msg->fill_file_marks;
 
-                {
+                    if (args.state_id != state_id) {
+                        print("deleting marks from fill_file_marks, given state_id = %d, current state_id = %d", args.state_id, state_id);
+                        world.message_queue.add([&](auto msg) {
+                            msg->type = MTM_DESTROY_SEARCH_MARKS;
+                            msg->search_marks = new_list(Mark*);
+                            msg->search_marks->concat(args.marks);
+                        });
+                        break;
+                    }
+
+                    print("fliling file marks, state_id = %d", state_id);
+
+                    update_state([&](auto draft) {
+                        int index = args.file_index;
+                        cp_assert(0 <= index && index < draft->results->len);
+
+                        auto &file = draft->results->at(index);
+                        Fori (file.results) {
+                            cp_assert(!it.mark_start);
+                            cp_assert(!it.mark_end);
+                            it.mark_start = args.marks->at(i * 2 + 0);
+                            it.mark_end = args.marks->at(i * 2 + 1);
+                        }
+                        draft->results_filled_with_marks = true;
+                    });
+                    break;
+                }
+
+                case SM_FILL_MARKS: {
+                    auto &args = msg->fill_marks;
+                    if (args.state_id != state_id) {
+                        print("deleting marks from fill_marks, given state_id = %d, current state_id = %d", args.state_id, state_id);
+                        auto marks = new_list(Mark*);
+                        For (args.files)
+                            marks->concat(it.marks);
+
+                        world.message_queue.add([&](auto msg) {
+                            msg->type = MTM_DESTROY_SEARCH_MARKS;
+                            msg->search_marks = new_list(Mark*);
+                            msg->search_marks->concat(marks);
+                        });
+                        break;
+                    }
+
+                    print("filling marks, state_id = %d", state_id);
+
+                    update_state([&](auto draft) {
+                        cp_assert(args.files->len == draft->results->len);
+
+                        Fori (draft->results) {
+                            auto &file = it;
+                            auto marks = args.files->at(i).marks;
+                            if (!marks->len) continue;
+
+                            cp_assert(marks->len == file.results->len * 2);
+
+                            Fori (file.results) {
+                                it.mark_start = marks->at(i * 2 + 0);
+                                it.mark_end   = marks->at(i * 2 + 1);
+                            }
+                        }
+                        draft->results_filled_with_marks = true;
+                    });
+                    break;
+                }
+                */
+                case SM_START_SEARCH: {
+                    cleanup_previous_search();
+
                     cycle_mem.init("searcher_cycle_mem");
-                    SCOPED_MEM(&cycle_mem);
+                    {
+                        SCOPED_MEM(&cycle_mem);
+                        opts = msg->start_search.opts->copy();
+                    }
 
-                    opts = msg->start_search.opts->copy();
+                    if (opts->query[0] == '\0') {
+                        update_state([&](auto draft) {
+                            draft->type = SEARCH_SEARCH_DONE;
+                            draft->results = new_list(Searcher_Result_File);
+                        });
+                        break;
+                    }
 
-                    search_file_queue = copy_string_list(msg->start_search.file_queue);
+                    update_state([&](auto draft) {
+                        draft->type = SEARCH_SEARCH_IN_PROGRESS;
+                        draft->results = NULL;
+                        draft->start_time_milli = current_time_milli();
+                    });
 
-                    ptr0(&sess);
-                    sess.query = cp_strdup(opts->query);
-                    sess.qlen = strlen(sess.query);
-                    sess.case_sensitive = opts->case_sensitive;
-                    sess.literal = opts->literal;
-                    if (!sess.init()) break;
+                    {
+                        SCOPED_MEM(&cycle_mem);
+                        search_file_queue = copy_string_list(msg->start_search.file_queue);
+                        ptr0(&sess);
+                        sess.query = cp_strdup(opts->query);
+                        sess.qlen = strlen(sess.query);
+                        sess.case_sensitive = opts->case_sensitive;
+                        sess.literal = opts->literal;
+                        if (!sess.init()) break;
+                    }
+                    search_total_results = 0;
+                    search_match_buffer->len = 0;
+                    search_result_buffer->len = 0;
+                    {
+                        SCOPED_MEM(&cycle_mem);
+                        search_result_buffer->concat(copy_list(msg->start_search.locally_searched_results));
+                    }
+                    break;
                 }
-                search_total_results = 0;
-                search_match_buffer->len = 0;
-                search_result_buffer->len = 0;
-                break;
-            }
-            case SM_START_REPLACE: {
-                if (state.type != SEARCH_SEARCH_DONE) break;
-                {
-                    SCOPED_MEM(&cycle_mem);
-                    replace_with = cp_strdup(msg->start_replace.replace_with);
-                    replace_current_search_result = 0;
+                case SM_START_REPLACE: {
+                    if (state.type != SEARCH_SEARCH_DONE) break;
+                    {
+                        SCOPED_MEM(&cycle_mem);
+                        replace_with = cp_strdup(msg->start_replace.replace_with);
+                        replace_current_search_result = 0;
+                    }
+                    update_state([&](auto draft) {
+                        draft->type = SEARCH_REPLACE_IN_PROGRESS;
+                    });
+                    break;
                 }
-                update_state([&](auto draft) {
-                    draft->type = SEARCH_REPLACE_IN_PROGRESS;
-                });
-                break;
-            }
-            case SM_CANCEL:
-                cleanup_previous_search();
-                update_state([&](auto draft) {
-                    draft->type = SEARCH_NOTHING_HAPPENING;
-                });
-                break;
+                case SM_CANCEL:
+                    cleanup_previous_search();
+                    update_state([&](auto draft) {
+                        draft->type = SEARCH_NOTHING_HAPPENING;
+                        draft->results = NULL;
+                    });
+                    break;
+                }
             }
         } while (0);
 
@@ -146,87 +293,9 @@ void Searcher::search_thread() {
             sess.search(buf, buflen, search_match_buffer, 10000);
             if (!search_match_buffer->len) break;
 
-            int curr_match = 0;
-            cur2 pos; ptr0(&pos);
-
-            Searcher_Result_Match sr; ptr0(&sr);
-
-            auto results = new_list(Searcher_Result_Match, search_match_buffer->len);
-
-            // convert temp matches into search results
-            for (int i = 0; i < buflen; i++) {
-                auto it = buf[i];
-
-                auto &next = search_match_buffer->at(curr_match);
-                if (i == next.start) {
-                    if (search_total_results++ > 1000) break;
-
-                    sr.match_start = pos;
-                    sr.match_off = i;
-
-                    if (next.group_starts) {
-                        sr.groups = new_list(ccstr, next.group_starts->len);
-                        Fori (next.group_starts) {
-                            auto start = it;
-                            auto end = next.group_ends->at(i);
-
-                            auto group = cp_strncpy(&buf[start], end-start);
-                            sr.groups->append(group);
-                        }
-                    }
-                }
-
-                if (i == next.end) {
-                    sr.match_len = i - sr.match_off;
-                    sr.match_end = pos;
-                    sr.match = cp_strncpy(&buf[sr.match_off], sr.match_len);
-
-                    sr.preview_start = sr.match_start;
-                    sr.preview_end = sr.match_end;
-                    sr.preview_len = sr.match_len;
-
-                    sr.match_offset_in_preview = 0;
-
-                    auto prevoff = sr.match_off;
-
-                    int to_left = min(relu_sub(PREVIEW_LEN, sr.preview_len) / 2, min(sr.preview_start.x, 10));
-
-                    prevoff -= to_left;
-                    sr.preview_start.x -= to_left;
-                    sr.match_offset_in_preview += to_left;
-                    sr.preview_len += to_left;
-
-                    int to_right = 0;
-                    for (int k = i; sr.preview_len + to_right < PREVIEW_LEN && buf[k] != '\n' && k < buflen; k++)
-                        to_right++;
-
-                    sr.preview_len += to_right;
-                    sr.preview_end.x += to_right;
-                    sr.preview = cp_strncpy(&buf[prevoff], sr.preview_len);
-
-                    sr.mark_start = world.mark_fridge.alloc();
-                    sr.mark_end = world.mark_fridge.alloc();
-
-                    // TODO: do this from main thread.
-                    // editor->buf->insert_mark(MARK_SEARCH_RESULT, sr.match_start, sr.mark_start);
-                    // editor->buf->insert_mark(MARK_SEARCH_RESULT, sr.match_end, sr.mark_end);
-
-                    results->append(&sr);
-
-                    if (++curr_match >= search_match_buffer->len) break;
-                }
-
-                if (it == '\n') {
-                    pos.y++;
-                    pos.x = 0;
-                } else {
-                    pos.x++;
-                }
-            }
-
             Searcher_Result_File sf;
             sf.filepath = filepath;
-            sf.results = results;
+            sf.results = convert_search_results(buf, buflen, search_match_buffer);
             search_result_buffer->append(&sf);
             break;
         }
@@ -311,6 +380,11 @@ bool Searcher::start_search(Searcher_Opts *opts) {
         return false;
     }
 
+    String_Set open_files; open_files.init();
+    For (get_all_editors()) open_files.add(it->filepath);
+
+    auto open_files_to_search = new_list(ccstr);
+
     // generate file queue
     auto file_queue = new_list(ccstr);
     auto stack = listof<FT_Node*>(world.file_tree);
@@ -320,8 +394,12 @@ bool Searcher::start_search(Searcher_Opts *opts) {
         auto path = stackpaths->pop();
         auto fullpath = path_join(path, node->name);
         if (!node->is_directory) {
-            if (!opts->search_go_files_only || str_ends_with(fullpath, ".go"))
-                file_queue->append(fullpath);
+            if (!opts->search_go_files_only || str_ends_with(fullpath, ".go")) {
+                if (open_files.has(fullpath))
+                    open_files_to_search->append(fullpath);
+                else
+                    file_queue->append(fullpath);
+            }
             continue;
         }
         for (auto child = node->children; child; child = child->next) {
@@ -330,10 +408,48 @@ bool Searcher::start_search(Searcher_Opts *opts) {
         }
     }
 
+    auto local_results = new_list(Searcher_Result_File);
+
+    // search open editors locally on current thread, since we can't
+    // access editor contents from another thread
+    do {
+        if (isempty(open_files_to_search)) break;
+
+        auto search_match_buffer = new_list(Search_Match);
+
+        Search_Session sess; ptr0(&sess);
+        sess.query = cp_strdup(opts->query);
+        sess.qlen = strlen(sess.query);
+        sess.case_sensitive = opts->case_sensitive;
+        sess.literal = opts->literal;
+        if (!sess.init()) {
+            file_queue->concat(open_files_to_search);
+            break;
+        }
+
+        For (open_files_to_search) {
+            auto editor = find_editor_by_filepath(it);
+            cp_assert(editor);
+
+            int buflen = 0;
+            auto buf = editor->buf->get_text(new_cur2(0, 0), editor->buf->end_pos(), &buflen);
+
+            search_match_buffer->len = 0;
+            sess.search(buf, buflen, search_match_buffer, 10000);
+            if (!search_match_buffer->len) break;
+
+            Searcher_Result_File sf;
+            sf.filepath = it;
+            sf.results = convert_search_results(buf, buflen, search_match_buffer);
+            local_results->append(&sf);
+        }
+    } while (0);
+
     message_queue.add([&](auto it) {
         it->type = SM_START_SEARCH;
         it->start_search.opts = opts->copy();
         it->start_search.file_queue = copy_string_list(file_queue);
+        it->start_search.locally_searched_results = copy_list(local_results);
     });
     return true;
 }

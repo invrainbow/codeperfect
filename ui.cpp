@@ -5590,7 +5590,7 @@ void UI::draw_everything() {
 
         im_small_newline();
 
-        if (search_again && wnd.find_str[0] != '\0') {
+        if (search_again) {
             wnd.files_open = NULL;
             wnd.sel_file = -1;
             wnd.sel_result = -1;
@@ -5745,9 +5745,9 @@ void UI::draw_everything() {
 
                         // draw match position
                         {
-                            auto pos = it.match_start;
-                            if (is_mark_valid(it.mark_start))
-                                pos = it.mark_start->pos();
+                            auto pos = get_search_mark_pos(filepath, result_idx, true);
+                            if (pos == NULL_CUR)
+                                pos = it.match_start;
 
                             auto s = cp_sprintf("%d:%d ", pos.y+1, pos.x+1);
 
@@ -5792,9 +5792,9 @@ void UI::draw_everything() {
 
                         if (clicked) {
                             if (im::IsMouseDoubleClicked(0)) {
-                                auto pos = it.match_start;
-                                if (is_mark_valid(it.mark_start))
-                                    pos = it.mark_start->pos();
+                                auto pos = get_search_mark_pos(filepath, result_idx, true);
+                                if (pos == NULL_CUR)
+                                    pos = it.match_start;
                                 goto_file_and_pos(filepath, pos, true);
                             } else {
                                 wnd.sel_file = file_idx;

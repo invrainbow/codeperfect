@@ -1064,26 +1064,16 @@ bool Editor::load_file(ccstr new_filepath) {
             if (!it.valid) continue;
             if (!are_filepaths_equal(editor_path, it.file)) continue;
 
-            // create mark
-            auto pos = new_cur2(it.col - 1, it.row - 1);
-            buf->insert_mark(MARK_BUILD_ERROR, pos, it.mark);
+            it.mark = buf->insert_mark(MARK_BUILD_ERROR, new_cur2(it.col-1, it.row-1));
         }
     }
 
     // fill in search results
     if (world.searcher.mt_state.type == SEARCH_SEARCH_DONE) {
-        For (world.searcher.mt_state.results) {
-            if (!are_filepaths_equal(it.filepath, filepath)) continue;
-
-            For (it.results) {
-                if (!it.mark_start) cp_panic("mark_start was null");
-                if (!it.mark_end) cp_panic("mark_end was null");
-
-                if (it.mark_start->valid) cp_panic("this shouldn't be happening");
-                if (it.mark_end->valid) cp_panic("this shouldn't be happening");
-
-                buf->insert_mark(MARK_SEARCH_RESULT, it.match_start, it.mark_start);
-                buf->insert_mark(MARK_SEARCH_RESULT, it.match_end, it.mark_end);
+        Fori (world.searcher.mt_state.results) {
+            if (are_filepaths_equal(it.filepath, filepath)) {
+                create_search_marks_for_editor(&it, this);
+                break;
             }
         }
     }
@@ -1473,27 +1463,53 @@ void Editor::ast_navigate_next() {
     });
 }
 
+void Editor::hunt_down_and_destroy_marks() {
+    // vim marks
+    if (world.vim.on) {
+        For (&vim.local_marks)
+            if (it) it->cleanup();
+        For (&vim.global_marks)
+            if (it) it->cleanup();
+    }
+
+    // history
+    world.history.remove_entries_for_editor(id);
+
+    // build errors
+    auto editor_path = get_path_relative_to(filepath, world.current_path);
+    For (&world.build.errors) {
+        if (!it.mark) continue;
+        if (!it.valid) continue;
+        if (!are_filepaths_equal(editor_path, it.file)) continue;
+
+        it.mark->cleanup();
+        it.mark = NULL;
+    }
+
+    // search results
+    if (world.search_marks) {
+        auto file = world.search_marks->find([&](auto it) { return are_filepaths_equal(it->filepath, filepath); });
+        if (file) {
+            For (file->mark_starts) it->cleanup();
+            For (file->mark_ends) it->cleanup();
+            world.search_marks->remove(file);
+        }
+    }
+
+    cp_assert(!buf->mark_tree->get_size());
+}
+
 void Editor::cleanup() {
     // before exiting, if we're in normal mode, get out
     if (world.vim.on && world.vim_mode() != VI_NORMAL)
         vim_return_to_normal_mode();
 
+    hunt_down_and_destroy_marks();
+
     buf->cleanup();
     mem.cleanup();
-    if (world.vim.on) {
-        For (&vim.local_marks) {
-            if (it) {
-                it->cleanup();
-                world.mark_fridge.free(it);
-            }
-        }
-        For (&vim.global_marks) {
-            if (it) {
-                it->cleanup();
-                world.mark_fridge.free(it);
-            }
-        }
 
+    if (world.vim.on) {
         world.vim.dotrepeat.mem_finished.cleanup();
         world.vim.dotrepeat.mem_working.cleanup();
 
@@ -1503,7 +1519,6 @@ void Editor::cleanup() {
 
         vim.mem.cleanup();
     }
-    world.history.remove_invalid_marks();
 }
 
 bool Editor::cur_is_inside_comment_or_string() {
@@ -5088,13 +5103,11 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             if (!arg) break;
             if (!isalnum(arg)) break;
 
-            auto mark = world.mark_fridge.alloc();
-            buf->insert_mark(MARK_VIM_MARK, cur, mark);
+            auto mark = buf->insert_mark(MARK_VIM_MARK, cur);
 
             auto clear_marks = [&](Mark** marks, int idx) {
                 if (marks[idx]) {
                     marks[idx]->cleanup();
-                    world.mark_fridge.free(marks[idx]);
                     marks[idx] = NULL;
                 }
             };

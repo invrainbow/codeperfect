@@ -74,7 +74,7 @@ struct Mark_Tree_Fuzzer {
 
     void cleanup() {
         buf.cleanup();
-        For (&marks) world.mark_fridge.free(it);
+        For (&marks) it->cleanup();
     }
 
     // assume 100x100 grid
@@ -121,15 +121,11 @@ struct Mark_Tree_Fuzzer {
         if (print_flag) print_action(a);
 
         switch (a->type) {
-        case MTF_INSERT_MARK: {
-            auto mark = world.mark_fridge.alloc();
-            buf.insert_mark(MARK_TEST, a->insert_mark_pos, mark);
-            marks.append(mark);
+        case MTF_INSERT_MARK:
+            marks.append(buf.insert_mark(MARK_TEST, a->insert_mark_pos));
             break;
-        }
         case MTF_DELETE_MARK:
             marks[a->delete_mark_index]->cleanup();
-            world.mark_fridge.free(marks[a->delete_mark_index]);
             marks.remove(a->delete_mark_index);
             break;
         case MTF_APPLY_EDIT:

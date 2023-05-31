@@ -30,8 +30,7 @@ void History::actually_push(int editor_id, cur2 pos) {
 
     ring[curr].editor_id = editor_id;
     ring[curr].pos = pos; // do we even need this anymore?
-    ring[curr].mark = world.mark_fridge.alloc();
-    editor->buf->insert_mark(MARK_HISTORY, pos, ring[curr].mark);
+    ring[curr].mark = editor->buf->insert_mark(MARK_HISTORY, pos);
 
     top = curr = inc(curr);
     if (curr == start) {
@@ -86,7 +85,7 @@ void History::actually_go(History_Loc *it) {
     auto editor = find_editor_by_id(it->editor_id);
     if (!editor) return;
 
-    auto pos = it->mark->pos(); // it->pos
+    auto pos = is_mark_valid(it->mark) ? it->mark->pos() : it->pos;
 
     auto old = world.dont_push_history;
     world.dont_push_history = true;
@@ -196,44 +195,41 @@ void History::save_latest() {
     check_marks();
 }
 
-void History::remove_invalid_marks() {
+void History::remove_entries_for_editor(int editor_id) {
     assert_main_thread();
 
     int i = start, j = start;
 
+    auto run_until = [&](int until) {
+        for (; i != until; i = inc(i)) {
+            if (ring[i].editor_id == editor_id) {
+                cp_assert(ring[i].mark);
+                ring[i].mark->cleanup();
+                ring[i].mark = NULL;
+                continue;
+            }
+            if (i != j)
+                memcpy(&ring[j], &ring[i], sizeof(ring[j]));
+            j = inc(j);
+        }
+    };
+
     check_marks();
 
-    for (; i != curr; i = inc(i)) {
-        if (!is_mark_valid(ring[i].mark))
-            continue;
-        if (i != j)
-            memcpy(&ring[j], &ring[i], sizeof(ring[j]));
-        j = inc(j);
-    }
-
-
+    run_until(curr);
     curr = j;
-    check_marks(j);
 
-    for (; i != top; i = inc(i))  {
-        if (!is_mark_valid(ring[i].mark))
-            continue;
-        if (i != j)
-            memcpy(&ring[j], &ring[i], sizeof(ring[j]));
-        j = inc(j);
-    }
+    check_marks();
 
+    run_until(top);
     top = j;
+
     check_marks();
 }
 
 void History_Loc::cleanup() {
-    if (!mark) {
-        return;
-    }
-
+    if (!mark) return;
     mark->cleanup();
-    world.mark_fridge.free(mark);
     mark = NULL;
 }
 
@@ -372,6 +368,7 @@ void World::init() {
     init_mem(callee_hierarchy_mem);
     init_mem(project_settings_mem);
     init_mem(fst_mem);
+    init_mem(search_marks_mem);
     init_mem(workspace_mem_1);
     init_mem(workspace_mem_2);
 #undef init_mem
@@ -869,7 +866,6 @@ void kick_off_build(Build_Profile *build_profile) {
                     // errors[i].is_vcol;
                 }
 
-                err.mark = world.mark_fridge.alloc();
                 build->errors.append(&err);
             }
 
@@ -889,8 +885,7 @@ void kick_off_build(Build_Profile *build_profile) {
                     if (!it.valid) continue;
                     if (!are_filepaths_equal(path, it.file)) continue;
 
-                    auto pos = new_cur2(it.col - 1, it.row - 1);
-                    editor->buf->insert_mark(MARK_BUILD_ERROR, pos, it.mark);
+                    it.mark = editor->buf->insert_mark(MARK_BUILD_ERROR, new_cur2(it.col-1, it.row-1));
                 }
             }
             break;
@@ -1395,10 +1390,9 @@ void Build::cleanup() {
 
     For (&errors) {
         it.mark->cleanup();
-        world.mark_fridge.free(it.mark);
+        it.mark = NULL;
     }
     errors.len = 0;
-
     mem.cleanup();
 }
 
@@ -4299,4 +4293,30 @@ bool is_imgui_hogging_keyboard() {
     if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) return true;
 
     return false;
+}
+
+void create_search_marks_for_editor(Searcher_Result_File *file, Editor *editor) {
+    auto out = world.search_marks->append();
+    {
+        SCOPED_MEM(&world.search_marks_mem);
+        out->filepath = cp_strdup(file->filepath);
+        out->mark_starts = new_list(Mark*);
+        out->mark_ends = new_list(Mark*);
+    }
+
+    auto buf = editor->buf;
+
+    For (file->results) {
+        out->mark_starts->append(buf->insert_mark(MARK_SEARCH_RESULT, it.match_start));
+        out->mark_ends->append(buf->insert_mark(MARK_SEARCH_RESULT, it.match_end));
+    }
+}
+
+cur2 get_search_mark_pos(ccstr filepath, int index, bool start) {
+    if (!world.search_marks) return NULL_CUR;
+
+    auto file = world.search_marks->find([&](auto it) { return are_filepaths_equal(it->filepath, filepath); });
+    if (!file) return NULL_CUR;
+
+    return (start ? file->mark_starts : file->mark_ends)->at(index)->pos();
 }

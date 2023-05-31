@@ -1428,10 +1428,11 @@ Avl_Node *Avl_Tree::insert_node(cur2 pos) {
     return node;
 }
 
-void Buffer::insert_mark(Mark_Type type, cur2 pos, Mark *mark) {
+Mark *Buffer::insert_mark(Mark_Type type, cur2 pos) {
     world.global_mark_tree_lock.enter();
     defer { world.global_mark_tree_lock.leave(); };
 
+    auto mark = world.mark_fridge.alloc();
     mark->type = type;
     mark->buf = this;
     mark->valid = true;
@@ -1445,6 +1446,8 @@ void Buffer::insert_mark(Mark_Type type, cur2 pos, Mark *mark) {
     node->marks = mark;
 
     mark_tree->check_tree_integrity();
+
+    return mark;
 }
 
 void Avl_Tree::recalc_height(Avl_Node *root) {
@@ -1550,7 +1553,7 @@ Avl_Node *Avl_Tree::internal_insert_node(Avl_Node *root, cur2 pos, Avl_Node *nod
     return root;
 }
 
-void Buffer::delete_mark(Mark *mark) {
+void Buffer::internal_delete_mark(Mark *mark) {
     world.global_mark_tree_lock.enter();
     defer { world.global_mark_tree_lock.leave(); };
 
@@ -1584,8 +1587,6 @@ void Buffer::delete_mark(Mark *mark) {
         mark_tree->delete_node(node->pos);
 
     mark->valid = false;
-    // ptr0(mark); // surface the error earlier
-    // world.mark_fridge.free(mark);
 }
 
 void Avl_Tree::delete_node(cur2 pos) {
@@ -1836,7 +1837,18 @@ void Avl_Tree::check_ordering() {
 }
 
 cur2 Mark::pos() { return node->pos; }
-void Mark::cleanup() { if (valid) buf->delete_mark(this); }
+
+void Mark::cleanup() {
+    if (valid)
+        buf->internal_delete_mark(this);
+
+    // In the past we had errors with the mark being freed and then overwritten
+    // much later down the line, causing a bug that was hard to trace back to
+    // root cause. Here we just zero out the mark to encourage errors to
+    // surface right away.
+    ptr0(this);
+    world.mark_fridge.free(this);
+}
 
 bool is_mark_valid(Mark *mark) {
     return mark && mark->valid;
