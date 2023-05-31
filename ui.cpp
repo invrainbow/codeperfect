@@ -6165,6 +6165,8 @@ void UI::draw_everything() {
                             if (im::BeginTabItem("Scope Ops", NULL)) {
                                 defer { im::EndTabItem(); };
 
+                                int open_scopes = 0;
+
                                 int i = 0;
                                 while (i < gofile->scope_ops->len) {
                                     auto &it = gofile->scope_ops->at(i++);
@@ -6178,7 +6180,10 @@ void UI::draw_everything() {
                                         if (im::IsItemClicked())
                                             pos = it.pos;
 
-                                        if (open) break;
+                                        if (open) {
+                                            open_scopes++;
+                                            break;
+                                        }
 
                                         int depth = 1;
                                         while (i < gofile->scope_ops->len) {
@@ -6191,6 +6196,8 @@ void UI::draw_everything() {
                                                     break;
                                             }
                                         }
+
+                                        open_scopes += depth;
                                         break;
                                     }
                                     case GSOP_DECL: {
@@ -6204,6 +6211,7 @@ void UI::draw_everything() {
                                         if (im::IsItemClicked())
                                             pos = it.pos;
 
+                                        open_scopes--;
                                         im::TreePop();
                                         break;
                                     }
@@ -6211,6 +6219,12 @@ void UI::draw_everything() {
 
                                     if (pos.x != -1 && pos.y != -1)
                                         goto_file_and_pos(wnd.filepath, pos, true);
+                                }
+
+                                if (open_scopes) {
+                                    for (int i = 0; i < open_scopes; i++)
+                                        im::TreePop();
+                                    im::Text("%d unclosed scpoes", open_scopes);
                                 }
                             }
 
