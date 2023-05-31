@@ -1113,21 +1113,30 @@ void Go_Indexer::background_thread() {
 
         if (!index.packages) return;
 
+        check_duplicate_packages();
+
         Fori (index.packages) {
             bool found = false;
             package_lookup.get(it.import_path, &found);
-            if (found)
+            if (found) {
+#ifdef DEBUG_BUILD
+                cp_panic("duplicate entry detected");
+#else
                 print("duplicate entry detected");
+#endif
+            }
             package_lookup.set(it.import_path, i);
         }
+
+        check_duplicate_packages();
     };
 
     auto remove_package = [&](Go_Package *pkg) {
         start_writing();
         defer { stop_writing(); };
 
-        index.packages->remove(pkg);
         pkg->cleanup();
+        index.packages->remove(pkg);
 
         rebuild_package_lookup();
     };
@@ -1162,6 +1171,8 @@ void Go_Indexer::background_thread() {
 
             memcpy(&index, obj, sizeof(Go_Index));
         }
+
+        check_duplicate_packages();
 
 #ifdef DEBUG_BUILD
         index_print("Successfully read database from disk, final_mem.size = %d", final_mem.mem_allocated);
@@ -1470,6 +1481,8 @@ void Go_Indexer::background_thread() {
                     pkg->files = new_list(Go_File);
                     pkg->import_path = cp_strdup(import_path);
                 }
+
+                check_duplicate_packages();
             };
 
             if (streq(import_path, "@builtin")) {
@@ -1923,6 +1936,17 @@ Goresult* new_primitive_type_goresult(ccstr name) {
     ctx->filename = cp_strdup(BUILTIN_FAKE_FILENAME);
 
     return make_goresult(new_primitive_type(name), ctx);
+}
+
+void Go_Indexer::check_duplicate_packages() {
+#ifdef DEBUG_BUILD
+    auto lookup = new_table(bool);
+    For (index.packages) {
+        if (lookup->get(it.import_path))
+            cp_panic("duplicate found");
+        lookup->set(it.import_path, true);
+    }
+#endif
 }
 
 Go_Package *Go_Indexer::find_package_in_index(ccstr import_path) {

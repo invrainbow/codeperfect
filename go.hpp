@@ -1352,6 +1352,7 @@ struct Go_Indexer {
     Pool *get_package_pool(Go_Package *pkg);
     Pool *get_file_pool(Go_Package *pkg, Go_File *file);
     Go_File *get_ready_file_in_package(Go_Package *pkg, ccstr filename);
+    void check_duplicate_packages();
 };
 
 Parsed_File *parse_file(ccstr filepath, Parse_Lang lang, bool use_latest = false);
