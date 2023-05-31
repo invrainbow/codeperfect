@@ -529,9 +529,9 @@ struct World {
     List<Pool*> all_pools;
     Lock all_pools_lock;
 
-    struct Wnd_Pool_Viewer : Wnd {
+    struct Wnd_Mem_Viewer : Wnd {
         bool only_show_significant_pools;
-    } wnd_pool_viewer;
+    } wnd_mem_viewer;
 
     u32 next_editor_id;
 

@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "list.hpp"
+#include <stdatomic.h>
 
 struct Fridge_Block {
     Fridge_Block *next;
@@ -20,6 +21,7 @@ struct Fridge {
     Fridge_Block *blocks;
     Elem* head;
     u32 blocksize;
+    atomic_int blocks_given_out;
 
     void init(s32 bsize) {
         ptr0(this);
@@ -61,6 +63,7 @@ struct Fridge {
         T* ret = (T*)head;
         head = head->next;
         mem0(ret, sizeof(T));
+        blocks_given_out++;
         return ret;
     }
 
@@ -68,6 +71,7 @@ struct Fridge {
         Elem* el = (Elem*)obj;
         el->next = head;
         head = el;
+        blocks_given_out--;
     }
 };
 

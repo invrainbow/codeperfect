@@ -2775,56 +2775,100 @@ void UI::draw_everything() {
         im::PopStyleColor();
     }
 
-    if (world.wnd_pool_viewer.show) {
-        auto &wnd = world.wnd_pool_viewer;
+    if (world.wnd_mem_viewer.show) {
+        auto &wnd = world.wnd_mem_viewer;
 
-        begin_window("Pools", &world.wnd_pool_viewer, ImGuiWindowFlags_AlwaysAutoResize, false, true);
+        begin_window("Memory Viewer", &world.wnd_mem_viewer, ImGuiWindowFlags_AlwaysAutoResize, false, true);
 
-        im::Checkbox("Only show significant pools", &wnd.only_show_significant_pools);
+        if (im::BeginTabBar("wnd_mem_viewer", 0)) {
+            defer { im::EndTabBar(); };
 
-        SCOPED_LOCK(&world.all_pools_lock);
+            if (im::BeginTabItem("Pools", NULL)) {
+                defer { im::EndTabItem(); };
 
-        auto amounts = new_table(int);
-        auto counts = new_table(int);
+                im::Checkbox("Only show significant pools", &wnd.only_show_significant_pools);
 
-        For (&world.all_pools) {
-            amounts->set(it->name, amounts->get(it->name) + it->mem_allocated);
-            counts->set(it->name, counts->get(it->name) + 1);
-        }
+                SCOPED_LOCK(&world.all_pools_lock);
 
-        auto entries = amounts->entries();
+                auto amounts = new_table(int);
+                auto counts = new_table(int);
 
-        entries->sort([&](auto pa, auto pb) -> int {
-            auto a = *pa;
-            auto b = *pb;
-            return b->value - a->value;
-        });
+                For (&world.all_pools) {
+                    amounts->set(it->name, amounts->get(it->name) + it->mem_allocated);
+                    counts->set(it->name, counts->get(it->name) + 1);
+                }
 
-        int flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_BordersH | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterV | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersInner;
-        if (im::BeginTable("pools", 3, flags)) {
-            im::TableSetupColumn("name");
-            im::TableSetupColumn("amount allocated (mb)");
-            im::TableSetupColumn("# pools");
-            im::TableHeadersRow();
+                auto entries = amounts->entries();
 
-            For (entries) {
-                if (wnd.only_show_significant_pools)
-                    if (it->value / 1024.0f / 1024.0f < 0.5f)
-                        break;
+                entries->sort([&](auto pa, auto pb) -> int {
+                    auto a = *pa;
+                    auto b = *pb;
+                    return b->value - a->value;
+                });
 
-                im::TableNextRow();
+                int flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_BordersH | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterV | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersInner;
+                if (im::BeginTable("pools", 3, flags)) {
+                    im::TableSetupColumn("name");
+                    im::TableSetupColumn("amount allocated (mb)");
+                    im::TableSetupColumn("# pools");
+                    im::TableHeadersRow();
 
-                im::TableSetColumnIndex(0);
-                im::Text("%s", it->name);
+                    For (entries) {
+                        if (wnd.only_show_significant_pools)
+                            if (it->value / 1024.0f / 1024.0f < 0.5f)
+                                break;
 
-                im::TableSetColumnIndex(1);
-                im::Text("%.2f", (it->value / 1024.0f / 1024.0f));
+                        im::TableNextRow();
 
-                im::TableSetColumnIndex(2);
-                im::Text("%d", counts->get(it->name));
+                        im::TableSetColumnIndex(0);
+                        im::Text("%s", it->name);
+
+                        im::TableSetColumnIndex(1);
+                        im::Text("%.2f", (it->value / 1024.0f / 1024.0f));
+
+                        im::TableSetColumnIndex(2);
+                        im::Text("%d", counts->get(it->name));
+                    }
+
+                    im::EndTable();
+                }
             }
 
-            im::EndTable();
+            if (im::BeginTabItem("Fridges", NULL)) {
+                defer { im::EndTabItem(); };
+
+                int flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_BordersH | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterV | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersInner;
+
+                auto render_fridge = [&](ccstr name, auto fridge) {
+                    im::TableNextRow();
+
+                    im::TableSetColumnIndex(0);
+                    im::Text("%s", name);
+                    im::TableSetColumnIndex(1);
+                    im::Text("%d", fridge->blocks_given_out);
+                };
+
+                if (im::BeginTable("fridges", 2, flags)) {
+                    im::TableSetupColumn("fridge");
+                    im::TableSetupColumn("# blocks given out");
+                    im::TableHeadersRow();
+
+                    render_fridge("mark", &world.mark_fridge);
+                    render_fridge("avl_node", &world.avl_node_fridge);
+                    render_fridge("treap", &world.treap_fridge);
+                    render_fridge("change", &world.change_fridge);
+                    render_fridge("chunk0", &world.chunk0_fridge);
+                    render_fridge("chunk1", &world.chunk1_fridge);
+                    render_fridge("chunk2", &world.chunk2_fridge);
+                    render_fridge("chunk3", &world.chunk3_fridge);
+                    render_fridge("chunk4", &world.chunk4_fridge);
+                    render_fridge("chunk5", &world.chunk5_fridge);
+                    render_fridge("chunk6", &world.chunk6_fridge);
+                    render_fridge("chunk7", &world.chunk7_fridge);
+
+                    im::EndTable();
+                }
+            }
         }
 
         im::End();
