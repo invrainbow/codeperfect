@@ -157,10 +157,8 @@ bool History::go_backward(int count) {
         auto editor = get_current_editor();
 
         if (!editor || last.editor_id != editor->id || last.pos != editor->cur) {
-            if (editor) {
+            if (editor)
                 actually_push(editor->id, editor->cur);
-                pos = dec(pos);
-            }
             count--;
         }
     }
