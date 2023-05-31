@@ -2699,6 +2699,8 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
             ptr++;
         }
         ret->append('\0');
+        if (ret->len-1 > 9)
+            return -1;
         return strtol(ret->items, NULL, 10);
     };
 
@@ -2719,6 +2721,7 @@ Vim_Parse_Status Editor::vim_parse_command(Vim_Command *out) {
     if (eof()) return VIM_PARSE_WAIT;
 
     out->o_count = read_count();
+    if (out->o_count == -1) return VIM_PARSE_DISCARD;
 
     if (eof()) return VIM_PARSE_WAIT;
 
@@ -4843,6 +4846,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         buf->hist_force_push_next_change = true;
 
     int o_count = cmd->o_count == 0 ? 1 : cmd->o_count;
+    if (o_count < 0) return false; // overflowed number
 
     // Move cursor in normal mode.
     auto move_cursor_normal = [&](cur2 pos) {
