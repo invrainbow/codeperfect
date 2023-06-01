@@ -1043,7 +1043,11 @@ void Go_Indexer::background_thread() {
 
     {
         SCOPED_MEM(&thread_mem);
-        module_resolver.init(world.current_path, gomodcache);
+        {
+            start_writing();
+            defer { stop_writing(); };
+            module_resolver.init(world.current_path, gomodcache);
+        }
         package_lookup.init();
         package_queue.init();
         already_enqueued_packages.init();
@@ -1224,6 +1228,9 @@ void Go_Indexer::background_thread() {
     rebuild_package_lookup();
 
     auto rescan_gomod = [&](bool force_reset_index) {
+        start_writing();
+        defer { stop_writing(); };
+
         module_resolver.cleanup();
         module_resolver.init(world.current_path, gomodcache);
         init_index(force_reset_index);

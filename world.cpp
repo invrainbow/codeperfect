@@ -2869,8 +2869,11 @@ void handle_command(Command cmd, bool from_menu) {
         if (!editor) break;
         if (!editor->is_modifiable()) break;
 
-        editor->optimize_imports();
-        editor->format_on_save();
+        {
+            SCOPED_BATCH_CHANGE(editor->buf);
+            editor->optimize_imports();
+            editor->format_on_save();
+        }
         break;
     }
 

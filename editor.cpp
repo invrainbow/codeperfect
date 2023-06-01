@@ -2135,15 +2135,28 @@ void Editor::backspace_in_insert_mode() {
 }
 
 bool Editor::optimize_imports() {
-    SCOPED_MEM(&world.indexer.ui_mem);
-    defer { world.indexer.ui_mem.reset(); };
+    auto &ind = world.indexer;
 
-    if (!world.indexer.try_acquire_lock(IND_READING)) return false;
-    defer { world.indexer.release_lock(IND_READING); };
+    SCOPED_MEM(&ind.ui_mem);
+    defer { ind.ui_mem.reset(); };
 
-    auto imports = world.indexer.optimize_imports(filepath);
+    if (!ind.try_acquire_lock(IND_READING)) return false;
+    defer { ind.release_lock(IND_READING); };
+
+    auto imports = ind.optimize_imports(filepath);
     if (!imports) return false;
-    if (!imports->len) return false;
+    // if (!imports->len) return false;
+
+    auto stdlib_imports = new_list(Go_Import);
+    auto ext_imports = new_list(Go_Import);
+
+    For (imports) {
+        auto resolved_path = ind.get_package_path(it.import_path);
+        if (path_has_descendant(ind.goroot, resolved_path))
+            stdlib_imports->append(&it);
+        else
+            ext_imports->append(&it);
+    }
 
     // add imports into the file
     do {
@@ -2159,7 +2172,7 @@ bool Editor::optimize_imports() {
 
         auto is_cgo_import = [&](Ast_Node *it) {
             auto imports = new_list(Go_Import);
-            world.indexer.import_decl_to_goimports(it, imports);
+            ind.import_decl_to_goimports(it, imports);
             return imports->len == 1 && streq(imports->at(0).import_path, "C");
         };
 
@@ -2220,23 +2233,35 @@ bool Editor::optimize_imports() {
         rend.init();
         rend.write("import (\n");
 
-        For (imports) {
-            switch (it.package_name_type) {
+        auto write_import = [&](auto it) {
+            switch (it->package_name_type) {
             case GPN_IMPLICIT:
-                rend.write("\"%s\"", it.import_path);
+                rend.write("\"%s\"", it->import_path);
                 break;
             case GPN_EXPLICIT:
-                rend.write("%s \"%s\"", it.package_name, it.import_path);
+                rend.write("%s \"%s\"", it->package_name, it->import_path);
                 break;
             case GPN_BLANK:
-                rend.write("_ \"%s\"", it.import_path);
+                rend.write("_ \"%s\"", it->import_path);
                 break;
             case GPN_DOT:
-                rend.write(". \"%s\"", it.import_path);
+                rend.write(". \"%s\"", it->import_path);
                 break;
             }
             rend.write("\n");
-        }
+        };
+
+
+        if (!isempty(stdlib_imports))
+            For (stdlib_imports)
+                write_import(&it);
+
+        if (!isempty(stdlib_imports) && !isempty(ext_imports))
+            rend.write("\n");
+
+        if (!isempty(ext_imports))
+            For (ext_imports)
+                write_import(&it);
 
         rend.write(")");
         rend.write("%s", cgo_imports_text->items);
@@ -2405,6 +2430,7 @@ void Editor::handle_save(bool about_to_close) {
     }
 
     if (options.format_on_save && !file_was_deleted) {
+        SCOPED_BATCH_CHANGE(buf);
         if (options.organize_imports_on_save)
             optimize_imports();
         format_on_save();
