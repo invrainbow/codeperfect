@@ -1416,7 +1416,8 @@ void Go_Indexer::background_thread() {
                 delete_file(path_join(world.current_path, ".cpdb"));
                 package_lookup.clear();
                 index.cleanup();
-                final_mem.reset();
+                final_mem.cleanup();
+                final_mem.init("final_mem");
                 rescan_gomod(true);
                 rescan_everything();
                 break;
