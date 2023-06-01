@@ -1463,6 +1463,8 @@ void Go_Indexer::background_thread() {
             // we defer this, because in case we don't find any files,
             // we don't actually want to create the package
             auto get_ready_package = [&]() {
+                check_duplicate_packages();
+
                 if (pkg) {
                     if (pkg->use_pool) {
                         pkg->pool->cleanup();
