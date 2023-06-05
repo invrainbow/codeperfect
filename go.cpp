@@ -10,6 +10,7 @@
 #include "defer.hpp"
 #include "unicode.hpp"
 #include "enums.hpp"
+#include "copy.hpp"
 
 #if OS_WINBLOWS
 #include <windows.h>
@@ -1867,6 +1868,18 @@ i32 cmp_pos_to_node(cur2 pos, Ast_Node *node, bool end_inclusive = false) {
 }
 
 // @Functional
+List<Walk_Ts_Entry> *walk_ast_node2(Ast_Node *node, bool abstract_only) {
+    auto cursor = ts_tree_cursor_new(node->node);
+    defer { ts_tree_cursor_delete(&cursor); };
+
+    auto ret = walk_ts_cursor2(&cursor, abstract_only);
+    if (ret)
+        For (ret)
+            it.node.it = node->it;
+    return ret;
+}
+
+// @Functional
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb) {
     auto cursor = ts_tree_cursor_new(node->node);
     defer { ts_tree_cursor_delete(&cursor); };
@@ -2021,6 +2034,209 @@ ccstr parse_go_string(ccstr s) {
         return &ret[1];
     }
     return NULL;
+}
+
+List<Go_Scope_Op> *Go_Indexer::iterate_over_scope_ops2(Ast_Node *root, ccstr filename) {
+    struct Open_Scope {
+        int depth;
+        cur2 close_pos;
+    };
+
+    List<Open_Scope> open_scopes;
+    open_scopes.init();
+
+    auto scope_ops_decls = new_list(Godecl);
+    auto ret = new_list(Go_Scope_Op);
+
+    walk_ast_node(root, true, [&](Ast_Node* node, Ts_Field_Type field, int depth) -> Walk_Action {
+        for (; open_scopes.len; open_scopes.len--) {
+            auto it = open_scopes.last();
+            if (depth > it->depth) break;
+
+            Go_Scope_Op op;
+            op.type = GSOP_CLOSE_SCOPE;
+            op.pos = it->close_pos; // node->start();
+            ret->append(&op);
+        }
+
+        auto node_type = node->type();
+        switch (node_type) {
+        case TS_IF_STATEMENT:
+        case TS_FOR_STATEMENT:
+        case TS_EXPRESSION_SWITCH_STATEMENT:
+        case TS_BLOCK:
+        case TS_FUNC_LITERAL:
+        case TS_TYPE_SWITCH_STATEMENT: {
+            Open_Scope os;
+            os.depth = depth;
+            os.close_pos = node->end();
+            open_scopes.append(&os);
+
+            Go_Scope_Op op;
+            op.type = GSOP_OPEN_SCOPE;
+            op.pos = node->start();
+            ret->append(&op);
+            break;
+        }
+
+        case TS_TYPE_CASE:
+        case TS_DEFAULT_CASE: {
+            auto parent = node->parent();
+            if (!parent) break;
+            if (parent->type() != TS_TYPE_SWITCH_STATEMENT) break;
+
+            auto alias = parent->field(TSF_ALIAS);
+            if (!alias) break;
+            if (alias->type() != TS_EXPRESSION_LIST) break;
+
+            FOR_NODE_CHILDREN (alias) {
+                if (it->type() != TS_IDENTIFIER) break;
+
+                auto decl = new_object(Godecl);
+                decl->name = cp_strdup(it->string());
+                decl->type = GODECL_TYPECASE;
+                decl->decl_start = node->start();
+                decl->decl_end = node->start();
+                decl->spec_start = node->start();
+                decl->name_start = it->start();
+                decl->name_end = it->end();
+
+                Gotype *gotype = NULL;
+                if (node_type == TS_TYPE_CASE && node->child_count() > 1) {
+                    gotype = node_to_gotype(node->child());
+                } else {
+                    gotype = new_gotype(GOTYPE_INTERFACE);
+                    gotype->interface_specs = new_list(Go_Interface_Spec, 0);
+                }
+
+                decl->gotype = gotype;
+
+                Go_Scope_Op op;
+                op.type = GSOP_DECL;
+                op.decl = decl;
+                op.decl_scope_depth = open_scopes.len;
+                op.pos = decl->decl_start;
+                ret->append(&op);
+            }
+            break;
+        }
+
+        case TS_METHOD_DECLARATION:
+        case TS_FUNCTION_DECLARATION:
+        case TS_TYPE_DECLARATION:
+        case TS_PARAMETER_LIST:
+        case TS_SHORT_VAR_DECLARATION:
+        case TS_CONST_DECLARATION:
+        case TS_VAR_DECLARATION:
+        case TS_RANGE_CLAUSE:
+        case TS_RECEIVE_STATEMENT:
+        case TS_LABELED_STATEMENT:
+        case TS_TYPE_PARAMETER_DECLARATION: {
+            if (node_type == TS_RECEIVE_STATEMENT) {
+                bool ok = false;
+                do {
+                    auto parent = node->parent();
+                    if (!parent) break;
+                    if (parent->type() != TS_COMMUNICATION_CASE) break;
+                    ok = true;
+                } while (0);
+
+                if (!ok) return WALK_ABORT;
+            }
+
+            scope_ops_decls->len = 0;
+            node_to_decls(node, scope_ops_decls, filename);
+
+            for (u32 i = 0; i < scope_ops_decls->len; i++) {
+                Go_Scope_Op op;
+                op.type = GSOP_DECL;
+                op.decl = &scope_ops_decls->items[i];
+                op.decl_scope_depth = open_scopes.len;
+                op.pos = scope_ops_decls->items[i].decl_start;
+                ret->append(&op);
+            }
+
+            if (node_type == TS_METHOD_DECLARATION || node_type == TS_FUNCTION_DECLARATION) {
+                Open_Scope os;
+                os.depth = depth;
+                os.close_pos = node->end();
+                open_scopes.append(&os);
+
+                Go_Scope_Op op;
+                op.type = GSOP_OPEN_SCOPE;
+                op.pos = node->start();
+                ret->append(&op);
+            }
+            break;
+        }
+
+        case TS_METHOD_SPEC:
+        case TS_FIELD_DECLARATION: {
+            auto process_field = [&](Godecl *field) -> bool {
+                if (!field->name) return true;
+
+                // add an open scope just for the field
+                {
+                    Open_Scope os;
+                    os.depth = depth;
+                    os.close_pos = field->name_end;
+                    open_scopes.append(&os);
+
+                    Go_Scope_Op op;
+                    op.type = GSOP_OPEN_SCOPE;
+                    op.pos = field->name_start;
+                    ret->append(&op);
+                }
+
+                // add the field as a decl
+                {
+                    Go_Scope_Op op;
+                    op.type = GSOP_DECL;
+                    op.decl = field;
+                    op.decl_scope_depth = open_scopes.len;
+                    op.pos = field->name_start;
+                    ret->append(&op);
+                }
+
+                // close the scope
+                {
+                    auto it = open_scopes.last();
+                    Go_Scope_Op op;
+                    op.type = GSOP_CLOSE_SCOPE;
+                    op.pos = it->close_pos;
+                    ret->append(&op);
+                    open_scopes.len--;
+                }
+
+                return true;
+            };
+
+            if (node_type == TS_METHOD_SPEC) {
+                auto field = read_method_spec_into_field(node, 0);
+                if (!field) break;
+                if (!process_field(field)) return WALK_ABORT;
+            } else {
+                auto specs = read_struct_field_into_specs(node, 0, false);
+                if (!specs) break;
+                For (specs)
+                    if (!process_field(it.field))
+                        return WALK_ABORT;
+            }
+            break;
+        }
+        }
+
+        return WALK_CONTINUE;
+    });
+
+    For (&open_scopes) {
+        Go_Scope_Op op;
+        op.type = GSOP_CLOSE_SCOPE;
+        op.pos = root->end();
+        ret->append(&op);
+    }
+
+    return ret;
 }
 
 void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> cb, ccstr filename) {
@@ -2334,16 +2550,16 @@ void Go_Indexer::process_tree_into_gofile(
 
     file->scope_ops->len = 0;
 
-    iterate_over_scope_ops(root, [&](Go_Scope_Op *it) -> bool {
-        auto op = file->scope_ops->append();
-        {
-            SCOPED_MEM(pool);
-            memcpy(op, it->copy(), sizeof(Go_Scope_Op));
-        }
-        return true;
-    }, filename);
+    {
+        auto ops = iterate_over_scope_ops2(root, filename);
 
-    if (time) t.log("get scope ops");
+        if (time) t.log("get scope ops 2 (iterate)");
+
+        file->scope_ops->len = 0;
+        file->scope_ops->concat(copy_list(ops));
+
+        if (time) t.log("get scope ops 2 (copy)");
+    }
 
     // add references
     // --------------
@@ -2396,6 +2612,8 @@ void Go_Indexer::process_tree_into_gofile(
             return a.cmp(b);
         });
     }
+
+    if (time) t.log("references");
 
     // add import info
     // ---------------
@@ -4602,6 +4820,8 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
     auto pf = parse_file(filepath, LANG_GO, true);
     if (!pf) return NULL;
     defer { free_parsed_file(pf); };
+
+    t.log("parse file");
 
     auto file = pf->root;
 
@@ -9169,6 +9389,45 @@ Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx, String_Set *seen) 
 }
 
 // -----
+
+List<Walk_Ts_Entry> *walk_ts_cursor2(TSTreeCursor *curr, bool abstract_only) {
+    auto processed = listof<bool>(false);
+    auto ret = new_list(Walk_Ts_Entry);
+    int depth = 0;
+
+    while (true) {
+        if (processed->at(depth)) {
+            if (ts_tree_cursor_goto_next_sibling(curr)) {
+                processed->at(depth) = false;
+                continue;
+            }
+            if (ts_tree_cursor_goto_parent(curr)) {
+                processed->len--;
+                depth--;
+                continue;
+            }
+            break;
+        }
+
+        auto node = ts_tree_cursor_current_node(curr);
+        if (abstract_only && !ts_node_is_named(node)) {
+            processed->at(depth) = true;
+            continue;
+        }
+
+        auto ent = ret->append();
+        ent->node.init(node, NULL); // it is important that cb fills in node->it for the user
+        ent->field_type = (Ts_Field_Type)ts_tree_cursor_current_field_id(curr);
+        ent->depth = depth;
+
+        processed->at(depth) = true;
+
+        if (ts_tree_cursor_goto_first_child(curr))
+            processed->append(false), depth++;
+    }
+
+    return ret;
+}
 
 void walk_ts_cursor(TSTreeCursor *curr, bool abstract_only, Walk_TS_Callback cb) {
     List<bool> processed;

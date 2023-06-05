@@ -906,6 +906,14 @@ struct Parsed_File {
 typedef fn<Walk_Action(Ast_Node *node, Ts_Field_Type field_type, int depth)> Walk_TS_Callback;
 void walk_ts_cursor(TSTreeCursor *curr, bool abstract_only, Walk_TS_Callback cb);
 
+struct Walk_Ts_Entry {
+    Ast_Node node;
+    Ts_Field_Type field_type;
+    int depth;
+};
+
+List<Walk_Ts_Entry> *walk_ts_cursor2(TSTreeCursor *curr, bool abstract_only);
+
 struct Parameter_Hint {
     Gotype *gotype;
     cur2 call_args_start;
@@ -1288,6 +1296,8 @@ struct Go_Indexer {
         bool time = false
     );
     void iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> cb, ccstr filename);
+    List<Go_Scope_Op> *iterate_over_scope_ops2(Ast_Node *root, ccstr filename);
+
     void reload_all_editors(bool force = false);
     void reload_editor(void *editor);
     void reload_single_file(ccstr path);
@@ -1358,6 +1368,7 @@ struct Go_Indexer {
 Parsed_File *parse_file(ccstr filepath, Parse_Lang lang, bool use_latest = false);
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
+List<Walk_Ts_Entry> *walk_ast_node2(Ast_Node *node, bool abstract_only);
 void find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<Walk_Action(Ast_Node *it)> callback, bool end_inclusive = false);
 
 Ast_Node *new_ast_node(TSNode node, Parser_It *it);
