@@ -2529,7 +2529,7 @@ bool Editor::ask_user_about_unsaved_changes() {
 }
 
 void Editor::toggle_comment(int ystart, int yend) {
-    print("toggling from [%d, %d]", ystart, yend);
+    // print("toggling from [%d, %d]", ystart, yend);
 
     auto u_isspace = [&](uchar uch) {
         return uch < 128 && isspace(uch);
@@ -6106,9 +6106,6 @@ void Editor::vim_dotrepeat_commit() {
     vdr.input_working.filled = false;
 }
 
-// oh fuck
-// how do macros work with autocomplete?
-
 void Editor::handle_type_enter() {
     // handle replace mode, it seems to insert a newline
     // actually i wonder if this will just work as written
@@ -6274,7 +6271,7 @@ bool Editor::vim_handle_input(Vim_Command_Input *input) {
         vim.command_buffer->append(input);
 
 #ifdef DEBUG_BUILD
-        print("[%s | %zu] %s", cur.str(), buf->lines.len, render_command_buffer(vim.command_buffer));
+        // print("[%s | %zu] %s", cur.str(), buf->lines.len, render_command_buffer(vim.command_buffer));
 #endif
 
         Vim_Command cmd;
@@ -6285,7 +6282,7 @@ bool Editor::vim_handle_input(Vim_Command_Input *input) {
 
         vim.command_buffer->len = 0;
         if (status == VIM_PARSE_DISCARD) {
-            print("command discarded");
+            // print("command discarded");
             break;
         }
 
