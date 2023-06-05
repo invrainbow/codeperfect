@@ -11,15 +11,6 @@
 #include "defer.hpp"
 #include "mtwist_shim.hpp"
 
-void test_diff() {
-    auto a = read_file("/Users/brandon/ide/old.go");
-    auto b = read_file("/Users/brandon/ide/new.go");
-
-    auto al = cstr_to_ustr(a);
-    auto bl = cstr_to_ustr(b);
-    diff_main(new_dstr(al), new_dstr(bl));
-}
-
 void test_mark_tree() {
     Buffer buf;
     buf.init(&world.frame_mem, 0, false, true);
@@ -360,9 +351,14 @@ void test_bytecounts() {
 }
 
 void run_tests(ccstr test_name) {
-    if (streq(test_name, "diff")) test_diff();
-    if (streq(test_name, "mark_tree")) test_mark_tree();
-    if (streq(test_name, "mtf")) test_mark_tree_fuzz();
-    if (streq(test_name, "mtf_replay")) test_mark_tree_fuzz_replay();
-    if (streq(test_name, "bytecounts")) test_bytecounts();
+    bool is_all = streq(test_name, "all");
+
+    auto is_test = [&](auto name) {
+        return is_all || streq(test_name, name);
+    };
+
+    if (is_test("mark_tree")) test_mark_tree();
+    if (is_test("mtf")) test_mark_tree_fuzz();
+    if (is_test("mtf_replay")) test_mark_tree_fuzz_replay();
+    if (is_test("bytecounts")) test_bytecounts();
 }

@@ -36,7 +36,7 @@
             "program": "${workspaceFolder}/build/bin/ide",
             "args": [
                 "--test",
-                "bytecounts",
+                "all",
             ],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native",
