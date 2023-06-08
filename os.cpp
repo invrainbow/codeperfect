@@ -60,7 +60,7 @@ Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title, ccstr yeslabel, 
 
 Ask_User_Result ask_user_yes_no(ccstr text, ccstr title, ccstr yeslabel, ccstr nolabel, bool cancel) {
     auto ret = os_ask_user_yes_no(text, title, yeslabel, nolabel, cancel);
-    world.message_queue.add([&](auto msg) {
+    world.message_queue.try_add([&](auto msg) {
         msg->type = MTM_RESET_AFTER_DEFOCUS;
     });
     return ret;
@@ -68,14 +68,14 @@ Ask_User_Result ask_user_yes_no(ccstr text, ccstr title, ccstr yeslabel, ccstr n
 
 void tell_user(ccstr text, ccstr title) {
     os_tell_user(text, title);
-    world.message_queue.add([&](auto msg) {
+    world.message_queue.try_add([&](auto msg) {
         msg->type = MTM_RESET_AFTER_DEFOCUS;
     });
 }
 
 bool let_user_select_file(Select_File_Opts* opts) {
     auto ret = os_let_user_select_file(opts);
-    world.message_queue.add([&](auto msg) {
+    world.message_queue.try_add([&](auto msg) {
         msg->type = MTM_RESET_AFTER_DEFOCUS;
     });
     return ret;
@@ -204,6 +204,12 @@ NORETURN void cp_panic(ccstr s) {
         tell_user(s, "An error has occurred");
         throw Panic_Exception(s);
     } else {
+        // create a new pool to generate the stack trace using, in case the
+        // reason we're panicking is that our mem is corrupted
+        Pool pool;
+        pool.init("panic_mem");
+        SCOPED_MEM(&pool);
+
         auto st = generate_stack_trace(s);
         world.message_queue.add([&](auto msg) {
             msg->type = MTM_PANIC;

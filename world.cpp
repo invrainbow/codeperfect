@@ -4082,12 +4082,12 @@ NORETURN void crash_handler(int sig) {
     mem.name = "crash_handler";
     mem.blocksize = _countof(huge_buffer_for_crash_handler);
     mem.sp = 0;
-    {
-        Pool_Block block; ptr0(&block);
-        block.base = huge_buffer_for_crash_handler;
-        block.size = _countof(huge_buffer_for_crash_handler);
-        mem.curr = &block;
-    }
+
+    Pool_Block block; ptr0(&block);
+    block.base = huge_buffer_for_crash_handler;
+    block.size = _countof(huge_buffer_for_crash_handler);
+    mem.curr = &block;
+
     SCOPED_MEM(&mem);
 
     print("mem initialized");

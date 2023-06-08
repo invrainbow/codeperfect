@@ -488,6 +488,17 @@ struct Message_Queue {
         lock.leave();
     }
 
+    void try_add(fn<void(T *t)> f) {
+        if (lock.try_enter()) {
+            SCOPED_MEM(&mem);
+            T msg; ptr0(&msg);
+            f(&msg);
+            messages.append(&msg);
+
+            lock.leave();
+        }
+    }
+
     void add(fn<void(T *t)> f) {
         SCOPED_LOCK(&lock);
         {

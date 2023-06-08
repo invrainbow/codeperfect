@@ -2624,9 +2624,39 @@ void UI::draw_everything() {
                 if (editor) editor->flash_cursor_error();
             }
 
-            if (im::MenuItem("Cause intentional crash")) {
+            im::Separator();
+
+            if (im::MenuItem("Crash")) {
                 cp_panic("This is an intentionally caused crash");
             }
+
+            if (im::MenuItem("Crash on separate thread")) {
+                auto thread = [](auto) {
+                    Pool pool;
+                    pool.init("crash_separate_thread");
+                    SCOPED_MEM(&pool);
+                    cp_panic("panicking from another thread");
+                };
+
+                auto t = create_thread(thread);
+                close_thread_handle(t);
+            }
+
+            if (im::MenuItem("Crash on another thread w/ corrupted mem")) {
+                auto thread = [](auto) {
+                    Pool pool;
+                    pool.init("crash_separate_thread_corrupted_mem");
+                    SCOPED_MEM(&pool);
+                    pool.curr = NULL; // corrupt the pool
+
+                    cp_panic("panicking from another thread w/ corrupted mem");
+                };
+
+                auto t = create_thread(thread);
+                close_thread_handle(t);
+            }
+
+            im::Separator();
 
             if (im::MenuItem("Restart CodePerfect")) {
                 fork_self();
