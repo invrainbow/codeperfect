@@ -394,8 +394,8 @@ const BUYING_QUESTIONS = [
 
 function BuyLicenseSection({ label, children }) {
   return (
-    <div className="bg-white shadow rounded-lg overflow-hidden p-4">
-      <div className="leading-none mb-3 text-neutral-500 border-neutral-100 flex gap-2 items-center font-bold text-sm">
+    <div className="bg-white shadow rounded-lg overflow-hidden p-5">
+      <div className="leading-none mb-4 text-neutral-500 border-neutral-100 flex gap-2 items-center font-bold text-sm">
         {label}
       </div>
       {children}
@@ -438,10 +438,10 @@ function BuySelectable({ selected, label, children, onClick }) {
     <button
       onClick={onClick}
       className={cx(
-        "font-inherit rounded-lg text-left p-4 relative flex flex-col bg-white transition-colors shadow",
+        "font-inherit rounded-lg text-left p-4 relative flex flex-col bg-white transition-colors",
         {
-          "border border-neutral-300 bg-neutral-50 ": !selected,
-          "border border-neutral-500": selected,
+          "border border-neutral-300 bg-neutral-50": !selected,
+          "border border-neutral-400 shadow": selected,
         }
       )}
     >
@@ -614,9 +614,9 @@ function BuyLicense() {
       </div>
       <div className="md:max-w-screen-xl mx-auto md:mb-16">
         <div className="flex flex-col md:flex-row gap-4 md:gap-8 md:items-start">
-          <div className="flex-1 flex flex-col gap-4 px-4 md:px-0">
+          <div className="flex-1 flex flex-col gap-4 px-4 lg:px-0">
             <BuyLicenseSection label="1. Select Plan">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 {PLAN_INFO.map(({ label, features, key }) => (
                   <BuySelectable
                     key={key}
@@ -647,7 +647,7 @@ function BuyLicense() {
             {plan !== "enterprise" && (
               <>
                 <BuyLicenseSection label="2. Select Product">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     {PRODUCT_INFO.map(({ key, label, points }) => (
                       <BuySelectable
                         key={key}
@@ -668,7 +668,7 @@ function BuyLicense() {
                 </BuyLicenseSection>
                 {product !== "license_only" && (
                   <BuyLicenseSection label="3. Select Billing Period">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       {PERIOD_INFO.map(({ key, label, subtitle }) => (
                         <BuySelectable
                           key={key}
@@ -1388,7 +1388,7 @@ function Download() {
         </p>
         <div className="flex items-center justify-center">
           <div className="mt-8">
-            CodePerfect is free to evaluate for 7 days. After that you'll need a{" "}
+            CodePerfect is free to evaluate for 7 days. Then you'll need a{" "}
             <A href="/buy">license</A>.
           </div>
         </div>
