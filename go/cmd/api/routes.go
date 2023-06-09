@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/codeperfect95/codeperfect/go/cmd/api/emails"
 	"github.com/codeperfect95/codeperfect/go/cmd/lib"
@@ -19,6 +20,7 @@ import (
 	"github.com/codeperfect95/codeperfect/go/models"
 	"github.com/codeperfect95/codeperfect/go/versions"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/stripe/stripe-go/v72"
 	"github.com/stripe/stripe-go/v72/customer"
 	"github.com/stripe/stripe-go/v72/webhook"
@@ -188,7 +190,7 @@ func PostTrialV2(c *gin.Context) {
 	}
 
 	go SendSlack(
-		"trial user `%s` opened on `%s-%s`",
+		"Trial user `%s` opened on `%s-%s`",
 		WorkaroundGinRetardationAndGetClientIP(c),
 		req.OS,
 		versions.VersionToString(version),
@@ -231,7 +233,7 @@ func PostAuth(c *gin.Context) {
 		return
 	}
 
-	SendSlackForUser(res.user, "%s authed on `%s-%s`", res.user.Email, req.OS, versions.VersionToString(req.CurrentVersion))
+	SendSlackForUser(res.user, "%s authed on `%s-%s`.", res.user.Email, req.OS, versions.VersionToString(req.CurrentVersion))
 
 	c.JSON(http.StatusOK, &models.AuthResponse{
 		Success:   true,
@@ -254,7 +256,7 @@ func PostAuthV2(c *gin.Context) {
 
 	SendSlackForUser(
 		res.user,
-		"%s authed on `%s-%s`, result = %s",
+		"%s authed on `%s-%s` (result = `%s`)",
 		res.user.Email,
 		req.OS,
 		versions.VersionToString(res.version),
@@ -320,13 +322,25 @@ func handleCrashReport(c *gin.Context, user *models.User, osslug string, version
 		infoParts[i] = fmt.Sprintf("`%s`", val)
 	}
 
-	hastebinUrl, err := uploadToHastebin(report)
+	ext := ".crash"
+	if strings.HasPrefix(report, `{"app_name":`) {
+		ext = ".ips"
+	}
+
+	filename := fmt.Sprintf("crash-%s%s", uuid.New().String(), ext)
+
+	if err := lib.UploadFileToS3("codeperfect-crashes", filename, report); err != nil {
+		log.Print(err)
+		return
+	}
+
+	url, err := lib.GetPresignedURL("codeperfect-crashes", filename, time.Hour*24*7)
 	if err != nil {
 		log.Print(err)
 		return
 	}
 
-	go SendSlack("*New crash report*: %s\n%s", strings.Join(infoParts, " "), hastebinUrl)
+	go SendSlack("New crash report | %s | <%s|View report>", strings.Join(infoParts, " "), url)
 }
 
 func PostCrashReport(c *gin.Context) {

@@ -40,12 +40,21 @@ func init() {
 	sesClient = ses.New(sess)
 }
 
-func GetPresignedURL(bucket, key string) (string, error) {
+func UploadFileToS3(bucket, key, data string) error {
+	_, err := s3Client.PutObject(&s3.PutObjectInput{
+		Bucket: &bucket,
+		Key:    &key,
+		Body:   bytes.NewReader([]byte(data)),
+	})
+	return err
+}
+
+func GetPresignedURL(bucket, key string, expire time.Duration) (string, error) {
 	req, _ := s3Client.GetObjectRequest(&s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})
-	return req.Presign(15 * time.Minute)
+	return req.Presign(expire) // 15 * time.Minute)
 }
 
 func SendEmail(to, subject, bodyText, bodyHtml string) error {

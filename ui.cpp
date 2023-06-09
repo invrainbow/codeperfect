@@ -2631,6 +2631,10 @@ void UI::draw_everything() {
                 cp_panic("This is an intentionally caused crash");
             }
 
+            if (im::MenuItem("Crash by using abort()")) {
+                abort();
+            }
+
             if (im::MenuItem("Crash on separate thread")) {
                 auto thread = [](auto) {
                     Pool pool;

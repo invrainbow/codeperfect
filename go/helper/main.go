@@ -257,8 +257,13 @@ func sendCrashReports(license *License) {
 		return
 	}
 
+	desiredProcName := "ide"
+	desiredProcPathSuffix := "/CodePerfect.app/Contents/MacOS/bin/ide"
+	if IsDebugMode() {
+		desiredProcPathSuffix = "/ide"
+	}
+
 	isOurCrashFileIps := func(data []byte) bool {
-		log.Print("checking file .ips")
 		lines := strings.Split(string(data), "\n")
 		blob := strings.Join(lines[1:], "\n")
 
@@ -273,11 +278,10 @@ func sendCrashReports(license *License) {
 			return false
 		}
 
-		return (strings.HasSuffix(info.ProcPath, "CodePerfect.app/Contents/MacOS/bin/ide") && info.ProcName == "ide")
+		return (strings.HasSuffix(info.ProcPath, desiredProcPathSuffix) && info.ProcName == desiredProcName)
 	}
 
 	isOurCrashFileCrash := func(data []byte) bool {
-		log.Print("checking file .crash")
 		lines := strings.Split(string(data), "\n")
 
 		pathmatch := false
@@ -285,16 +289,16 @@ func sendCrashReports(license *License) {
 
 		for _, line := range lines {
 			parts := strings.Fields(line)
-			if len(parts) == 2 {
+			if len(parts) != 2 {
 				continue
 			}
 			if parts[0] == "Path:" {
-				if !strings.HasSuffix(line, "CodePerfect.app/Contents/MacOS/bin/ide") {
+				if !strings.HasSuffix(line, desiredProcPathSuffix) {
 					return false
 				}
 				pathmatch = true
 			} else if parts[0] == "Identifier:" {
-				if len(parts) != 2 || parts[1] != "ide" {
+				if len(parts) != 2 || parts[1] != desiredProcName {
 					return false
 				}
 				idmatch = true
@@ -341,6 +345,9 @@ func sendCrashReports(license *License) {
 	}
 
 	for _, f := range files {
+		if f.IsDir() {
+			continue
+		}
 		fullpath := filepath.Join(reportsdir, f.Name())
 		data, err := os.ReadFile(fullpath)
 		if err != nil {
