@@ -389,6 +389,10 @@ struct World {
     Pool fst_mem;
     Pool search_marks_mem;
 
+    bool scr_has_info;
+    char scr_email[256];
+    char scr_license[256];
+
     Pool workspace_mem_1;
     Pool workspace_mem_2;
     bool which_workspace_mem;

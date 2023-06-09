@@ -370,8 +370,7 @@ func GHSendCrashReports(rawEmail, rawLicenseKey *C.char) {
 			LicenseKey: C.GoString(rawLicenseKey),
 		}
 	}
-
-	go sendCrashReports(license)
+	sendCrashReports(license)
 }
 
 var authStatus int = AuthWaiting

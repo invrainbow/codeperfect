@@ -496,3 +496,18 @@ ccstr generate_stack_trace(ccstr message = NULL);
 int get_current_focused_window_pid();
 
 bool move_file_or_directory(ccstr src, ccstr dest);
+
+struct Mutex {
+#if OS_MAC
+    int fd;
+#endif
+
+    bool init(ccstr name) {
+        ptr0(this);
+        return platform_init(name);
+    }
+    bool try_enter();
+    void leave();
+    bool platform_init(ccstr name);
+    void cleanup();
+};
