@@ -2596,6 +2596,7 @@ void UI::draw_everything() {
             menu_command(CMD_OPTIONS);
 
 #ifdef DEBUG_BUILD
+// #if 1
             im::Separator();
 
             im::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);

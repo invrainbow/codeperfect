@@ -993,9 +993,11 @@ void Editor::reload_file(bool because_of_file_watcher) {
 
     if (!check_file(fm)) return;
 
-    auto uchars = cstr_to_ustr((ccstr)fm->data, fm->len);
-    replace_buf_contents(uchars);
-    buf->dirty = false;
+    if (fm->len) {
+        auto uchars = cstr_to_ustr((ccstr)fm->data, fm->len);
+        replace_buf_contents(uchars);
+        buf->dirty = false;
+    }
 }
 
 Parse_Lang determine_lang(ccstr filepath) {

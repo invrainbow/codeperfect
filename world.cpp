@@ -1387,8 +1387,10 @@ void Build::cleanup() {
     }
 
     For (&errors) {
-        it.mark->cleanup();
-        it.mark = NULL;
+        if (it.mark) {
+            it.mark->cleanup();
+            it.mark = NULL;
+        }
     }
     errors.len = 0;
     mem.cleanup();

@@ -2042,15 +2042,13 @@ List<Go_Scope_Op> *Go_Indexer::iterate_over_scope_ops2(Ast_Node *root, ccstr fil
         cur2 close_pos;
     };
 
-    List<Open_Scope> open_scopes;
-    open_scopes.init();
-
+    auto open_scopes = new_list(Open_Scope);
     auto scope_ops_decls = new_list(Godecl);
     auto ret = new_list(Go_Scope_Op);
 
     walk_ast_node(root, true, [&](Ast_Node* node, Ts_Field_Type field, int depth) -> Walk_Action {
-        for (; open_scopes.len; open_scopes.len--) {
-            auto it = open_scopes.last();
+        for (; open_scopes->len; open_scopes->len--) {
+            auto it = open_scopes->last();
             if (depth > it->depth) break;
 
             Go_Scope_Op op;
@@ -2070,7 +2068,7 @@ List<Go_Scope_Op> *Go_Indexer::iterate_over_scope_ops2(Ast_Node *root, ccstr fil
             Open_Scope os;
             os.depth = depth;
             os.close_pos = node->end();
-            open_scopes.append(&os);
+            open_scopes->append(&os);
 
             Go_Scope_Op op;
             op.type = GSOP_OPEN_SCOPE;
@@ -2114,7 +2112,7 @@ List<Go_Scope_Op> *Go_Indexer::iterate_over_scope_ops2(Ast_Node *root, ccstr fil
                 Go_Scope_Op op;
                 op.type = GSOP_DECL;
                 op.decl = decl;
-                op.decl_scope_depth = open_scopes.len;
+                op.decl_scope_depth = open_scopes->len;
                 op.pos = decl->decl_start;
                 ret->append(&op);
             }
@@ -2150,8 +2148,8 @@ List<Go_Scope_Op> *Go_Indexer::iterate_over_scope_ops2(Ast_Node *root, ccstr fil
             for (u32 i = 0; i < scope_ops_decls->len; i++) {
                 Go_Scope_Op op;
                 op.type = GSOP_DECL;
-                op.decl = &scope_ops_decls->items[i];
-                op.decl_scope_depth = open_scopes.len;
+                op.decl = scope_ops_decls->items[i].copy();
+                op.decl_scope_depth = open_scopes->len;
                 op.pos = scope_ops_decls->items[i].decl_start;
                 ret->append(&op);
             }
@@ -2160,7 +2158,7 @@ List<Go_Scope_Op> *Go_Indexer::iterate_over_scope_ops2(Ast_Node *root, ccstr fil
                 Open_Scope os;
                 os.depth = depth;
                 os.close_pos = node->end();
-                open_scopes.append(&os);
+                open_scopes->append(&os);
 
                 Go_Scope_Op op;
                 op.type = GSOP_OPEN_SCOPE;
@@ -2180,7 +2178,7 @@ List<Go_Scope_Op> *Go_Indexer::iterate_over_scope_ops2(Ast_Node *root, ccstr fil
                     Open_Scope os;
                     os.depth = depth;
                     os.close_pos = field->name_end;
-                    open_scopes.append(&os);
+                    open_scopes->append(&os);
 
                     Go_Scope_Op op;
                     op.type = GSOP_OPEN_SCOPE;
@@ -2193,19 +2191,19 @@ List<Go_Scope_Op> *Go_Indexer::iterate_over_scope_ops2(Ast_Node *root, ccstr fil
                     Go_Scope_Op op;
                     op.type = GSOP_DECL;
                     op.decl = field;
-                    op.decl_scope_depth = open_scopes.len;
+                    op.decl_scope_depth = open_scopes->len;
                     op.pos = field->name_start;
                     ret->append(&op);
                 }
 
                 // close the scope
                 {
-                    auto it = open_scopes.last();
+                    auto it = open_scopes->last();
                     Go_Scope_Op op;
                     op.type = GSOP_CLOSE_SCOPE;
                     op.pos = it->close_pos;
                     ret->append(&op);
-                    open_scopes.len--;
+                    open_scopes->len--;
                 }
 
                 return true;
@@ -2229,7 +2227,7 @@ List<Go_Scope_Op> *Go_Indexer::iterate_over_scope_ops2(Ast_Node *root, ccstr fil
         return WALK_CONTINUE;
     });
 
-    For (&open_scopes) {
+    For (open_scopes) {
         Go_Scope_Op op;
         op.type = GSOP_CLOSE_SCOPE;
         op.pos = root->end();
@@ -2245,14 +2243,12 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
         cur2 close_pos;
     };
 
-    List<Open_Scope> open_scopes;
-    open_scopes.init();
-
+    auto open_scopes = new_list(Open_Scope);;
     auto scope_ops_decls = new_list(Godecl);
 
     walk_ast_node(root, true, [&](Ast_Node* node, Ts_Field_Type field, int depth) -> Walk_Action {
-        for (; open_scopes.len; open_scopes.len--) {
-            auto it = open_scopes.last();
+        for (; open_scopes->len; open_scopes->len--) {
+            auto it = open_scopes->last();
             if (depth > it->depth) break;
 
             Go_Scope_Op op;
@@ -2272,7 +2268,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
             Open_Scope os;
             os.depth = depth;
             os.close_pos = node->end();
-            open_scopes.append(&os);
+            open_scopes->append(&os);
 
             Go_Scope_Op op;
             op.type = GSOP_OPEN_SCOPE;
@@ -2316,7 +2312,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
                 Go_Scope_Op op;
                 op.type = GSOP_DECL;
                 op.decl = decl;
-                op.decl_scope_depth = open_scopes.len;
+                op.decl_scope_depth = open_scopes->len;
                 op.pos = decl->decl_start;
                 if (!cb(&op)) return WALK_ABORT;
             }
@@ -2353,7 +2349,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
                 Go_Scope_Op op;
                 op.type = GSOP_DECL;
                 op.decl = &scope_ops_decls->items[i];
-                op.decl_scope_depth = open_scopes.len;
+                op.decl_scope_depth = open_scopes->len;
                 op.pos = scope_ops_decls->items[i].decl_start;
                 if (!cb(&op)) return WALK_ABORT;
             }
@@ -2362,7 +2358,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
                 Open_Scope os;
                 os.depth = depth;
                 os.close_pos = node->end();
-                open_scopes.append(&os);
+                open_scopes->append(&os);
 
                 Go_Scope_Op op;
                 op.type = GSOP_OPEN_SCOPE;
@@ -2382,7 +2378,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
                     Open_Scope os;
                     os.depth = depth;
                     os.close_pos = field->name_end;
-                    open_scopes.append(&os);
+                    open_scopes->append(&os);
 
                     Go_Scope_Op op;
                     op.type = GSOP_OPEN_SCOPE;
@@ -2395,19 +2391,19 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
                     Go_Scope_Op op;
                     op.type = GSOP_DECL;
                     op.decl = field;
-                    op.decl_scope_depth = open_scopes.len;
+                    op.decl_scope_depth = open_scopes->len;
                     op.pos = field->name_start;
                     if (!cb(&op)) return false;
                 }
 
                 // close the scope
                 {
-                    auto it = open_scopes.last();
+                    auto it = open_scopes->last();
                     Go_Scope_Op op;
                     op.type = GSOP_CLOSE_SCOPE;
                     op.pos = it->close_pos;
                     if (!cb(&op)) return false;
-                    open_scopes.len--;
+                    open_scopes->len--;
                 }
 
                 return true;
@@ -2431,7 +2427,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
         return WALK_CONTINUE;
     });
 
-    For (&open_scopes) {
+    For (open_scopes) {
         Go_Scope_Op op;
         op.type = GSOP_CLOSE_SCOPE;
         op.pos = root->end();
@@ -2555,6 +2551,7 @@ void Go_Indexer::process_tree_into_gofile(
 
         if (time) t.log("get scope ops 2 (iterate)");
 
+        SCOPED_MEM(pool);
         file->scope_ops->len = 0;
         file->scope_ops->concat(copy_list(ops));
 
