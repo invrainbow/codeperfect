@@ -760,8 +760,6 @@ void handle_window_event(Window_Event *it) {
 int realmain(int argc, char **argv) {
     is_main_thread = true;
 
-    install_crash_handlers();
-
 #ifdef DEBUG_BUILD
     {
         Pool mem; mem.init("tmp");
@@ -1430,17 +1428,6 @@ int realmain(int argc, char **argv) {
                 case MTM_EXIT:
                     exit(it.exit_code);
                     break;
-
-                case MTM_PANIC: {
-                    // When we get here, we already called cp_panic in the
-                    // other thread. There's no point in throwing a new
-                    // exception, since the stacktrace will just be this
-                    // thread's, so just exit.
-                    tell_user(NULL, it.panic_message);
-                    write_stacktrace_to_file(it.panic_stacktrace);
-                    exit(1);
-                    break;
-                }
 
                 case MTM_TELL_USER:
                     tell_user(it.tell_user_text, it.tell_user_title);

@@ -1008,10 +1008,6 @@ void fork_self(List<char*> *args, bool exit_this) {
     if (exit_this) ExitProcess(0);
 }
 
-NORETURN void exit_from_crash_handler() {
-    _exit(1); // is this supported on windows?
-}
-
 ccstr generate_stack_trace(ccstr message) {
     void* pointers[62];
     int n = CaptureStackBackTrace(0, 62, pointers, NULL);

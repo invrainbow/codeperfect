@@ -4060,47 +4060,6 @@ void fstlog(ccstr fmt, ...) {
     world.fst.log(s);
 }
 
-u8 huge_buffer_for_crash_handler[1024 * 64];
-
-void write_stacktrace_to_file(ccstr stacktrace) {
-    auto fp = path_join(world.configdir, cp_sprintf("crash-report.txt", get_unix_time()));
-    print("filepath: %s", fp);
-
-    File f;
-    if (f.init_write(fp) != FILE_RESULT_OK) {
-        print("unable to open file??");
-        return;
-    }
-    defer { f.cleanup(); };
-
-    f.write(stacktrace, strlen(stacktrace));
-}
-
-NORETURN void crash_handler(int sig) {
-    print("crash handler sig %d", sig);
-
-    // this is so stupid, but we have to create a pool that never calls malloc
-    Pool mem; ptr0(&mem);
-    mem.name = "crash_handler";
-    mem.blocksize = _countof(huge_buffer_for_crash_handler);
-    mem.sp = 0;
-
-    Pool_Block block; ptr0(&block);
-    block.base = huge_buffer_for_crash_handler;
-    block.size = _countof(huge_buffer_for_crash_handler);
-    mem.curr = &block;
-
-    SCOPED_MEM(&mem);
-
-    print("mem initialized");
-
-    auto st = generate_stack_trace(cp_sprintf("crash handler on signal %d", sig));
-    write_stacktrace_to_file(st);
-    print("stacktrace:\n%s", st);
-
-    exit_from_crash_handler();
-}
-
 void set_zoom_level(int level) {
     options.zoom_level = level;
     if (world.wnd_options.show)

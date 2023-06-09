@@ -465,8 +465,4 @@ ccstr get_path_relative_to(ccstr full, ccstr base) {
     return p.str();
 }
 
-NORETURN void exit_from_crash_handler() {
-    _exit(1);
-}
-
 #endif // OS_MAC || OS_LINUX

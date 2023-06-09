@@ -9,7 +9,6 @@
 #elif OS_MAC || OS_LINUX
 #   include <pthread.h>
 #   include <errno.h>
-#   include <signal.h>
 #   include <unistd.h>
 #   if OS_LINUX
 #       include <sys/epoll.h>
@@ -493,8 +492,6 @@ typedef fn<int(const void *it)> bs_test_func;
 int binary_search(void *list, s32 num, s32 size, bs_test_func test);
 
 ccstr generate_stack_trace(ccstr message = NULL);
-NORETURN void exit_from_crash_handler();
-void install_crash_handlers();
 
 int get_current_focused_window_pid();
 

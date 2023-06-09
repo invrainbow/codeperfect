@@ -290,16 +290,16 @@ func handleCrashReport(c *gin.Context, user *models.User, osslug string, version
 		log.Printf("user not nil, email = %s license = %s", user.Email, user.LicenseKey)
 	}
 
-	if len(report) > 2048 {
+	if len(report) > 64000 {
 		log.Printf("user sent large content with len %d", len(report))
-		report = report[:2048]
+		report = report[:64000]
 	}
 
 	newlines := 0
 	for i, ch := range report {
 		if ch == '\n' {
 			newlines++
-			if newlines > 128 {
+			if newlines > 1024 {
 				log.Printf("user sent large content with lots of lines")
 				report = report[:i]
 				break
@@ -320,7 +320,13 @@ func handleCrashReport(c *gin.Context, user *models.User, osslug string, version
 		infoParts[i] = fmt.Sprintf("`%s`", val)
 	}
 
-	go SendSlack("*New crash report*: %s\n```%s```", strings.Join(infoParts, " "), report)
+	hastebinUrl, err := uploadToHastebin(report)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+
+	go SendSlack("*New crash report*: %s\n%s", strings.Join(infoParts, " "), hastebinUrl)
 }
 
 func PostCrashReport(c *gin.Context) {

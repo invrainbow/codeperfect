@@ -54,7 +54,6 @@ enum Main_Thread_Message_Type {
     MTM_FILETREE_DELETE,
     MTM_FILETREE_CREATE,
     /**/
-    MTM_PANIC,
     MTM_TELL_USER,
     /**/
     MTM_RELOAD_EDITOR,
@@ -74,10 +73,6 @@ struct Main_Thread_Message {
         struct {
             ccstr goto_file;
             cur2 goto_pos;
-        };
-        struct {
-            ccstr panic_message;
-            ccstr panic_stacktrace;
         };
         struct {
             ccstr tell_user_text;
@@ -980,8 +975,6 @@ bool write_project_settings();
 void handle_window_focus(bool focus);
 
 void fstlog(ccstr fmt, ...);
-void write_stacktrace_to_file(ccstr stacktrace);
-NORETURN void crash_handler(int sig);
 
 void recalc_display_size();
 

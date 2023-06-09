@@ -2,7 +2,6 @@
 #include "world.hpp"
 #include "cwalk.h"
 #include "defer.hpp"
-#include <signal.h>
 #if !OS_WINBLOWS
 #   include <unistd.h>
 #endif
@@ -131,18 +130,6 @@ bool Process::read1(char* out) {
     return false;
 }
 
-void install_crash_handlers() {
-    signal(SIGSEGV, crash_handler);
-    signal(SIGILL, crash_handler);
-    signal(SIGABRT, crash_handler);
-    signal(SIGFPE, crash_handler);
-
-#if OS_UNIX
-    // not supported on windows
-    signal(SIGBUS, crash_handler);
-#endif
-}
-
 ccstr rel_to_abs_path(ccstr path, ccstr cwd) {
     int size = 16;
 
@@ -189,35 +176,11 @@ bool copy_file(ccstr src, ccstr dest) {
     return f.write((char*)fm->data, fm->len);
 }
 
-// cases to handle:
-// cp_panic from main thread
-//    throw exception, signal handler handles
-// cp_panic from nonmain thread
-//    send message to main thread, gen stacktrace, exit this thread
-//    in main thread, take stacktrace, invoke signal handler manually? lol
-// general crash
-//    signal handler handles
-
 #ifndef DEBUG_BUILD
 NORETURN void cp_panic(ccstr s) {
-    if (is_main_thread) {
+    if (is_main_thread)
         tell_user(s, "An error has occurred");
-        throw Panic_Exception(s);
-    } else {
-        // create a new pool to generate the stack trace using, in case the
-        // reason we're panicking is that our mem is corrupted
-        Pool pool;
-        pool.init("panic_mem");
-        SCOPED_MEM(&pool);
-
-        auto st = generate_stack_trace(s);
-        world.message_queue.add([&](auto msg) {
-            msg->type = MTM_PANIC;
-            msg->panic_message = cp_strdup(s);
-            msg->panic_stacktrace = cp_strdup(st);
-        });
-        exit_thread(1);
-    }
+    abort();
 }
 #endif
 
