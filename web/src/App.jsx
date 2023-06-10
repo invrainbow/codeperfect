@@ -292,13 +292,19 @@ function PaymentDone() {
     <WallOfText>
       <Title>Thanks for the purchase!</Title>
       <p>
-        Please check your email &mdash; we just sent your license key to you. If
-        you don't see it, see if it's in your spam folder. If you still don't
+        Please check your email&mdash;we just sent your license key to you. If
+        you don't see it, it might be in your spam folder. If you still don't
         see it, please <a href={`mailto:${SUPPORT_EMAIL}`}>contact support</a>.
       </p>
       <p>
         If you haven't done so yet, you can download CodePerfect{" "}
         <A href="/download">here</A>.
+      </p>
+      <p>
+        We highly recommend subscribing to our{" "}
+        <A href={LINKS.substack}>Substack</A> for essential product
+        announcements and releases. We use it as our newsletter and blog rolled
+        into one.
       </p>
     </WallOfText>
   );
