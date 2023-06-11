@@ -22,7 +22,7 @@ import (
 )
 
 /*
-#include <fcntl.h>
+#include <sys/file.h>
 */
 import "C"
 
