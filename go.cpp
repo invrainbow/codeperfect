@@ -5776,7 +5776,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
         t.log("more crazy shit part 2");
 
-        bool is_current_file_test_file = str_ends_with(gofile->filename, "_test.go");
+        bool is_current_file_test_file = gofile && str_ends_with(gofile->filename, "_test.go");
 
         auto results = list_package_decls(ctx->import_path, LISTDECLS_EXCLUDE_METHODS);
         if (results) {
