@@ -520,10 +520,6 @@ struct World {
 
     struct Debugger dbg;
 
-    Pool* _all_pools[2048];
-    List<Pool*> all_pools;
-    Lock all_pools_lock;
-
     struct Wnd_Mem_Viewer : Wnd {
         bool only_show_significant_pools;
     } wnd_mem_viewer;

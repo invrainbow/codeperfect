@@ -95,21 +95,3 @@ void free_chunk(uchar* buf, s32 cap) {
 }
 
 void memhpp_assert_stub(bool cond) { cp_assert(cond); }
-
-void add_pool(Pool *pool) {
-    SCOPED_LOCK(&world.all_pools_lock);
-
-    if (world.all_pools.mode == LIST_UNINITIALIZED) return;
-
-    world.all_pools.append(pool);
-}
-
-void remove_pool(Pool *pool) {
-    SCOPED_LOCK(&world.all_pools_lock);
-
-    if (world.all_pools.mode == LIST_UNINITIALIZED) return;
-
-    auto p = world.all_pools.find([&](auto it) { return *it == pool; });
-    cp_assert(p);
-    world.all_pools.remove(p);
-}

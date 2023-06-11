@@ -85,11 +85,6 @@ struct Pool_Block {
     s32 size;
 };
 
-struct Pool;
-
-void add_pool(Pool *pool);
-void remove_pool(Pool *pool);
-
 struct Pool {
     bool initialized;
     List<Pool_Block*> obsolete_blocks;
@@ -146,8 +141,6 @@ struct Pool {
 
         request_new_block();
         initialized = true;
-
-        add_pool(this);
     }
 
     Pool_Block *alloc_block(s32 blocksize) {
@@ -165,8 +158,6 @@ struct Pool {
 
     void cleanup() {
         if (!initialized) return;
-
-        remove_pool(this);
 
         For (&unused_blocks) free_block(it);
         For (&used_blocks) free_block(it);

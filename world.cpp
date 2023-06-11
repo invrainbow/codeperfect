@@ -342,9 +342,6 @@ void World::init() {
 
     t.log("getversionstring");
 
-    all_pools_lock.init();
-    all_pools.init(LIST_FIXED, _countof(_all_pools), _all_pools);
-
 #define init_mem(x) x.init(#x)
     init_mem(world_mem);
     init_mem(frame_mem);
