@@ -219,25 +219,4 @@ ccstr generate_stack_trace(ccstr message) {
     return r.finish();
 }
 
-bool Mutex::platform_init(ccstr name) {
-    fd = open(name, O_WRONLY | O_CREAT, 0644);
-    if (fd == -1) {
-        perror("open");
-        return false;
-    }
-    return true;
-}
-
-bool Mutex::try_enter() {
-    return flock(fd, LOCK_NB | LOCK_EX) == 0;
-}
-
-void Mutex::leave() {
-    flock(fd, LOCK_UN);
-}
-
-void Mutex::cleanup() {
-    close(fd);
-}
-
 #endif

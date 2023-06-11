@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"bytes"
@@ -27,11 +27,6 @@ type ServerError struct {
 
 func (se *ServerError) Error() string {
 	return se.Message
-}
-
-type License struct {
-	Email      string `json:"email"`
-	LicenseKey string `json:"key"`
 }
 
 func CallServer(endpoint string, license *License, params interface{}, out interface{}) error {

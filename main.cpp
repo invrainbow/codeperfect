@@ -867,7 +867,7 @@ int realmain(int argc, char **argv) {
                 GHOpenURLInBrowser("https://codeperfect95.com/buy");
             }
         } else {
-            GHAuth(NULL, NULL);
+            GHAuth(NULL, NULL, options.send_crash_reports);
         }
         break;
 
@@ -880,41 +880,9 @@ int realmain(int argc, char **argv) {
         auto license = cp_sprintf("%.*s", auth.reg_license_len, auth.reg_license);
         cp_strcpy_fixed(world.authed_email, auth.reg_email);
 
-        GHAuth((char*)email, (char*)license);
+        GHAuth((char*)email, (char*)license, options.send_crash_reports);
         break;
     }
-    }
-
-    if (options.send_crash_reports) {
-        auto &a = world.auth;
-        world.scr_has_info = false;
-        if (a.state == AUTH_REGISTERED) {
-            cp_strcpy_fixed(world.scr_email, cp_sprintf("%.*s", a.reg_email_len, a.reg_email));
-            cp_strcpy_fixed(world.scr_license, cp_sprintf("%.*s", a.reg_license_len, a.reg_license));
-            world.scr_has_info = true;
-        }
-
-        auto proc = [](void*) {
-            Pool pool;
-            pool.init("send_crash_reports_mem");
-            defer { pool.cleanup(); };
-            SCOPED_MEM(&pool);
-
-            Mutex mutex;
-            auto lockfile = path_join(world.configdir, "codeperfect_send_crash_mutex");
-            if (!mutex.init(lockfile)) return;
-            defer { mutex.cleanup(); };
-
-            if (!mutex.try_enter()) return;
-            defer { mutex.leave(); };
-
-            if (world.scr_has_info)
-                GHSendCrashReports(world.scr_email, world.scr_license);
-            else
-                GHSendCrashReports(NULL, NULL);
-        };
-
-        close_thread_handle(create_thread(proc, NULL));
     }
 
     auto set_window_title = [&](ccstr note) {

@@ -3,11 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
-	"encoding/json"
 	"fmt"
 	"go/build"
 	"go/format"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -243,136 +241,6 @@ const (
 	AuthUserInactive
 )
 
-func sendCrashReports(license *License) {
-	homedir, err := os.UserHomeDir()
-	if err != nil {
-		log.Print(err)
-		return
-	}
-
-	reportsdir := filepath.Join(homedir, "Library/Logs/DiagnosticReports")
-	files, err := ioutil.ReadDir(reportsdir)
-	if err != nil {
-		log.Print(err)
-		return
-	}
-
-	desiredProcName := "ide"
-	desiredProcPathSuffix := "/CodePerfect.app/Contents/MacOS/bin/ide"
-	if IsDebugMode() {
-		desiredProcPathSuffix = "/ide"
-	}
-
-	isOurCrashFileIps := func(data []byte) bool {
-		lines := strings.Split(string(data), "\n")
-		blob := strings.Join(lines[1:], "\n")
-
-		type Info struct {
-			ProcName string `json:"procName"`
-			ProcPath string `json:"procPath"`
-		}
-
-		var info Info
-		if err := json.Unmarshal([]byte(blob), &info); err != nil {
-			log.Print(err)
-			return false
-		}
-
-		return (strings.HasSuffix(info.ProcPath, desiredProcPathSuffix) && info.ProcName == desiredProcName)
-	}
-
-	isOurCrashFileCrash := func(data []byte) bool {
-		lines := strings.Split(string(data), "\n")
-
-		pathmatch := false
-		idmatch := false
-
-		for _, line := range lines {
-			parts := strings.Fields(line)
-			if len(parts) != 2 {
-				continue
-			}
-			if parts[0] == "Path:" {
-				if !strings.HasSuffix(line, desiredProcPathSuffix) {
-					return false
-				}
-				pathmatch = true
-			} else if parts[0] == "Identifier:" {
-				if len(parts) != 2 || parts[1] != desiredProcName {
-					return false
-				}
-				idmatch = true
-			} else {
-				continue
-			}
-			if pathmatch && idmatch {
-				return true
-			}
-		}
-		return false
-	}
-
-	isOurCrashFile := func(fullpath string, data []byte) bool {
-		if strings.HasSuffix(fullpath, ".ips") {
-			return isOurCrashFileIps(data)
-		}
-		if strings.HasSuffix(fullpath, ".crash") {
-			return isOurCrashFileCrash(data)
-		}
-		return false
-	}
-
-	processFile := func(fullpath string, data []byte) {
-		defer os.Remove(fullpath)
-
-		// big crash report, skip
-		if len(data) > 64000 {
-			log.Printf("data is big, len = %d", len(data))
-			return
-		}
-
-		osSlug, _ := versions.GetOSSlug(runtime.GOOS, runtime.GOARCH)
-		req := models.CrashReportRequest{
-			OS:      osSlug,
-			Content: string(data),
-			Version: versions.CurrentVersion,
-		}
-
-		if err := CallServer("v2/crash-report", license, req, nil); err != nil {
-			log.Print(err)
-			return
-		}
-	}
-
-	for _, f := range files {
-		if f.IsDir() {
-			continue
-		}
-		fullpath := filepath.Join(reportsdir, f.Name())
-		data, err := os.ReadFile(fullpath)
-		if err != nil {
-			log.Print(fullpath, err)
-			continue
-		}
-		if isOurCrashFile(fullpath, data) {
-			processFile(fullpath, data)
-		}
-	}
-}
-
-//export GHSendCrashReports
-func GHSendCrashReports(rawEmail, rawLicenseKey *C.char) {
-	var license *License
-
-	if rawEmail != nil && rawLicenseKey != nil {
-		license = &License{
-			Email:      C.GoString(rawEmail),
-			LicenseKey: C.GoString(rawLicenseKey),
-		}
-	}
-	sendCrashReports(license)
-}
-
 var authStatus int = AuthWaiting
 
 //export GHGetAuthStatus
@@ -380,7 +248,7 @@ func GHGetAuthStatus() int {
 	return authStatus
 }
 
-func tellLauncherWhetherToAutoupdate(update bool) error {
+func sendInfoToLauncher(update bool, email, licenseKey string, sendCrashReport bool) error {
 	pipeFile, err := utils.GetAppToLauncherPipeFile()
 	if err != nil {
 		return err
@@ -391,22 +259,39 @@ func tellLauncherWhetherToAutoupdate(update bool) error {
 		return err
 	}
 
-	message := "autoupdate"
+	updateMessage := "autoupdate"
 	if !update {
-		message = "noautoupdate"
+		updateMessage = "noautoupdate"
 	}
 
-	_, err = f.WriteString(message + "\n")
-	return err
+	sendCrashMessage := "sendcrash"
+	if !sendCrashReport {
+		sendCrashMessage = "nosendcrash"
+	}
+
+	lines := []string{
+		updateMessage + "\n",
+		email + "\n",
+		licenseKey + "\n",
+		sendCrashMessage + "\n",
+	}
+
+	for _, val := range lines {
+		_, err = f.WriteString(val)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 //export GHAuth
-func GHAuth(rawEmail, rawLicenseKey *C.char) {
-	var license *License
+func GHAuth(rawEmail, rawLicenseKey *C.char, sendCrashReport bool) {
+	var license *utils.License
 	var endpoint string
 
 	if rawEmail != nil && rawLicenseKey != nil {
-		license = &License{
+		license = &utils.License{
 			Email:      C.GoString(rawEmail),
 			LicenseKey: C.GoString(rawLicenseKey),
 		}
@@ -425,7 +310,7 @@ func GHAuth(rawEmail, rawLicenseKey *C.char) {
 	shouldUpdate := false
 
 	doAuth := func() {
-		if err := CallServer(endpoint, license, req, &resp); err != nil {
+		if err := utils.CallServer(endpoint, license, req, &resp); err != nil {
 			log.Printf("error calling %s: %v", endpoint, err)
 			switch err.(type) {
 			case net.Error, *net.OpError, syscall.Errno:
@@ -461,7 +346,12 @@ func GHAuth(rawEmail, rawLicenseKey *C.char) {
 
 	run := func() {
 		doAuth()
-		tellLauncherWhetherToAutoupdate(shouldUpdate)
+		email, licenseKey := "", ""
+		if license != nil {
+			email = license.Email
+			licenseKey = license.LicenseKey
+		}
+		sendInfoToLauncher(shouldUpdate, email, licenseKey, sendCrashReport)
 	}
 
 	go run()
@@ -509,7 +399,7 @@ func GHRenameFileOrDirectory(oldpath, newpath *C.char) bool {
 
 //export GHEnableDebugMode
 func GHEnableDebugMode() {
-	DebugModeFlag = true
+	utils.DebugModeFlag = true
 }
 
 //export GHGetVersion
@@ -818,7 +708,7 @@ func GHIsUnicodeDigit(code rune) bool {
 
 //export GHForceServerLocalhost
 func GHForceServerLocalhost() {
-	ForceServerLocalhost = true
+	utils.ForceServerLocalhost = true
 }
 
 //export GHHasTag

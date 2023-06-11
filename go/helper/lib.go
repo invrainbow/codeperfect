@@ -4,7 +4,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/codeperfect95/codeperfect/go/utils"
 )
@@ -16,16 +15,6 @@ func ReadFileFromExeFolder(filename string) ([]byte, error) {
 		return nil, err
 	}
 	return os.ReadFile(filepath.Join(filepath.Dir(exepath), filename))
-}
-
-func IsTestMode() bool {
-	return strings.HasSuffix(os.Args[0], ".test")
-}
-
-var DebugModeFlag = false
-
-func IsDebugMode() bool {
-	return DebugModeFlag || os.Getenv("DEBUG") == "1"
 }
 
 func PrepareConfigDir() (string, error) {

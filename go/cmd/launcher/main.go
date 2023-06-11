@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -13,10 +14,17 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+	"time"
 
+	"github.com/codeperfect95/codeperfect/go/models"
 	"github.com/codeperfect95/codeperfect/go/utils"
 	"github.com/codeperfect95/codeperfect/go/versions"
 )
+
+/*
+#include <fcntl.h>
+*/
+import "C"
 
 func isDir(fullpath string) bool {
 	info, err := os.Stat(fullpath)
@@ -264,35 +272,192 @@ folder structure:
 	newbin/
 */
 
-func waitForAutoupdate() (bool, error) {
+type MainAppInfo struct {
+	shouldUpdate     bool
+	email            string
+	licenseKey       string
+	sendCrashReports bool
+}
+
+func readInfoFromMainApp() (*MainAppInfo, error) {
 	pipeFile, err := utils.GetAppToLauncherPipeFile()
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	os.Remove(pipeFile)
 	err = syscall.Mkfifo(pipeFile, 0666)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	file, err := os.OpenFile(pipeFile, os.O_RDONLY, os.ModeNamedPipe)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	defer file.Close()
 
-	r := bufio.NewReader(file)
-	line, err := r.ReadBytes('\n')
-	if err != nil {
-		return false, err
+	info := &MainAppInfo{}
+
+	s := bufio.NewScanner(file)
+	if s.Scan() {
+		info.shouldUpdate = s.Text() == "autoupdate"
+	}
+	if s.Scan() {
+		info.email = s.Text()
+	}
+	if s.Scan() {
+		info.licenseKey = s.Text()
+	}
+	if s.Scan() {
+		info.sendCrashReports = s.Text() == "sendcrash"
 	}
 
-	shouldUpdate := strings.TrimRight(string(line), "\n") == "autoupdate"
+	return info, nil
+}
 
-	log.Printf("updating: %v", shouldUpdate)
+const (
+	FlockSh = 1
+	FlockEx = 2
+	FlockNb = 4
+	FlockUn = 8
+)
 
-	return shouldUpdate, nil
+func SendCrashReports(license *utils.License) {
+	configdir, err := utils.GetConfigDir()
+	if err != nil {
+		log.Print(err)
+		return
+	}
+
+	lockfilepath := filepath.Join(configdir, "codeperfect_crash_reports_mutex")
+	lockfile, err := os.OpenFile(lockfilepath, os.O_WRONLY|os.O_CREATE, 0o0644)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	defer lockfile.Close()
+
+	if C.flock(C.int(lockfile.Fd()), FlockEx|FlockNb) != 0 {
+		log.Print("couldn't lock")
+		return
+	}
+	defer C.flock(C.int(lockfile.Fd()), FlockUn)
+
+	homedir, err := os.UserHomeDir()
+	if err != nil {
+		log.Print(err)
+		return
+	}
+
+	reportsdir := filepath.Join(homedir, "Library/Logs/DiagnosticReports")
+	files, err := ioutil.ReadDir(reportsdir)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+
+	desiredProcName := "ide"
+	desiredProcPathSuffix := "/CodePerfect.app/Contents/MacOS/bin/ide"
+	if utils.IsDebugMode() {
+		desiredProcPathSuffix = "/ide"
+	}
+
+	isOurCrashFileIps := func(data []byte) bool {
+		lines := strings.Split(string(data), "\n")
+		blob := strings.Join(lines[1:], "\n")
+
+		type Info struct {
+			ProcName string `json:"procName"`
+			ProcPath string `json:"procPath"`
+		}
+
+		var info Info
+		if err := json.Unmarshal([]byte(blob), &info); err != nil {
+			log.Print(err)
+			return false
+		}
+
+		return (strings.HasSuffix(info.ProcPath, desiredProcPathSuffix) && info.ProcName == desiredProcName)
+	}
+
+	isOurCrashFileCrash := func(data []byte) bool {
+		lines := strings.Split(string(data), "\n")
+
+		pathmatch := false
+		idmatch := false
+
+		for _, line := range lines {
+			parts := strings.Fields(line)
+			if len(parts) != 2 {
+				continue
+			}
+			if parts[0] == "Path:" {
+				if !strings.HasSuffix(line, desiredProcPathSuffix) {
+					return false
+				}
+				pathmatch = true
+			} else if parts[0] == "Identifier:" {
+				if len(parts) != 2 || parts[1] != desiredProcName {
+					return false
+				}
+				idmatch = true
+			} else {
+				continue
+			}
+			if pathmatch && idmatch {
+				return true
+			}
+		}
+		return false
+	}
+
+	isOurCrashFile := func(fullpath string, data []byte) bool {
+		if strings.HasSuffix(fullpath, ".ips") {
+			return isOurCrashFileIps(data)
+		}
+		if strings.HasSuffix(fullpath, ".crash") {
+			return isOurCrashFileCrash(data)
+		}
+		return false
+	}
+
+	processFile := func(fullpath string, data []byte) {
+		defer os.Remove(fullpath)
+
+		// big crash report, skip
+		if len(data) > 64000 {
+			log.Printf("data is big, len = %d", len(data))
+			return
+		}
+
+		osSlug, _ := versions.GetOSSlug(runtime.GOOS, runtime.GOARCH)
+		req := models.CrashReportRequest{
+			OS:      osSlug,
+			Content: string(data),
+			Version: versions.CurrentVersion,
+		}
+
+		if err := utils.CallServer("v2/crash-report", license, req, nil); err != nil {
+			log.Print(err)
+			return
+		}
+	}
+
+	for _, f := range files {
+		if f.IsDir() {
+			continue
+		}
+		fullpath := filepath.Join(reportsdir, f.Name())
+		data, err := os.ReadFile(fullpath)
+		if err != nil {
+			log.Print(fullpath, err)
+			continue
+		}
+		if isOurCrashFile(fullpath, data) {
+			processFile(fullpath, data)
+		}
+	}
 }
 
 func main() {
@@ -316,13 +481,27 @@ func main() {
 		log.Printf("%v", err)
 	}
 
-	update, err := waitForAutoupdate()
+	info, err := readInfoFromMainApp()
 	if err != nil {
 		log.Printf("error reading from pipe: %v", err)
 		return
 	}
 
-	if update {
+	if info.shouldUpdate {
 		doUpdate()
+	}
+
+	if info.sendCrashReports {
+		cmd.Wait()
+		time.Sleep(time.Second * 10)
+
+		var license *utils.License
+		if info.email != "" && info.licenseKey != "" {
+			license = &utils.License{
+				Email:      info.email,
+				LicenseKey: info.licenseKey,
+			}
+		}
+		SendCrashReports(license)
 	}
 }
