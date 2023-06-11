@@ -21,11 +21,6 @@ import (
 	"github.com/codeperfect95/codeperfect/go/versions"
 )
 
-/*
-#include <sys/file.h>
-*/
-import "C"
-
 func isDir(fullpath string) bool {
 	info, err := os.Stat(fullpath)
 	return err == nil && info.IsDir()
@@ -316,13 +311,6 @@ func readInfoFromMainApp() (*MainAppInfo, error) {
 	return info, nil
 }
 
-const (
-	FlockSh = 1
-	FlockEx = 2
-	FlockNb = 4
-	FlockUn = 8
-)
-
 func SendCrashReports(license *utils.License) {
 	configdir, err := utils.GetConfigDir()
 	if err != nil {
@@ -338,11 +326,11 @@ func SendCrashReports(license *utils.License) {
 	}
 	defer lockfile.Close()
 
-	if C.flock(C.int(lockfile.Fd()), FlockEx|FlockNb) != 0 {
-		log.Print("couldn't lock")
+	if err := syscall.Flock(int(lockfile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		log.Printf("couldn't lock: %v", err)
 		return
 	}
-	defer C.flock(C.int(lockfile.Fd()), FlockUn)
+	defer syscall.Flock(int(lockfile.Fd()), syscall.LOCK_UN)
 
 	homedir, err := os.UserHomeDir()
 	if err != nil {
