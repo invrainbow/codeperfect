@@ -436,7 +436,7 @@ bool Searcher::start_search(Searcher_Opts *opts) {
 
             search_match_buffer->len = 0;
             sess.search(buf, buflen, search_match_buffer, 10000);
-            if (!search_match_buffer->len) break;
+            if (!search_match_buffer->len) continue;
 
             Searcher_Result_File sf;
             sf.filepath = it;
