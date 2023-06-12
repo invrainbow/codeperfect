@@ -2487,7 +2487,7 @@ void UI::draw_everything() {
 
         if (im::BeginMenu("Format")) {
             menu_command(CMD_FORMAT_FILE);
-            menu_command(CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS);
+            menu_command(CMD_ORGANIZE_IMPORTS);
             // menu_command(CMD_FORMAT_SELECTION);
             im::EndMenu();
         }
@@ -2946,17 +2946,9 @@ void UI::draw_everything() {
                         im::Checkbox("Format on save", &tmp.format_on_save);
                         im_small_newline();
 
-                        im::Indent();
-                        {
-                            im_with_disabled(!tmp.format_on_save, [&]() {
-                                im::Checkbox("Fix imports after formatting", &tmp.organize_imports_on_save);
-
-                                im::SameLine();
-                                help_marker("This adds missing imports and removes unused ones.");
-                            });
-                        }
-                        im::Unindent();
-
+                        im::Checkbox("Organize imports on save", &tmp.organize_imports_on_save);
+                        im::SameLine();
+                        help_marker("This adds missing imports and removes unused ones.");
                         im_small_newline();
 
                         im::Checkbox("Use gofumpt", &tmp.format_with_gofumpt);

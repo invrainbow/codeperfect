@@ -1761,7 +1761,7 @@ bool is_command_enabled(Command cmd) {
     case CMD_TOGGLE_COMMENT:
     case CMD_SAVE_FILE:
     case CMD_FORMAT_FILE:
-    case CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS: {
+    case CMD_ORGANIZE_IMPORTS: {
         auto editor = get_current_editor();
         return editor && editor->is_modifiable();
     }
@@ -2000,7 +2000,7 @@ void init_command_info_table() {
 
     command_info_table[CMD_FIND_REFERENCES] = k(CP_MOD_PRIMARY | CP_MOD_ALT, CP_KEY_R, "Find References");
     command_info_table[CMD_FORMAT_FILE] = k(CP_MOD_ALT | CP_MOD_SHIFT, CP_KEY_F, "Format File");
-    command_info_table[CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS] = k(CP_MOD_ALT | CP_MOD_SHIFT, CP_KEY_O, "Format File and Organize Imports");
+    command_info_table[CMD_ORGANIZE_IMPORTS] = k(CP_MOD_ALT | CP_MOD_SHIFT, CP_KEY_O, "Organize Imports");
     command_info_table[CMD_RENAME] = k(CP_MOD_NONE, CP_KEY_F12, "Rename");
     command_info_table[CMD_BUILD] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_B, "Build", true);
     command_info_table[CMD_CONTINUE] = k(CP_MOD_NONE, CP_KEY_F5, "Continue", true);
@@ -2863,7 +2863,7 @@ void handle_command(Command cmd, bool from_menu) {
         break;
     }
 
-    case CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS: {
+    case CMD_ORGANIZE_IMPORTS: {
         auto editor = get_current_editor();
         if (!editor) break;
         if (!editor->is_modifiable()) break;
@@ -2871,7 +2871,7 @@ void handle_command(Command cmd, bool from_menu) {
         {
             SCOPED_BATCH_CHANGE(editor->buf);
             editor->optimize_imports();
-            editor->format_on_save();
+            // editor->format_on_save();
         }
         break;
     }

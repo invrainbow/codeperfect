@@ -2431,11 +2431,12 @@ void Editor::handle_save(bool about_to_close) {
             buf->enable_tree(lang);
     }
 
-    if (options.format_on_save && !file_was_deleted) {
+    if ((options.format_on_save || options.organize_imports_on_save) && !file_was_deleted) {
         SCOPED_BATCH_CHANGE(buf);
         if (options.organize_imports_on_save)
             optimize_imports();
-        format_on_save();
+        if (options.format_on_save)
+            format_on_save();
     }
 
     // save to disk
