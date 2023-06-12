@@ -2253,6 +2253,13 @@ bool Editor::optimize_imports() {
             rend.write("\n");
         };
 
+        stdlib_imports->sort([&](auto pa, auto pb) {
+            return strcmp(pa->import_path, pb->import_path);
+        });
+
+        ext_imports->sort([&](auto pa, auto pb) {
+            return strcmp(pa->import_path, pb->import_path);
+        });
 
         if (!isempty(stdlib_imports))
             For (stdlib_imports)
