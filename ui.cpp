@@ -92,35 +92,44 @@ void keep_item_inside_scroll() {
         im::SetScrollY(im::GetScrollY() - (lo - pos));
 }
 
-// These two functions are copy pasted from imgui with one small change:
+// These next two functions are copy pasted from imgui with one small change:
 // passing ImGuiWindowFlags_NoMove to BeginPopupEx. This is because imgui
 // refuses to just enable this obvious behavior by default, and also does not
-// let us pass flags to BeginPopupEx, resulting in the need for this
-// stupidity. Third-party libraries are the devil.
-namespace ImGui {
-    bool OurBeginPopupContextItem(const char* str_id = NULL, ImGuiPopupFlags popup_flags = 1) {
-        ImGuiWindow* window = GImGui->CurrentWindow;
-        if (window->SkipItems)
-            return false;
-        ImGuiID id = str_id ? window->GetID(str_id) : GImGui->LastItemData.ID; // If user hasn't passed an ID, we can use the LastItemID. Using LastItemID as a Popup ID won't conflict!
-        IM_ASSERT(id != 0);                                                  // You cannot pass a NULL str_id if the last item has no identifier (e.g. a Text() item)
-        int mouse_button = (popup_flags & ImGuiPopupFlags_MouseButtonMask_);
-        if (IsMouseReleased(mouse_button) && IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup))
-            OpenPopupEx(id, popup_flags);
-        return BeginPopupEx(id, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings);
-    }
+// let us pass flags to BeginPopupEx, resulting in the need for this stupidity.
+// Third-party libraries are the devil.
+//
+// Update: we now have an extra check at the end to handle the escape key.
 
-    bool OurBeginPopupContextWindow(const char* str_id, ImGuiPopupFlags popup_flags = 1) {
-        ImGuiWindow* window = GImGui->CurrentWindow;
-        if (!str_id)
-            str_id = "window_context";
-        ImGuiID id = window->GetID(str_id);
-        int mouse_button = (popup_flags & ImGuiPopupFlags_MouseButtonMask_);
-        if (IsMouseReleased(mouse_button) && IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup))
-            if (!(popup_flags & ImGuiPopupFlags_NoOpenOverItems) || !IsAnyItemHovered())
-                OpenPopupEx(id, popup_flags);
-        return BeginPopupEx(id, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings);
-    }
+bool UI::im_begin_popup_context_item(const char* str_id, ImGuiPopupFlags popup_flags) {
+    ImGuiWindow* window = GImGui->CurrentWindow;
+    if (window->SkipItems)
+        return false;
+    ImGuiID id = str_id ? window->GetID(str_id) : GImGui->LastItemData.ID; // If user hasn't passed an ID, we can use the LastItemID. Using LastItemID as a Popup ID won't conflict!
+    IM_ASSERT(id != 0);                                                  // You cannot pass a NULL str_id if the last item has no identifier (e.g. a Text() item)
+    int mouse_button = (popup_flags & ImGuiPopupFlags_MouseButtonMask_);
+    if (im::IsMouseReleased(mouse_button) && im::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup))
+        im::OpenPopupEx(id, popup_flags);
+    auto ret = im::BeginPopupEx(id, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings);
+    if (ret)
+        if (im_key_pressed(CP_KEY_ESCAPE))
+            im::CloseCurrentPopup();
+    return ret;
+}
+
+bool UI::im_begin_popup_context_window(const char* str_id, ImGuiPopupFlags popup_flags) {
+    ImGuiWindow* window = GImGui->CurrentWindow;
+    if (!str_id)
+        str_id = "window_context";
+    ImGuiID id = window->GetID(str_id);
+    int mouse_button = (popup_flags & ImGuiPopupFlags_MouseButtonMask_);
+    if (im::IsMouseReleased(mouse_button) && im::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup))
+        if (!(popup_flags & ImGuiPopupFlags_NoOpenOverItems) || !im::IsAnyItemHovered())
+            im::OpenPopupEx(id, popup_flags);
+    auto ret = im::BeginPopupEx(id, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings);
+    if (ret)
+        if (im_key_pressed(CP_KEY_ESCAPE))
+            im::CloseCurrentPopup();
+    return ret;
 }
 
 ccstr get_key_name(int key) {
@@ -1573,7 +1582,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
         }
 
         if (final_var_name) {
-            if (im::OurBeginPopupContextItem(cp_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
+            if (im_begin_popup_context_item(cp_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
                 if (im::Selectable("Copy Name")) {
                     world.window->set_clipboard_string(final_var_name);
                 }
@@ -1719,7 +1728,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
                 if (im_key_pressed(CP_KEY_C))
                     copy = true;
 
-        if (im::OurBeginPopupContextItem(cp_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
+        if (im_begin_popup_context_item(cp_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
             if (im::Selectable("Copy Value"))
                 copy = true;
             im::EndPopup();
@@ -1766,7 +1775,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
 
             if (type_name) {
                 im::TextWrapped("%s", type_name);
-                if (im::OurBeginPopupContextItem(cp_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
+                if (im_begin_popup_context_item(cp_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
                     if (im::Selectable("Copy Type")) {
                         world.window->set_clipboard_string(type_name);
                     }
@@ -2416,7 +2425,7 @@ void UI::draw_everything() {
         im::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
         im::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(7, 5));
 
-        if (im::BeginMenu("File")) {
+        if (im_begin_menu("File")) {
             menu_command(CMD_NEW_FILE);
             menu_command(CMD_OPEN_FILE_MANUALLY);
             menu_command(CMD_OPEN_FOLDER);
@@ -2431,7 +2440,7 @@ void UI::draw_everything() {
             im::EndMenu();
         }
 
-        if (im::BeginMenu("Edit")) {
+        if (im_begin_menu("Edit")) {
             menu_command(CMD_UNDO);
             menu_command(CMD_REDO);
             im::Separator();
@@ -2445,7 +2454,7 @@ void UI::draw_everything() {
             im::EndMenu();
         }
 
-        if (im::BeginMenu("View")) {
+        if (im_begin_menu("View")) {
             menu_command(CMD_FILE_EXPLORER, world.file_explorer.show);
             menu_command(CMD_ERROR_LIST, world.error_list.show);
             menu_command(CMD_COMMAND_PALETTE);
@@ -2453,7 +2462,7 @@ void UI::draw_everything() {
             menu_command(CMD_ZOOM_ORIGINAL);
             menu_command(CMD_ZOOM_IN);
             menu_command(CMD_ZOOM_OUT);
-            if (im::BeginMenu("Zoom")) {
+            if (im_begin_menu("Zoom")) {
                 For (&ZOOM_LEVELS)
                     if (im::MenuItem(cp_sprintf("%d%%", it), NULL, it == options.zoom_level))
                         set_zoom_level(it);
@@ -2462,7 +2471,7 @@ void UI::draw_everything() {
             im::EndMenu();
         }
 
-        if (im::BeginMenu("Navigate")) {
+        if (im_begin_menu("Navigate")) {
             menu_command(CMD_GO_BACK);
             menu_command(CMD_GO_FORWARD);
             im::Separator();
@@ -2485,20 +2494,20 @@ void UI::draw_everything() {
             im::EndMenu();
         }
 
-        if (im::BeginMenu("Format")) {
+        if (im_begin_menu("Format")) {
             menu_command(CMD_FORMAT_FILE);
             menu_command(CMD_ORGANIZE_IMPORTS);
             // menu_command(CMD_FORMAT_SELECTION);
             im::EndMenu();
         }
 
-        if (im::BeginMenu("Refactor")) {
+        if (im_begin_menu("Refactor")) {
             menu_command(CMD_RENAME);
             menu_command(CMD_GENERATE_IMPLEMENTATION);
             im::EndMenu();
         }
 
-        if (im::BeginMenu("Project")) {
+        if (im_begin_menu("Project")) {
             menu_command(CMD_ADD_NEW_FILE);
             menu_command(CMD_ADD_NEW_FOLDER);
             im::Separator();
@@ -2506,12 +2515,12 @@ void UI::draw_everything() {
             im::EndMenu();
         }
 
-        if (im::BeginMenu("Build")) {
+        if (im_begin_menu("Build")) {
             menu_command(CMD_BUILD);
 
             im::Separator();
 
-            if (im::BeginMenu("Windows...")) {
+            if (im_begin_menu("Windows...")) {
                 menu_command(CMD_BUILD_RESULTS, world.error_list.show);
                 im::EndMenu();
             }
@@ -2519,7 +2528,7 @@ void UI::draw_everything() {
             im::Separator();
 
             // TODO: add these as commands
-            if (im::BeginMenu("Select Active Build Profile..."))  {
+            if (im_begin_menu("Select Active Build Profile..."))  {
                 if (project_settings.build_profiles->len > 0) {
                     Fori (project_settings.build_profiles) {
                         if (im::MenuItem(it.label, NULL, project_settings.active_build_profile == i, true)) {
@@ -2538,7 +2547,7 @@ void UI::draw_everything() {
             im::EndMenu();
         }
 
-        if (im::BeginMenu("Debug")) {
+        if (im_begin_menu("Debug")) {
             if (world.dbg.mt_state.state_flag == DLV_STATE_PAUSED)
                 menu_command(CMD_CONTINUE);
             else
@@ -2559,14 +2568,14 @@ void UI::draw_everything() {
 
             im::Separator();
 
-            if (im::BeginMenu("Windows..."))  {
+            if (im_begin_menu("Windows..."))  {
                 menu_command(CMD_DEBUG_OUTPUT, world.wnd_debug_output.show);
                 im::EndMenu();
             }
 
             im::Separator();
 
-            if (im::BeginMenu("Select Active Debug Profile..."))  {
+            if (im_begin_menu("Select Active Debug Profile..."))  {
                 // TODO(robust): we should handle the builtins more explicitly, instead of using hardcoded value of 1
                 if (project_settings.debug_profiles->len > 1) {
                     for (int i = 1; i < project_settings.debug_profiles->len; i++) {
@@ -2587,7 +2596,7 @@ void UI::draw_everything() {
             im::EndMenu();
         }
 
-        if (im::BeginMenu("Tools")) {
+        if (im_begin_menu("Tools")) {
             // should we allow this even when not ready, so it can be used as an escape hatch if the indexer gets stuck?
 
             menu_command(CMD_RESCAN_INDEX);
@@ -2765,7 +2774,7 @@ void UI::draw_everything() {
             im::EndMenu();
         }
 
-        if (im::BeginMenu("Help")) {
+        if (im_begin_menu("Help")) {
             im::MenuItem(cp_sprintf("CodePerfect %s", world.gh_version), NULL, false, false);
             if (world.auth.state == AUTH_REGISTERED)
                 if (world.auth_status == GH_AUTH_OK)
@@ -3907,7 +3916,7 @@ void UI::draw_everything() {
                 auto &it = lines[i];
 
                 im::Text("%s", it);
-                if (im::OurBeginPopupContextItem(cp_sprintf("##debug_output_hidden_%d", i))) {
+                if (im_begin_popup_context_item(cp_sprintf("##debug_output_hidden_%d", i))) {
                     defer { im::EndPopup(); };
 
                     if (im::Selectable("Copy")) {
@@ -3998,7 +4007,7 @@ void UI::draw_everything() {
                     bool clicked = im::Selectable(cp_sprintf("##hidden_%d", i), i == b.current_error, 0, text_size);
                     im::GetWindowDrawList()->AddText(NULL, 0.0f, pos, im::GetColorU32(ImGuiCol_Text), label, NULL, wrap_width);
 
-                    if (im::OurBeginPopupContextItem()) {
+                    if (im_begin_popup_context_item()) {
                         if (im::Selectable("Copy")) {
                             world.window->set_clipboard_string(label);
                         }
@@ -4367,7 +4376,7 @@ void UI::draw_everything() {
                     }
                 }
 
-                if (im::OurBeginPopupContextItem(NULL)) {
+                if (im_begin_popup_context_item(NULL)) {
                     menu_handled = true;
 
                     im::PushStyleVar(ImGuiStyleVar_ItemSpacing, old_item_spacing);
@@ -4491,7 +4500,7 @@ void UI::draw_everything() {
 
                 fstlog("wnd_file_explorer - draw files");
 
-                if (!menu_handled && im::OurBeginPopupContextWindow("file_explorer_context_menu")) {
+                if (!menu_handled && im_begin_popup_context_window("file_explorer_context_menu")) {
                     {
                         im::PushStyleVar(ImGuiStyleVar_ItemSpacing, old_item_spacing);
                         defer { im::PopStyleVar(); };
@@ -8158,6 +8167,14 @@ void UI::im_select_all_last() {
         auto state = im::GetInputTextState(g->LastItemData.ID);
         if (state) state->SelectAll();
     }
+}
+
+bool UI::im_begin_menu(ccstr str_id) {
+    auto ret = im::BeginMenu(str_id);
+    if (ret)
+        if (im_key_pressed(CP_KEY_ESCAPE))
+            im::CloseCurrentPopup();
+    return ret;
 }
 
 bool UI::im_begin_popup(ccstr str_id) {

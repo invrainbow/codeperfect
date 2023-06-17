@@ -319,8 +319,12 @@ struct UI {
     Keyboard_Nav get_keyboard_nav(Wnd *wnd, int flags);
     bool im_begin_popup_rect(ccstr str_id, boxf rect);
     bool im_begin_popup(ccstr str_id);
+    bool im_begin_menu(ccstr str_id);
     void im_select_all_last();
     void im_select_clear_last();
+
+    bool im_begin_popup_context_item(const char* str_id = NULL, ImGuiPopupFlags popup_flags = 1);
+    bool im_begin_popup_context_window(const char* str_id, ImGuiPopupFlags popup_flags = 1);
 
     void handle_popup_window_logic(Wnd *wnd, Wnd *parent);
 };
