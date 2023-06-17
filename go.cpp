@@ -6334,7 +6334,7 @@ getout:
     case GOTYPE_GENERIC:
     case GOTYPE_ASSERTION:
     case GOTYPE_RECEIVE:
-        type = type->base;
+        type = unpointer_type(type->base);
         break;
     }
 
