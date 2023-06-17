@@ -6771,7 +6771,7 @@ void UI::draw_everything() {
                         auto part = it;
                         bool found = false;
                         if (strchr(part, '@')) {
-                            auto arr = split_string(cp_dirname(path), '@');
+                            auto arr = split_string(part, '@');
                             arr->len--; // remove last part
                             part = join_array(arr, '@');
                             found = true;
