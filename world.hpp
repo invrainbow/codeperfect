@@ -547,6 +547,7 @@ struct World {
     bool darkmode;
 
     Lock global_mark_tree_lock;
+    Lock build_lock;
 
     bool flag_defocus_imgui;
     Timer fst;

@@ -375,6 +375,7 @@ void World::init() {
     init_treesitter_go_trie();
 
     global_mark_tree_lock.init();
+    build_lock.init();
 
     mark_fridge.init(512);
     avl_node_fridge.init(512);
@@ -805,6 +806,8 @@ void init_goto_file() {
 }
 
 void kick_off_build(Build_Profile *build_profile) {
+    SCOPED_LOCK(&world.build_lock);
+
     if (!build_profile)
         build_profile = project_settings.get_active_build_profile();
 

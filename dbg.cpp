@@ -961,7 +961,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
         cp_strcpy_fixed(build_profile.cmd, cmd);
 
         world.error_list.show = true;
-        world.error_list.cmd_focus = true;
+        world.error_list.cmd_make_visible_but_dont_focus = true;
         kick_off_build(&build_profile);
         while (!world.build.done) sleep_milli(10);
 
