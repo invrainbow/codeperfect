@@ -511,10 +511,13 @@ void Debugger::halt_when_already_running() {
     // in the first place, and one from the halt. Swallow the first response.
 
     Packet p; ptr0(&p);
-    if (read_packet(&p))
+    if (read_packet(&p)) {
         handle_new_state(&p);
-    else
+    } else {
         update_state_flag(DLV_STATE_PAUSED);
+        world.wnd_call_stack.cmd_focus = true;
+        world.wnd_local_variables.cmd_focus = true;
+    }
 }
 
 void Debugger::update_state_flag(Dlv_State new_state_flag) {
@@ -1809,6 +1812,9 @@ void Debugger::handle_new_state(Packet *p) {
         fill_local_vars(draft);
         fill_function_args(draft);
     });
+
+    world.wnd_call_stack.cmd_focus = true;
+    world.wnd_local_variables.cmd_focus = true;
 
     jump_to_frame();
     eval_watches();

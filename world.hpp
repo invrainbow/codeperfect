@@ -586,6 +586,11 @@ struct World {
         ccstr token;
     } editor_context_menu;
 
+    // only used for cmds, not show
+    struct Wnd_Local_Variables : Wnd {} wnd_local_variables;
+    struct Wnd_Watches : Wnd {} wnd_watches;
+    struct Wnd_Call_Stack : Wnd {} wnd_call_stack;
+
     struct Wnd_Local_Search : Wnd {
         char query[256];
         char permanent_query[256];

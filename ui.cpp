@@ -1878,8 +1878,11 @@ void UI::draw_debugger() {
 
     do {
         im::SetNextWindowDockID(dock_bottom_id, ImGuiCond_Once);
-        im::Begin("Call Stack");
+        im::Begin("Call Stack", NULL, ImGuiWindowFlags_NoFocusOnAppearing);
         defer { im::End(); };
+
+        if (check_cmd_flag(&world.wnd_call_stack.cmd_focus))
+            im::SetWindowFocus();
 
         if (!can_show_stuff) break;
 
@@ -1943,10 +1946,13 @@ void UI::draw_debugger() {
 
         {
             im::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-            im::Begin("Local Variables");
+            im::Begin("Local Variables", NULL, ImGuiWindowFlags_NoFocusOnAppearing);
             im::PopStyleVar();
         }
         defer { im::End(); };
+
+        if (check_cmd_flag(&world.wnd_local_variables.cmd_focus))
+            im::SetWindowFocus();
 
         if (!can_show_stuff) break;
 
@@ -2025,9 +2031,12 @@ void UI::draw_debugger() {
 
         {
             im::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-            im::Begin("Watches");
+            im::Begin("Watches", NULL, ImGuiWindowFlags_NoFocusOnAppearing);
             im::PopStyleVar();
         }
+
+        if (check_cmd_flag(&world.wnd_watches.cmd_focus))
+            im::SetWindowFocus();
 
         if (can_show_stuff) {
             im_push_mono_font();
@@ -2102,7 +2111,7 @@ void UI::draw_debugger() {
     /*
     {
         im::SetNextWindowDockID(dock_bottom_right_id, ImGuiCond_Once);
-        im::Begin("Global Variables");
+        im::Begin("Global Variables", NULL, ImGuiWindowFlags_NoFocusOnAppearing);
         im_push_mono_font();
         im::Text("@Incomplete: global vars go here");
         im_pop_font();
