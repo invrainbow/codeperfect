@@ -887,12 +887,12 @@ const faqs = [
           <li>Manage our own memory with amortized arena allocation.</li>
         </ol>
         <p>
-          In particular, we try to limit use of third-party libraries and
-          frameworks in order to own our entire stack, and maintain visibility
-          into every line of code that goes into the final product. Much of the
-          slowness of modern software comes not from this slow algorithm or that
-          inefficient data structure, but from all the invisible bloat hidden
-          inside the mainstream default software stack.
+          We especially try to limit use of third-party libraries and frameworks
+          in order to own our entire stack, and maintain visibility into every
+          line of code that goes into the final product. Much of the slowness of
+          modern software comes not from this slow algorithm or that inefficient
+          data structure, but from all the invisible bloat hidden inside the
+          mainstream default software stack.
         </p>
 
         <p>
