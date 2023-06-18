@@ -976,7 +976,7 @@ void goto_jump_to_definition_result(Jump_To_Definition_Result *result) {
 Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_error, cur2 pos) {
     auto show_error = [&](ccstr msg) -> Jump_To_Definition_Result* {
         if (display_error)
-            tell_user(msg, NULL);
+            tell_user_error(msg);
         return NULL;
     };
 
@@ -2425,7 +2425,7 @@ void handle_command(Command cmd, bool from_menu) {
         opts.save = false;
         if (!let_user_select_file(&opts)) break;
         if (!goto_file_and_pos(opts.buf, new_cur2(0, 0))) {
-            tell_user(NULL, cp_sprintf("Unable to open %s.", cp_basename(opts.buf)));
+            tell_user_error(cp_sprintf("Unable to open %s.", cp_basename(opts.buf)));
             break;
         }
         break;
