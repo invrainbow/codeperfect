@@ -77,12 +77,62 @@ const BASE_LINKS = {
   roadAhead: "https://codeperfect95.substack.com/p/the-road-ahead",
   oldSoftwareOpenedInstantly:
     "https://www.youtube.com/watch?v=GC-0tCy4P1U&t=2168s",
+
+  payment: {
+    individual: {
+      license_only: "https://buy.stripe.com/cN27sF7vd6c8euk5ky",
+      license_and_sub: {
+        monthly: "https://buy.stripe.com/8wM9ANdTB0ROfyo3co",
+        annual: "https://buy.stripe.com/7sI6oBaHpdEA0DufZb",
+      },
+      sub_only: {
+        monthly: "https://buy.stripe.com/eVa14hbLteIEae428n",
+        annual: "https://buy.stripe.com/4gwbIV8zh7gcae400g",
+      },
+    },
+    business: {
+      license_only: "https://buy.stripe.com/28oeV78zh7gc2LCbIZ",
+      license_and_sub: {
+        monthly: "https://buy.stripe.com/28ocMZeXF2ZWgCs5kE",
+        annual: "https://buy.stripe.com/eVaeV716Pbwsdqg00l",
+      },
+      sub_only: {
+        monthly: "https://buy.stripe.com/dR65kx6r9aso1HyeVc",
+        annual: "https://buy.stripe.com/fZeaER5n5584gCs3cv",
+      },
+    },
+  },
 };
 
 const DEV_LINKS = {
   docs: "http://localhost:3000",
   gettingStarted: "http://localhost:3000/getting-started",
   changelog: "http://localhost:3000/changelog",
+
+  payment: {
+    individual: {
+      license_only: "https://buy.stripe.com/test_cN2293fhg9KffiU4gt",
+      license_and_sub: {
+        monthly: "https://buy.stripe.com/test_dR64hbglke0vgmYeV5",
+        annual: "https://buy.stripe.com/test_6oEaFzfhg1dJc6IeVe",
+      },
+      sub_only: {
+        monthly: "https://buy.stripe.com/test_fZe6pjd987C7fiUdR4",
+        annual: "https://buy.stripe.com/test_00g2939WW4pV3Ac6oF",
+      },
+    },
+    business: {
+      license_only: "https://buy.stripe.com/test_bIYcNH3yy2hN0o07sI",
+      license_and_sub: {
+        monthly: "https://buy.stripe.com/test_aEU2933yy2hNb2E00c",
+        annual: "https://buy.stripe.com/test_aEU293fhg9Kfc6I6oH",
+      },
+      sub_only: {
+        monthly: "https://buy.stripe.com/test_7sI6pj7OOcWr8UwbIX",
+        annual: "https://buy.stripe.com/test_4gwcNH7OO3lR8Uw14m",
+      },
+    },
+  },
 };
 
 const STAGING_LINKS = {
@@ -168,10 +218,10 @@ function Home() {
     <div className="bg-neutral-50 mx-auto md:pt-12 w-full">
       <div className="max-w-full leading-relaxed px-8 py-12 md:py-8 md:pb-20">
         <div className="md:text-center font-bold text-5xl md:text-5xl mb-1 md:mb-2 text-black tracking-tight leading-[1.1] md:leading-[1.1]">
-          A fast, lightweight IDE for Go
+          A fast, lightweight Go IDE
         </div>
-        <div className="md:text-center text-[130%] text-gray-600 leading-normal">
-          A power tool with a small resource footprint.
+        <div className="md:text-center text-[120%] text-gray-600 leading-normal">
+          CodePerfect is a power tool with a small resource footprint.
         </div>
         <div className="mt-8 md:mt-8 md:text-center flex flex-col md:flex-row gap-4 md:justify-center">
           <A
@@ -203,18 +253,18 @@ function Home() {
             </div>
             <div className="text-lg leading-normal mt-6 md:mt-8 text-neutral-400">
               <p>
-                We threw out the modern software stack and rewrote the entire
-                IDE with in blazing fast C/C++.
+                We threw out the modern software stack and redesigned the IDE in
+                blazing fast C/C++.
               </p>
               <p>
-                Performance as fast as a video game. Instant startup. 144 FPS.
-                No latency between keystrokes. An indexer that gobbles through
+                Performance like a video game. Instant startup. 144 FPS. No
+                latency between keystrokes. An indexer that gobbles through
                 large codebases.
               </p>
               <p>
                 With predictable operations, ergonomic shortcuts, and a
-                streamlined workflow, CodePerfect "just does the right thing"
-                and gets out of the way.
+                streamlined workflow, CodePerfect does the right thing and gets
+                out of your way.
               </p>
             </div>
           </div>
@@ -238,7 +288,7 @@ function Home() {
             <div className="max-w-screen-sm mx-auto mt-4 mb-6 text-lg">
               <p>
                 CodePerfect comes with a full IDE out of the box. Get the best
-                of both worlds: Vim's speed, an IDE's power.
+                of both worlds: the speed of Vim, the power of an IDE.
               </p>
             </div>
             <A
@@ -271,7 +321,7 @@ function Home() {
           Ready to get started?
         </div>
         <div className="mx-auto text-lg md:text-xl leading-relaxed mb-6 md:mb-12 text-neutral-600">
-          Try CodePerfect for free for 7 days with all features available.
+          Try CodePerfect for free for 7 days.
         </div>
         <A
           href="/download"
@@ -280,7 +330,7 @@ function Home() {
           )}
         >
           <Icon className="mr-2" icon={IconDownload} size={20} />
-          Download
+          Download for Mac
         </A>
       </div>
     </div>
@@ -443,17 +493,16 @@ function BuySelectable({ selected, label, children, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={cx(
-        "font-inherit rounded-lg text-left p-4 relative flex flex-col bg-white transition-colors",
-        {
-          "border border-neutral-300 bg-neutral-50": !selected,
-          "border border-neutral-400 shadow": selected,
-        }
+      className={twMerge(
+        cx(
+          "font-inherit rounded text-left p-4 relative flex flex-col transition-colors bg-neutral-100 border-2 border-transparent",
+          selected && "border-stone-500 bg-white"
+        )
       )}
     >
       <div
         className={cx(
-          "absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-neutral-600 text-white transition-opacity",
+          "absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-stone-600 text-white transition-opacity",
           {
             "opacity-100": selected,
             "opacity-0": !selected,
@@ -505,7 +554,7 @@ function BuyLicense() {
       points: [
         "Perpetual license",
         "3 months of updates included",
-        "Locked to version at end of 3 months",
+        "Version locked after 3 months",
       ],
     },
     {
@@ -514,7 +563,7 @@ function BuyLicense() {
       points: [
         "Perpetual license",
         "Automatic updates",
-        "Locked to version at end of subscription",
+        "Version locked after subscription",
       ],
     },
     {
@@ -523,7 +572,7 @@ function BuyLicense() {
       points: [
         "Use software during susbcription",
         "Automatic updates",
-        "Lose access when subscription ends",
+        "Lose access after subscription",
       ],
     },
   ];
@@ -613,6 +662,18 @@ function BuyLicense() {
   const licensePrice = calcLicensePrice();
   const subPrice = calcSubPrice();
 
+  const goodPoints = _.filter([
+    isLicense && "Perpetual License",
+    isSub && "Automatic updates",
+    plan !== "individual" && "Company can pay",
+  ]);
+
+  const badPoints = _.filter([
+    !isLicense && "Lose access after subscription",
+    !isSub && "No updates after 3 months",
+    plan === "individual" && "Company cannot pay",
+  ]);
+
   return (
     <div className="mt-12 md:mt-24">
       <div className="title text-center text-3xl md:text-5xl mb-6 md:mb-12">
@@ -620,7 +681,7 @@ function BuyLicense() {
       </div>
       <div className="md:max-w-screen-xl mx-auto md:mb-16">
         <div className="flex flex-col md:flex-row gap-4 md:gap-8 md:items-start">
-          <div className="flex-1 flex flex-col gap-4 px-4 lg:px-0">
+          <div className="flex-1 flex flex-col gap-6 px-4 lg:px-0">
             <BuyLicenseSection label="1. Select Plan">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 {PLAN_INFO.map(({ label, features, key }) => (
@@ -719,22 +780,12 @@ function BuyLicense() {
                     {productInfo.label}
                   </div>
                   <div className="flex flex-col gap-1">
-                    {isLicense && (
-                      <BuySummaryPoint good text="Perpetual license" />
-                    )}
-                    {isSub ? (
-                      <BuySummaryPoint good text="Automatic updates" />
-                    ) : (
-                      <BuySummaryPoint text="No updates after 3 months" />
-                    )}
-                    {!isLicense && (
-                      <BuySummaryPoint text="Lose access after subscription" />
-                    )}
-                    {plan === "individual" ? (
-                      <BuySummaryPoint text="Company cannot pay" />
-                    ) : (
-                      <BuySummaryPoint good text="Company can pay" />
-                    )}
+                    {goodPoints.map((it) => (
+                      <BuySummaryPoint good text={it} />
+                    ))}
+                    {badPoints.map((it) => (
+                      <BuySummaryPoint text={it} />
+                    ))}
                   </div>
                 </>
               )}
@@ -818,26 +869,30 @@ const faqs = [
     a: (
       <>
         <p>
-          There isn't any one thing. CodePerfect gets its speed largely by
-          declining to copy what makes modern software slow.
+          There isn't any one single thing. CodePerfect gets its speed largely
+          by declining to copy all the extreme bloat that makes the modern tech
+          stack slow. In particular, we:
         </p>
-
+        <ol>
+          <li style={{ marginBottom: "0.75em" }}>
+            Use a low level language (C/C++) and render our own UI with OpenGL.
+          </li>
+          <li style={{ marginBottom: "0.75em" }}>
+            Write straightforward,{" "}
+            <A href={LINKS.nonPessimized}>non-pessimized</A> code that just
+            executes the actual CPU instructions that do the thing it's supposed
+            to.
+            <br />
+          </li>
+          <li>Manage our own memory with amortized arena allocation.</li>
+        </ol>
         <p>
-          The modern tech stack has extreme bloat everywhere. We eschewed all
-          that in favor of a low level language (C/C++) and managing our own
-          memory with amortized arena allocation. We write straightforward,{" "}
-          <A href={LINKS.nonPessimized}>non-pessimized</A> code that just
-          executes the actual CPU instructions that do the thing it's supposed
-          to.
-        </p>
-
-        <p>
-          We try to limit use of third-party libraries and frameworks in order
-          to own our entire stack, and maintain visibility into every line of
-          code that goes into the final product. Much of the slowness of modern
-          software comes not from this slow algorithm or that inefficient data
-          structure, but rather from all the invisible bloat hidden inside the
-          mainstream default software stack.
+          In particular, we try to limit use of third-party libraries and
+          frameworks in order to own our entire stack, and maintain visibility
+          into every line of code that goes into the final product. Much of the
+          slowness of modern software comes not from this slow algorithm or that
+          inefficient data structure, but from all the invisible bloat hidden
+          inside the mainstream default software stack.
         </p>
 
         <p>
