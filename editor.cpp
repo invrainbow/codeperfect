@@ -4159,7 +4159,7 @@ Motion_Result* Editor::vim_eval_motion(Vim_Command *cmd) {
         case '$': {
             int y = c.y + count-1;
             CLAMP_LINE_Y(y);
-            ret->dest = new_cur2(lines[y].len, y);
+            ret->dest = new_cur2(lines[y].len-1, y);
             ret->type = MOTION_CHAR_INCL;
             return ret;
         }
