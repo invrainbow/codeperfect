@@ -1620,6 +1620,14 @@ Command_Info command_info_table[_CMD_COUNT_];
 
 bool is_command_enabled(Command cmd) {
     switch (cmd) {
+    case CMD_RENAME: {
+        auto editor = get_current_editor();
+        if (!editor) return false;
+        if (!path_has_descendant(world.current_path, editor->filepath)) return false;
+        if (editor->lang != LANG_GO) return false;
+        return true;
+    }
+
     case CMD_GO_TO_NEXT_EDITOR:
     case CMD_GO_TO_PREVIOUS_EDITOR: {
         auto pane = get_current_pane();
@@ -2254,6 +2262,11 @@ bool initiate_rename_identifier(cur2 pos) {
     if (!result || !result->decl) return false;
     if (result->decl->decl->type == GODECL_IMPORT) {
         tell_user_error("Sorry, we're currently not yet able to rename imports.");
+        return false;
+    }
+
+    if (!path_has_descendant(world.current_path, result->file)) {
+        tell_user_error("Sorry, we're unable to rename things outside your project.");
         return false;
     }
 

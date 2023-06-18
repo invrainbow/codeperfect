@@ -1551,6 +1551,7 @@ bool Editor::cur_is_inside_comment_or_string() {
 
 void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typing_ident, uchar typed_ident_char) {
     if (lang != LANG_GO) return;
+    if (!is_modifiable()) return;
 
     if (cur_is_inside_comment_or_string()) {
         return;
@@ -1771,6 +1772,7 @@ bool is_goident_empty(ccstr name) {
 }
 
 void Editor::trigger_parameter_hint() {
+    if (!is_modifiable()) return;
     if (lang != LANG_GO) return;
 
     ptr0(&parameter_hint);
@@ -5060,6 +5062,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         switch (inp.ch) {
         case '.': {
             if (world.vim_mode() != VI_NORMAL) break;
+            if (!is_modifiable()) break;
 
             auto &vdi = world.vim.dotrepeat.input_finished;
             if (!vdi.filled) break;
@@ -5195,6 +5198,8 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         }
 
         case 'q': {
+            if (!is_modifiable()) break;
+
             if (world.vim.macro_state == MACRO_RECORDING) {
                 auto macro = vim_get_macro(world.vim.macro_record.macro);
                 if (macro && macro->inputs->len) {
@@ -5233,6 +5238,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
 
         case 'Q':
         case '@': {
+            if (!is_modifiable()) break;
             if (world.vim.macro_state != MACRO_IDLE) break;
 
             char arg = 0;
@@ -5263,6 +5269,8 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
 
         case 'p':
         case 'P': {
+            if (!is_modifiable()) break;
+
             SCOPED_BATCH_CHANGE(buf);
 
             auto raw_text = vim_paste_text();
@@ -5360,11 +5368,13 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             *can_dotrepeat = true;
             return true;
         case 'i':
+            if (!is_modifiable()) break;
             if (mode != VI_NORMAL) return false;
             enter_insert_mode([]() { return; });
             *can_dotrepeat = true;
             return true;
         case 'a': {
+            if (!is_modifiable()) break;
             if (c.x < buf->lines[c.y].len) {
                 auto gr = buf->idx_cp_to_gr(c.y, c.x);
                 auto x = buf->idx_gr_to_cp(c.y, gr+1);
@@ -5394,6 +5404,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             }
         }
         case 'I': {
+            if (!is_modifiable()) break;
             if (world.vim_mode() == VI_NORMAL) {
                 move_cursor(new_cur2(first_nonspace_cp(c.y), c.y));
                 enter_insert_mode([]() { return; });
@@ -5404,6 +5415,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         }
         case 'o':
         case 'O':
+            if (!is_modifiable()) break;
             switch (world.vim_mode()) {
             case VI_NORMAL: {
                 int y = inp.ch == 'o' ? c.y + 1 : c.y;
@@ -5420,6 +5432,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             break;
 
         case 's':
+            if (!is_modifiable()) break;
             switch (world.vim_mode()) {
             case VI_NORMAL:
                 enter_insert_mode([&]() {
@@ -5439,6 +5452,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             break;
 
         case 'S':
+            if (!is_modifiable()) break;
             switch (world.vim_mode()) {
             case VI_NORMAL:
                 enter_insert_mode([&]() {
@@ -5479,6 +5493,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
 
         case 'D':
         case 'C':
+            if (!is_modifiable()) break;
             switch (world.vim_mode()) {
             case VI_NORMAL: {
                 auto start = cur;
@@ -5515,6 +5530,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             break;
 
         case 'U':
+            if (!is_modifiable()) break;
             if (mode == VI_VISUAL) {
                 auto pos = vim_handle_text_transform_command(inp.ch, NULL);
                 if (pos != NULL_CUR) {
@@ -5529,6 +5545,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             break;
 
         case '~':
+            if (!is_modifiable()) break;
             switch (mode) {
             case VI_NORMAL: {
                 auto start = c;
@@ -5554,6 +5571,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             break;
 
         case 'u': {
+            if (!is_modifiable()) break;
             switch (mode) {
             case VI_NORMAL: {
                 cur2 pos = NULL_CUR;
@@ -5582,6 +5600,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             break;
         }
         case 'J': {
+            if (!is_modifiable()) break;
             auto pos = vim_handle_J(cmd, true);
             if (pos == NULL_CUR) break;
 
@@ -5590,6 +5609,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             return true;
         }
         case 'x': {
+            if (!is_modifiable()) break;
             SCOPED_BATCH_CHANGE(buf);
 
             switch (world.vim_mode()) {
@@ -5622,6 +5642,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         }
         case '<':
         case '>': {
+            if (!is_modifiable()) break;
             switch (mode) {
             case VI_VISUAL: {
                 auto sel = get_selection();
@@ -5652,6 +5673,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         }
 
         case 'c': {
+            if (!is_modifiable()) break;
             SCOPED_BATCH_CHANGE(buf);
             switch (mode) {
             case VI_VISUAL: {
@@ -5673,6 +5695,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
         }
 
         case 'd': {
+            if (!is_modifiable()) break;
             SCOPED_BATCH_CHANGE(buf);
             switch (mode) {
             case VI_VISUAL: {
@@ -5741,6 +5764,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             break;
         }
         case 'r': {
+            if (!is_modifiable()) break;
             auto arg = get_second_char_arg();
             if (!arg) break;
 
@@ -5807,22 +5831,14 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             }
             break;
         }
-        case '!':
-            break;
-        case '=':
-            break;
         case 'g': {
             auto arg = get_second_char_arg();
             switch (arg) {
-            case 'q':
-            case 'w':
-            case '@':
-                break;
-
             case '~':
             case 'u':
             case 'U':
             case '?': {
+                if (!is_modifiable()) break;
                 auto pos = vim_handle_text_transform_command(arg, motion_result);
                 if (pos != NULL_CUR) {
                     move_cursor_normal(pos);
@@ -5833,6 +5849,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
             }
 
             case 'I':
+                if (!is_modifiable()) break;
                 switch (world.vim_mode()) {
                 case VI_NORMAL:
                     move_cursor(new_cur2(0, c.y));
@@ -5850,6 +5867,7 @@ bool Editor::vim_exec_command(Vim_Command *cmd, bool *can_dotrepeat) {
                 handle_goto_definition();
                 return true;
             case 'J': {
+                if (!is_modifiable()) break;
                 auto pos = vim_handle_J(cmd, false);
                 if (pos == NULL_CUR) break;
 
