@@ -415,16 +415,16 @@ var paymentLinkTypesDev = map[string]string{
 }
 
 var paymentLinkTypesProd = map[string]string{
-	"plink_1N3vNpBpL0Zd3zdOuDCwTfaR": "license_and_sub",
-	"plink_1N3vNBBpL0Zd3zdO412WVvjR": "license_and_sub",
-	"plink_1N3vMWBpL0Zd3zdOho8Q0oPU": "sub_only",
-	"plink_1N3vMOBpL0Zd3zdOHtyvGnlE": "sub_only",
-	"plink_1N3v85BpL0Zd3zdOtCHOLlYl": "license_only",
-	"plink_1N3v7uBpL0Zd3zdOOaU2UVIq": "sub_only",
-	"plink_1N3v7ZBpL0Zd3zdO0JbYZunV": "sub_only",
-	"plink_1N3v7DBpL0Zd3zdOWUOCeXKf": "license_only",
-	"plink_1N3v1gBpL0Zd3zdOrmBJGL8T": "license_and_sub",
-	"plink_1N3v0RBpL0Zd3zdOSifnvyCs": "license_and_sub",
+	"plink_1NKVHRBpL0Zd3zdOwz886BCQ": "license_and_sub",
+	"plink_1NKVGxBpL0Zd3zdO8j7UNwWA": "license_and_sub",
+	"plink_1NKVGbBpL0Zd3zdOmZEnJtaJ": "sub_only",
+	"plink_1NKVGHBpL0Zd3zdOZyBYgD8Q": "sub_only",
+	"plink_1NKVFyBpL0Zd3zdOyjMv1HZf": "license_only",
+	"plink_1NKVFdBpL0Zd3zdOKJFLstqW": "sub_only",
+	"plink_1NKVFGBpL0Zd3zdOXtYpK4bT": "sub_only",
+	"plink_1NKVEfBpL0Zd3zdOQK7jKu3w": "license_only",
+	"plink_1NKVDrBpL0Zd3zdOcVx5XhSI": "license_and_sub",
+	"plink_1NKVCLBpL0Zd3zdOjbpBhbE6": "license_and_sub",
 }
 
 func getPaymentLinkType(id string) string {
