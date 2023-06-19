@@ -599,44 +599,16 @@ function BuyLicense() {
   const isLicense = product !== "sub_only";
   const isSub = product !== "license_only";
 
-  const PAYMENT_LINKS = {
-    individual: {
-      license_only: "https://buy.stripe.com/test_cN2293fhg9KffiU4gt",
-      license_and_sub: {
-        monthly: "https://buy.stripe.com/test_dR64hbglke0vgmYeV5",
-        annual: "https://buy.stripe.com/test_6oEaFzfhg1dJc6IeVe",
-      },
-      sub_only: {
-        monthly: "https://buy.stripe.com/test_fZe6pjd987C7fiUdR4",
-        annual: "https://buy.stripe.com/test_00g2939WW4pV3Ac6oF",
-      },
-    },
-    business: {
-      license_only: "https://buy.stripe.com/test_bIYcNH3yy2hN0o07sI",
-      license_and_sub: {
-        monthly: "https://buy.stripe.com/test_aEU2933yy2hNb2E00c",
-        annual: "https://buy.stripe.com/test_aEU293fhg9Kfc6I6oH",
-      },
-      sub_only: {
-        monthly: "https://buy.stripe.com/test_7sI6pj7OOcWr8UwbIX",
-        annual: "https://buy.stripe.com/test_4gwcNH7OO3lR8Uw14m",
-      },
-    },
-  };
-
   function getPaymentLink() {
     if (plan === "enterprise") {
       return null;
     }
-    const ret = PAYMENT_LINKS[plan][product];
+    const ret = LINKS.payment[plan][product];
     if (product === "license_only") {
       return ret;
     }
     return ret[period];
   }
-
-  const paymentLink = getPaymentLink();
-  console.log(paymentLink);
 
   function calcLicensePrice() {
     if (!isLicense) return 0;
@@ -831,7 +803,7 @@ function BuyLicense() {
                       <A
                         className="group btn btn2 btn-no-hover btn-lg flex gap-2 items-center justify-center"
                         style={{ paddingLeft: "40px", paddingRight: "40px" }}
-                        href={paymentLink}
+                        href={getPaymentLink()}
                       >
                         Checkout
                         <Icon
