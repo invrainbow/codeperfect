@@ -797,5 +797,4 @@ func GHCopyJblowTestSuite(src *C.char) *C.char {
 	return C.CString(path)
 }
 
-func main() {
-}
+func main() {}
