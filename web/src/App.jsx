@@ -147,6 +147,35 @@ const LINKS = {
   ...(isStaging ? STAGING_LINKS : {}),
 };
 
+const DOWNLOADS = [
+  /*
+    {
+      platform: "windows-x64",
+      icon: AiFillWindows,
+      label: "Windows",
+      disabledText: "Temporarily unavailable.",
+    },
+    */
+  {
+    platform: "mac-x64",
+    icon: AiFillApple,
+    label: "macOS Intel",
+  },
+  {
+    platform: "mac-arm",
+    icon: AiFillApple,
+    label: "macOS M1",
+  },
+  /*
+    {
+      platform: "linux-x64",
+      icon: FaLinux,
+      label: "Linux",
+      disabledText: "Coming soon!",
+    },
+    */
+];
+
 function asset(path) {
   return isDev ? `/public${path}` : path;
 }
@@ -208,9 +237,8 @@ const BAD_FEATURES = [
   "Electron",
   "JavaScript",
   "language servers",
-  "slow runtimes",
-  "bulky frameworks",
-  "bloated abstractions",
+  "frameworks",
+  "OOP abstractions",
 ];
 
 function Home() {
@@ -316,22 +344,34 @@ function Home() {
         </div>
       </div>
 
-      <div className="md:text-center px-6 py-12 md:py-16 bg-white">
-        <div className="title text-3xl md:text-4xl mb-3">
-          Ready to get started?
+      <div className="bg-px-6 py-12 md:py-16 bg-neutral-50">
+        <div className="max-w-screen-lg mx-auto flex flex-col items-center">
+          <div className="title text-3xl md:text-4xl mb-3">
+            Ready to get started?
+          </div>
+          <div className="mx-auto text-lg md:text-xl leading-relaxed mb-6 md:mb-8 text-neutral-600">
+            Try CodePerfect for free for 7 days.
+          </div>
+          <div className="flex gap-4">
+            <A
+              href="/download"
+              className={twMerge(
+                "btn btn1 btn-lg justify-center inline-flex text-center bg-black text-white px-6"
+              )}
+            >
+              <Icon className="mr-2" icon={IconDownload} size={20} />
+              Download for Mac
+            </A>
+            <A
+              href={LINKS.substack}
+              className={twMerge(
+                "btn btn2 btn-lg justify-center inline-flex text-center px-6"
+              )}
+            >
+              Sign up to newsletter
+            </A>
+          </div>
         </div>
-        <div className="mx-auto text-lg md:text-xl leading-relaxed mb-6 md:mb-12 text-neutral-600">
-          Try CodePerfect for free for 7 days.
-        </div>
-        <A
-          href="/download"
-          className={twMerge(
-            "btn btn1 btn-lg justify-center inline-flex text-center bg-black text-white px-6"
-          )}
-        >
-          <Icon className="mr-2" icon={IconDownload} size={20} />
-          Download for Mac
-        </A>
       </div>
     </div>
   );
@@ -1347,35 +1387,6 @@ function FAQ() {
 }
 
 function Download() {
-  const links = [
-    /*
-    {
-      platform: "windows-x64",
-      icon: AiFillWindows,
-      label: "Windows",
-      disabledText: "Temporarily unavailable.",
-    },
-    */
-    {
-      platform: "mac-x64",
-      icon: AiFillApple,
-      label: "macOS Intel",
-    },
-    {
-      platform: "mac-arm",
-      icon: AiFillApple,
-      label: "macOS M1",
-    },
-    /*
-    {
-      platform: "linux-x64",
-      icon: FaLinux,
-      label: "Linux",
-      disabledText: "Coming soon!",
-    },
-    */
-  ];
-
   return (
     <div className="my-12 md:my-28 px-6 md:px-0">
       <div className="md:px-4 md:text-center text-3xl md:text-5xl title leading-none">
@@ -1405,13 +1416,13 @@ function Download() {
       </div>
       <div className="mt-8 md:text-center">
         <p className="md:max-w-xs mx-auto flex flex-wrap flex-col justify-center">
-          {links.map((it, index) => (
+          {DOWNLOADS.map((it, index) => (
             <div className="mb-3 md:mb-2">
               <WithTooltip
                 className="w-full h-full"
                 show={it.disabledText}
                 label={it.disabledText}
-                bottom={index === links.length - 1}
+                bottom={index === DOWNLOADS.length - 1}
               >
                 <A
                   href={
@@ -1627,7 +1638,7 @@ function Footer() {
             <FootLink href={LINKS.docs}>Docs</FootLink>
             <FootLink href={LINKS.changelog}>Changelog</FootLink>
             <FootLink href={LINKS.issueTracker}>Issue Tracker</FootLink>
-            <FootLink href={LINKS.substack}>Substack</FootLink>
+            <FootLink href={LINKS.substack}>Newsletter</FootLink>
           </FootSection>
           <FootSection>
             <FootLink href={`mailto:${SUPPORT_EMAIL}`}>Support</FootLink>
