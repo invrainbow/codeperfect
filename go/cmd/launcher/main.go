@@ -267,32 +267,37 @@ folder structure:
 	newbin/
 */
 
-type MainAppInfo struct {
+type AppInfo struct {
 	shouldUpdate     bool
 	email            string
 	licenseKey       string
 	sendCrashReports bool
 }
 
-func readInfoFromMainApp() (*MainAppInfo, error) {
+var appInfoChan = make(chan *AppInfo)
+
+func readInfoFromApp() {
 	pipeFile, err := utils.GetAppToLauncherPipeFile()
 	if err != nil {
-		return nil, err
+		log.Print(err)
+		return
 	}
 
 	os.Remove(pipeFile)
 	err = syscall.Mkfifo(pipeFile, 0666)
 	if err != nil {
-		return nil, err
+		log.Print(err)
+		return
 	}
 
 	file, err := os.OpenFile(pipeFile, os.O_RDONLY, os.ModeNamedPipe)
 	if err != nil {
-		return nil, err
+		log.Print(err)
+		return
 	}
 	defer file.Close()
 
-	info := &MainAppInfo{}
+	info := &AppInfo{}
 
 	s := bufio.NewScanner(file)
 	if s.Scan() {
@@ -308,7 +313,8 @@ func readInfoFromMainApp() (*MainAppInfo, error) {
 		info.sendCrashReports = s.Text() == "sendcrash"
 	}
 
-	return info, nil
+	log.Print("got info from app")
+	appInfoChan <- info
 }
 
 func SendCrashReports(license *utils.License) {
@@ -469,27 +475,44 @@ func main() {
 		log.Printf("%v", err)
 	}
 
-	info, err := readInfoFromMainApp()
-	if err != nil {
-		log.Printf("error reading from pipe: %v", err)
-		return
-	}
+	go readInfoFromApp()
 
-	if info.shouldUpdate {
-		doUpdate()
-	}
+	signal := make(chan bool)
+	go func() {
+		log.Print("waiting for app to finish...")
+		err := cmd.Wait()
+		log.Printf("app finished, sending error = %v", err)
+		signal <- (err != nil)
+	}()
 
-	if info.sendCrashReports {
-		cmd.Wait()
-		time.Sleep(time.Second * 10)
+	select {
+	case <-signal:
+		log.Print("got close signal")
+		// if the app closed before we got something, just exit
+		break
 
-		var license *utils.License
-		if info.email != "" && info.licenseKey != "" {
-			license = &utils.License{
-				Email:      info.email,
-				LicenseKey: info.licenseKey,
-			}
+	case info := <-appInfoChan:
+		if info.shouldUpdate {
+			doUpdate()
 		}
-		SendCrashReports(license)
+
+		if info.sendCrashReports {
+			crashed := <-signal // wait for cmd to finish
+			if !crashed {
+				break
+			}
+
+			log.Print("got close signal, waiting to send crash report")
+			time.Sleep(time.Second * 7) // wait for crash report to show up
+
+			var license *utils.License
+			if info.email != "" && info.licenseKey != "" {
+				license = &utils.License{
+					Email:      info.email,
+					LicenseKey: info.licenseKey,
+				}
+			}
+			SendCrashReports(license)
+		}
 	}
 }
