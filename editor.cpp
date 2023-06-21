@@ -20,6 +20,14 @@ bool Editor::is_modifiable() {
     return false;
 }
 
+Ast_Node *Editor::get_selected_ast_node() {
+    auto &nav = ast_navigation;
+    if (nav.on)
+        if (nav.tree_version == buf->tree_version)
+            return nav.node;
+    return NULL;
+}
+
 // returned ranges are ordered
 Selection *Editor::get_selection(Selection_Type sel_type) {
     if (sel_type == SEL_NONE)
@@ -1391,7 +1399,6 @@ void Editor::update_ast_navigate(fn<Ast_Node*(Ast_Node*)> cb) {
     if (!node) return;
 
     node = cb(node);
-    if (!node) return;
     if (!node) return;
 
     update_selected_ast_node(node);

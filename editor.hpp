@@ -439,6 +439,7 @@ struct Editor {
     void replace_buf_contents(List<uchar> *new_contents);
 
     void hunt_down_and_destroy_marks();
+    Ast_Node *get_selected_ast_node();
 };
 
 void vim_copy_command(Vim_Command *dest, Vim_Command *src);
