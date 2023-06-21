@@ -239,9 +239,24 @@ void handle_key_event(Window_Event *it) {
             case CP_KEY_ESCAPE:
                 editor->ast_navigation.on = false;
                 return;
+
+            case CP_KEY_BACKSPACE: {
+                auto node = editor->get_selected_ast_node();
+                if (!node) break;
+
+                auto a = node->start();
+                auto b = node->end();
+                if (a == b) break;
+
+                editor->buf->remove(a, b);
+                editor->ast_navigation.on = false;
+                break;
+            }
+
             }
             break;
         }
+        return;
     }
 
     // always run before vim
@@ -736,7 +751,57 @@ void handle_window_event(Window_Event *it) {
 
         auto editor = get_current_editor();
         if (!editor) break;
-        if (editor->ast_navigation.on) break;
+
+        auto &nav = editor->ast_navigation;
+        if (nav.on) {
+            if (world.vim.on) {
+                switch (ch) {
+                case 'y':
+                case 'c':
+                case 's':
+                case 'd':
+                case 'x': {
+                    if (ch == 'c' || ch == 'd' || ch == 'x' || ch == 's')
+                        if (!editor->is_modifiable())
+                            break;
+
+                    do {
+                        auto node = editor->get_selected_ast_node();
+                        if (!node) break;
+
+                        auto a = node->start();
+                        auto b = node->end();
+                        if (a == b) break;
+
+                        editor->vim_yank_text(editor->buf->get_text(a, b));
+
+                        if (ch == 'c' || ch == 's') {
+                            Vim_Command cmd;
+                            cmd.o_count = 0;
+                            cmd.m_count = 0;
+                            cmd.motion = new_list(Vim_Command_Input);
+                            cmd.op = new_list(Vim_Command_Input);
+
+                            auto inp = cmd.op->append();
+                            inp->is_key = false;
+                            inp->ch = ch;
+
+                            editor->vim_enter_insert_mode(&cmd, [&]() {
+                                editor->buf->remove(a, b);
+                            });
+                        } else if (ch == 'd' || ch == 'x') {
+                            editor->buf->remove(a, b);
+                        }
+
+                    } while (0);
+
+                    editor->ast_navigation.on = false;
+                    break;
+                }
+                }
+            }
+            break;
+        }
 
         // when vim is on, it takes over insert mode completely
         if (world.vim.on) {

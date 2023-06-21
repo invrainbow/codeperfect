@@ -3407,6 +3407,11 @@ void handle_command(Command cmd, bool from_menu) {
             break;
         }
 
+        // if we're not in normal mode it fucks it up
+        if (world.vim.on)
+            if (world.vim_mode() != VI_NORMAL)
+                editor->vim_handle_key(CP_KEY_ESCAPE, 0);
+
         // or reset?
         nav.mem.cleanup();
         nav.mem.init("ast_navigation");
@@ -3437,7 +3442,25 @@ void handle_command(Command cmd, bool from_menu) {
             return WALK_CONTINUE;
         });
 
-        if (!node) return; // TODO: ENG-302: flash the cursor red or something?
+        if (!node) {
+            // if we're not on a node, first try to jump to the next node
+            Ast_Node *last = NULL;
+            FOR_NODE_CHILDREN (root) {
+                if (it->start() > editor->cur) {
+                    node = it->dup();
+                    break;
+                }
+                last = it;
+            }
+
+            // if we're past the last node, just go to the last node
+            if (!node) {
+                if (!last) return;
+                node = last->dup();
+            }
+
+            editor->move_cursor(node->start());
+        }
 
         nav.on = true;
         nav.tree_version = editor->buf->tree_version;

@@ -1963,6 +1963,7 @@ Goresult* new_primitive_type_goresult(ccstr name) {
 
 void Go_Indexer::check_duplicate_packages() {
 #ifdef DEBUG_BUILD
+    SCOPED_FRAME();
     auto lookup = new_table(bool);
     For (index.packages) {
         if (lookup->get(it.import_path))
