@@ -419,6 +419,7 @@ struct World {
 
     Jblow_Tests jblow_tests;
 
+    List<int> *konami;
     List<Last_Closed> *last_closed;
 
     struct Frameskip {

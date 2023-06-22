@@ -153,6 +153,24 @@ void handle_key_event(Window_Event *it) {
 
     if (!press) return;
 
+    world.konami->append(key);
+    while (world.konami->len > 10)
+        world.konami->remove((int)0);
+
+    auto is_konami = [&]() {
+        if (world.konami->len != 10) return false;
+
+        int secret[] = { CP_KEY_UP, CP_KEY_UP, CP_KEY_DOWN, CP_KEY_DOWN, CP_KEY_LEFT, CP_KEY_RIGHT, CP_KEY_LEFT, CP_KEY_RIGHT, CP_KEY_B, CP_KEY_A };
+        for (int i = 0; i < 10; i++)
+            if (world.konami->at(i) != secret[i])
+                return false;
+        return true;
+    };
+
+    if (is_konami())
+        if (ask_user_yes_no("This is an easter egg that lets developers trigger a crash in release mode. Do you want to do that now?", "Easter egg", "Yes", "No") == ASKUSER_YES)
+            cp_panic("panicking");
+
     // handle global keys
 
     if (keymods == CP_MOD_PRIMARY) {

@@ -425,6 +425,7 @@ void World::init() {
         SCOPED_MEM(&world_mem);
         message_queue.init();
         last_closed = new_list(Last_Closed);
+        konami = new_list(int);
     }
 
     {
