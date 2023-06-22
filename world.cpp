@@ -2605,6 +2605,8 @@ void handle_command(Command cmd, bool from_menu) {
                 // we shouldn't be here otherwise
                 cp_assert(world.vim_mode() == VI_VISUAL);
                 editor->vim_return_to_normal_mode();
+            } else {
+                editor->selecting = false;
             }
         }
         break;
