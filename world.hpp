@@ -59,6 +59,9 @@ enum Main_Thread_Message_Type {
     MTM_RELOAD_EDITOR,
     MTM_EXIT,
     MTM_FOCUS_APP_DEBUGGER,
+    /**/
+    MTM_WRITE_LAST_FOLDER,
+    /**/
     // for tests
     MTM_TEST_MOVE_CURSOR,
     MTM_RESET_AFTER_DEFOCUS,

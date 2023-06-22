@@ -1054,6 +1054,12 @@ void Go_Indexer::background_thread() {
         already_enqueued_packages.init();
     }
 
+    // now that we successfully initialized in the current folder,
+    // instruct the main thread to write it out to .last_folder
+    world.message_queue.add([&](auto msg) {
+        msg->type = MTM_WRITE_LAST_FOLDER;
+    });
+
     // utility functions
     // ===
 

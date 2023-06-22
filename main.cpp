@@ -1465,6 +1465,15 @@ int realmain(int argc, char **argv) {
                     exit(it.exit_code);
                     break;
 
+                case MTM_WRITE_LAST_FOLDER: {
+                    File f;
+                    if (f.init_write(path_join(world.configdir, ".last_folder")) == FILE_RESULT_OK) {
+                        f.write(world.current_path, strlen(world.current_path));
+                        f.cleanup();
+                    }
+                    break;
+                }
+
                 case MTM_RESET_AFTER_DEFOCUS:
                     reset_inputs_after_defocus = true;
                     break;

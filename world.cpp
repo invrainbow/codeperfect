@@ -537,9 +537,15 @@ void World::init() {
             do {
                 if (!options.open_last_folder) break;
 
-                auto fm = map_file_into_memory(path_join(configdir, ".last_folder"));
+                auto last_folder_path = path_join(configdir, ".last_folder");
+
+                auto fm = map_file_into_memory(last_folder_path);
                 if (!fm) break;
-                defer { fm->cleanup(); };
+
+                defer {
+                    fm->cleanup();
+                    delete_file(last_folder_path);
+                };
 
                 auto result = new_list(char);
                 for (int i = 0; i < fm->len; i++) {
@@ -573,14 +579,6 @@ void World::init() {
 
         GHGitIgnoreInit(current_path);
         cp_chdir(current_path);
-
-        {
-            File f;
-            if (f.init_write(path_join(configdir, ".last_folder")) == FILE_RESULT_OK) {
-                f.write(current_path, strlen(current_path));
-                f.cleanup();
-            }
-        }
     }
 
     t.log("init workspace");
