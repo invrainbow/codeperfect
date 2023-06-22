@@ -4122,10 +4122,12 @@ List<Editor*> *get_all_editors() {
 
 void reset_everything_when_switching_editors(Editor *old_editor) {
     if (old_editor) {
-        // this should clear out most vim related things, because in vim mode
-        // it calls handle_input(CP_KEY_ESCAPE)
-        old_editor->trigger_escape();
-        cp_assert(world.vim_mode() == VI_NORMAL);
+        if (world.vim.on) {
+            // this should clear out most vim related things, because in vim mode
+            // it calls handle_input(CP_KEY_ESCAPE)
+            old_editor->trigger_escape();
+            cp_assert(world.vim_mode() == VI_NORMAL);
+        }
     }
 
     // do this after triggering escape in the old editor so the escape gets saved
