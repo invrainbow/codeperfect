@@ -1197,7 +1197,6 @@ struct Generate_Struct_Tags_Result {
 
 struct Go_Indexer {
     ccstr goroot;
-    // ccstr gopath;
     ccstr gomodcache;
 
     // Right now `mem` holds both orchestrating stuff (like the import

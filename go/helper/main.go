@@ -48,7 +48,6 @@ typedef struct _GH_Message {
 
 typedef struct _GH_Env_Vars {
 	char *goroot;
-	char *gopath;
 	char *gomodcache;
 } GH_Env_Vars;
 */
@@ -497,7 +496,7 @@ func GHGetGoEnvVars() *C.GH_Env_Vars {
 		log.Print("couldn't find go")
 		return nil
 	}
-	out, err := utils.MakeExecCommand(binpath, "env", "GOPATH", "GOMODCACHE", "GOROOT").Output()
+	out, err := utils.MakeExecCommand(binpath, "env", "GOMODCACHE", "GOROOT").Output()
 	if err != nil {
 		log.Print(err)
 		return nil
@@ -510,9 +509,8 @@ func GHGetGoEnvVars() *C.GH_Env_Vars {
 	}
 
 	vars := (*C.GH_Env_Vars)(C.malloc(C.size_t(unsafe.Sizeof(C.GH_Env_Vars{}))))
-	vars.gopath = C.CString(lines[0])
-	vars.gomodcache = C.CString(lines[1])
-	vars.goroot = C.CString(lines[2])
+	vars.gomodcache = C.CString(lines[0])
+	vars.goroot = C.CString(lines[1])
 	return vars
 }
 
@@ -520,9 +518,6 @@ func GHGetGoEnvVars() *C.GH_Env_Vars {
 func GHFreeGoEnvVars(vars *C.GH_Env_Vars) {
 	if vars.goroot != nil {
 		C.free(unsafe.Pointer(vars.goroot))
-	}
-	if vars.gopath != nil {
-		C.free(unsafe.Pointer(vars.gopath))
 	}
 	if vars.gomodcache != nil {
 		C.free(unsafe.Pointer(vars.gomodcache))
