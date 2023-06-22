@@ -455,7 +455,7 @@ void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
 
     if (workspace.flag == GWS_NO_GOWORK)
         if (!process_module_filepath(root_filepath))
-            cp_panic("CodePerfect was unable to read your project folder as a Go module or workspace.\n\nPlease make sure this folder contains a valid go.mod or go.work file. If you're sure it does, you can run `go list -m all` in a terminal in this folder and inspect the output.");
+            cp_exit("CodePerfect was unable to read your project folder as a Go module or workspace.\n\nPlease make sure this folder contains a valid go.mod or go.work file. If you're sure it does, you can run `go list -m all` in a terminal in this folder and inspect the output.");
 
     auto prepare_golist_proc = [&]() -> Process* {
         auto proc = new_object(Process);
@@ -489,7 +489,7 @@ void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
 
     auto proc = prepare_golist_proc();
     if (!proc || !proc->can_read())
-        cp_panic("Unable to run `go list -m all` in folder.");
+        cp_exit("CodePerfect was unable to read your project folder as a Go module or workspace -- attempting to run `go list -m all` in the folder failed. Please try running that command manually and ensure it succeeds.");
 
     bool found_module = false;
     bool done = false;
@@ -6444,7 +6444,7 @@ void Go_Indexer::init() {
     };
 
     if (!init_buildenv())
-        cp_panic("Please make sure Go version 1.13+ is installed and accessible through your PATH.");
+        cp_exit("Please make sure Go version 1.13+ is installed and accessible through your PATH.");
 
     auto copystr = [&](ccstr s) {
         auto ret = cp_strdup(s);
@@ -6454,13 +6454,13 @@ void Go_Indexer::init() {
 
     {
         auto vars = GHGetGoEnvVars();
-        if (!vars) cp_panic("Unable to detect Go installation.");
+        if (!vars) cp_exit("Unable to detect Go installation. Please make sure `go env GOROOT` and `go env GOMODCACHE` are printing out valid places.");
         defer { GHFreeGoEnvVars(vars); };
 
         if (streq(vars->goroot, ""))
-            cp_panic("Unable to detect GOROOT. Please make sure Go is installed and accessible through your PATH.");
+            cp_exit("Unable to detect GOROOT. Please make sure Go is installed and accessible through your PATH.");
         if (streq(vars->gomodcache, ""))
-            cp_panic("Unable to detect GOMODCACHE. Please make sure Go is installed and accessible through your PATH.");
+            cp_exit("Unable to detect GOMODCACHE. Please make sure Go is installed and accessible through your PATH.");
 
         goroot = cp_strdup(vars->goroot);
         gomodcache = cp_strdup(vars->gomodcache);

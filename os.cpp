@@ -176,14 +176,25 @@ bool copy_file(ccstr src, ccstr dest) {
     return f.write((char*)fm->data, fm->len);
 }
 
-#ifndef DEBUG_BUILD
-NORETURN void cp_panic(ccstr s) {
-    if (is_main_thread)
-        tell_user(s, "An error has occurred");
-    abort();
-}
-#endif
-
 bool move_file_or_directory(ccstr src, ccstr dest) {
     return !rename(src, dest);
 }
+
+NORETURN void cp_exit(ccstr s) {
+#ifdef DEBUG_BUILD
+    BREAK_HERE();
+#endif
+
+    if (is_main_thread) {
+        tell_user(s, "An error has occurred");
+        exit(1);
+    } else {
+        world.message_queue.try_add([&](auto msg) {
+            msg->type = MTM_EXIT;
+            msg->exit_message = cp_strdup(s);
+            msg->exit_code = 1;
+        });
+        exit_thread(1);
+    }
+}
+

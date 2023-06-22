@@ -78,9 +78,12 @@ struct Main_Thread_Message {
             ccstr tell_user_text;
             ccstr tell_user_title;
         };
+        struct {
+            ccstr exit_message;
+            int exit_code;
+        };
         ccstr debugger_stdout_line;
         cur2 test_move_cursor;
-        int exit_code;
         List<Mark*> *search_marks;
     };
 };

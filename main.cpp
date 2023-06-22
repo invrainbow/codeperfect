@@ -1459,6 +1459,12 @@ int realmain(int argc, char **argv) {
 
             For (messages) {
                 switch (it.type) {
+                case MTM_EXIT:
+                    if (it.exit_message)
+                        tell_user_error(it.exit_message);
+                    exit(it.exit_code);
+                    break;
+
                 case MTM_RESET_AFTER_DEFOCUS:
                     reset_inputs_after_defocus = true;
                     break;
@@ -1475,10 +1481,6 @@ int realmain(int argc, char **argv) {
                         if (it.focus_app_debugger_pid == get_current_focused_window_pid())
                             if (!world.window->is_focused())
                                 world.window->focus();
-                    break;
-
-                case MTM_EXIT:
-                    exit(it.exit_code);
                     break;
 
                 case MTM_TELL_USER:

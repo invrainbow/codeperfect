@@ -52,8 +52,10 @@
 #ifdef DEBUG_BUILD
 #define cp_panic(s) do { BREAK_HERE(); exit(1); } while (0)
 #else
-NORETURN void cp_panic(ccstr s);
+#define cp_panic(s) abort()
 #endif
+
+NORETURN void cp_exit(ccstr s);
 
 #define cp_assert(x) do { if (!(x)) cp_panic("assertion failed"); } while (0)
 
