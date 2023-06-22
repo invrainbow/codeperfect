@@ -59,6 +59,9 @@ enum Main_Thread_Message_Type {
     MTM_RELOAD_EDITOR,
     MTM_EXIT,
     MTM_FOCUS_APP_DEBUGGER,
+    /**/
+    MTM_WRITE_LAST_FOLDER,
+    /**/
     // for tests
     MTM_TEST_MOVE_CURSOR,
     MTM_RESET_AFTER_DEFOCUS,
@@ -78,9 +81,12 @@ struct Main_Thread_Message {
             ccstr tell_user_text;
             ccstr tell_user_title;
         };
+        struct {
+            ccstr exit_message;
+            int exit_code;
+        };
         ccstr debugger_stdout_line;
         cur2 test_move_cursor;
-        int exit_code;
         List<Mark*> *search_marks;
     };
 };
@@ -413,6 +419,7 @@ struct World {
 
     Jblow_Tests jblow_tests;
 
+    List<int> *konami;
     List<Last_Closed> *last_closed;
 
     struct Frameskip {

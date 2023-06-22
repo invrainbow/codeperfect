@@ -795,11 +795,11 @@ void Window::create_nsgl_context() {
 
     nsgl_pixel_format = [[NSOpenGLPixelFormat alloc] initWithAttributes:attribs->items];
     if (nsgl_pixel_format == nil)
-        cp_panic("Unable to initialize window (couldn't find pixel format)");
+        cp_exit("Unable to initialize window (couldn't find pixel format)");
 
     nsgl_object = [[NSOpenGLContext alloc] initWithFormat:nsgl_pixel_format shareContext:nil];
     if (nsgl_object == nil)
-        cp_panic("Unable to initialize window (couldn't create context)");
+        cp_exit("Unable to initialize window (couldn't create context)");
 
     [ns_view setWantsBestResolutionOpenGLSurface:YES];
     [nsgl_object setView:ns_view];
@@ -1079,11 +1079,11 @@ void _make_bootstrap_context() {
 
     bootstrap_pixel_format = [[NSOpenGLPixelFormat alloc] initWithAttributes:attribs->items];
     if (bootstrap_pixel_format == nil)
-        cp_panic("Unable to initialize window (couldn't find pixel format)");
+        cp_exit("Unable to initialize window (couldn't find pixel format)");
 
     bootstrap_context = [[NSOpenGLContext alloc] initWithFormat:bootstrap_pixel_format shareContext:nil];
     if (bootstrap_context == nil)
-        cp_panic("Unable to initialize window (couldn't create context)");
+        cp_exit("Unable to initialize window (couldn't create context)");
 
     [bootstrap_context makeCurrentContext];
 }

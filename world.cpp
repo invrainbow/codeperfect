@@ -425,6 +425,7 @@ void World::init() {
         SCOPED_MEM(&world_mem);
         message_queue.init();
         last_closed = new_list(Last_Closed);
+        konami = new_list(int);
     }
 
     {
@@ -537,9 +538,15 @@ void World::init() {
             do {
                 if (!options.open_last_folder) break;
 
-                auto fm = map_file_into_memory(path_join(configdir, ".last_folder"));
+                auto last_folder_path = path_join(configdir, ".last_folder");
+
+                auto fm = map_file_into_memory(last_folder_path);
                 if (!fm) break;
-                defer { fm->cleanup(); };
+
+                defer {
+                    fm->cleanup();
+                    delete_file(last_folder_path);
+                };
 
                 auto result = new_list(char);
                 for (int i = 0; i < fm->len; i++) {
@@ -573,14 +580,6 @@ void World::init() {
 
         GHGitIgnoreInit(current_path);
         cp_chdir(current_path);
-
-        {
-            File f;
-            if (f.init_write(path_join(configdir, ".last_folder")) == FILE_RESULT_OK) {
-                f.write(current_path, strlen(current_path));
-                f.cleanup();
-            }
-        }
     }
 
     t.log("init workspace");
@@ -2606,6 +2605,8 @@ void handle_command(Command cmd, bool from_menu) {
                 // we shouldn't be here otherwise
                 cp_assert(world.vim_mode() == VI_VISUAL);
                 editor->vim_return_to_normal_mode();
+            } else {
+                editor->selecting = false;
             }
         }
         break;
@@ -4124,10 +4125,12 @@ List<Editor*> *get_all_editors() {
 
 void reset_everything_when_switching_editors(Editor *old_editor) {
     if (old_editor) {
-        // this should clear out most vim related things, because in vim mode
-        // it calls handle_input(CP_KEY_ESCAPE)
-        old_editor->trigger_escape();
-        cp_assert(world.vim_mode() == VI_NORMAL);
+        if (world.vim.on) {
+            // this should clear out most vim related things, because in vim mode
+            // it calls handle_input(CP_KEY_ESCAPE)
+            old_editor->trigger_escape();
+            cp_assert(world.vim_mode() == VI_NORMAL);
+        }
     }
 
     // do this after triggering escape in the old editor so the escape gets saved
