@@ -345,11 +345,6 @@ func SendCrashReports(license *utils.License) {
 	}
 
 	reportsdir := filepath.Join(homedir, "Library/Logs/DiagnosticReports")
-	files, err := ioutil.ReadDir(reportsdir)
-	if err != nil {
-		log.Print(err)
-		return
-	}
 
 	desiredProcName := "ide"
 	desiredProcPathSuffix := "/CodePerfect.app/Contents/MacOS/bin/ide"
@@ -438,19 +433,41 @@ func SendCrashReports(license *utils.License) {
 		}
 	}
 
-	for _, f := range files {
-		if f.IsDir() {
-			continue
-		}
-		fullpath := filepath.Join(reportsdir, f.Name())
-		data, err := os.ReadFile(fullpath)
+	// check every 500ms for 5 seconds
+	for i := 0; i < 10; i++ {
+		files, err := ioutil.ReadDir(reportsdir)
 		if err != nil {
-			log.Print(fullpath, err)
-			continue
+			log.Print(err)
+			return
 		}
-		if isOurCrashFile(fullpath, data) {
+
+		found := false
+
+		for _, f := range files {
+			if f.IsDir() {
+				continue
+			}
+			fullpath := filepath.Join(reportsdir, f.Name())
+			data, err := os.ReadFile(fullpath)
+			if err != nil {
+				log.Print(fullpath, err)
+				continue
+			}
+			if !isOurCrashFile(fullpath, data) {
+				continue
+			}
+
 			processFile(fullpath, data)
+			found = true
 		}
+
+		if found {
+			log.Printf("found")
+			break
+		}
+
+		time.Sleep(time.Millisecond * 500)
+		log.Printf("attempt %v", i)
 	}
 }
 
@@ -503,7 +520,6 @@ func main() {
 			}
 
 			log.Print("got close signal, waiting to send crash report")
-			time.Sleep(time.Second * 7) // wait for crash report to show up
 
 			var license *utils.License
 			if info.email != "" && info.licenseKey != "" {
