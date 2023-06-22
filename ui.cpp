@@ -7898,8 +7898,10 @@ void UI::draw_everything() {
 
         auto curr_editor = get_current_editor();
 
-        if (world.vim.on && curr_editor) {
-            if (curr_editor->is_modifiable()) {
+        if (curr_editor) {
+            if (!curr_editor->is_modifiable()) {
+                draw_status_piece(LEFT, "READONLY", rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
+            } else if (world.vim.on) {
                 ccstr mode_str = NULL;
                 switch (world.vim_mode()) {
                 case VI_NORMAL: mode_str = "NORMAL"; break;
@@ -7917,14 +7919,12 @@ void UI::draw_everything() {
                 default: mode_str = "UNKNOWN"; break;
                 }
                 draw_status_piece(LEFT, mode_str, rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
-            } else {
-                draw_status_piece(LEFT, "READONLY", rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
-            }
 
-            if (world.vim.macro_state == MACRO_RECORDING)
-                draw_status_piece(LEFT, cp_sprintf("Recording @%c", world.vim.macro_record.macro), rgba("#000000", 0), rgba(global_colors.foreground, 0.5));
-            else if (world.vim.macro_state == MACRO_RUNNING)
-                draw_status_piece(LEFT, cp_sprintf("Running @%c (Ctrl+C to stop)", world.vim.macro_run.macro), rgba("#000000", 0), rgba(global_colors.foreground, 0.5));
+                if (world.vim.macro_state == MACRO_RECORDING)
+                    draw_status_piece(LEFT, cp_sprintf("Recording @%c", world.vim.macro_record.macro), rgba("#000000", 0), rgba(global_colors.foreground, 0.5));
+                else if (world.vim.macro_state == MACRO_RUNNING)
+                    draw_status_piece(LEFT, cp_sprintf("Running @%c (Ctrl+C to stop)", world.vim.macro_run.macro), rgba("#000000", 0), rgba(global_colors.foreground, 0.5));
+            }
         }
 
         if (world.show_frame_index) {
