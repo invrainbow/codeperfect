@@ -274,7 +274,7 @@ function Home() {
           <div className="lg:w-1/3 md:mx-0">
             <div className="text-[160%] md:text-[225%] font-semibold text-black leading-tight">
               {BAD_FEATURES.map((name) => (
-                <div className="text-white md:whitespace-nowrap">
+                <div key={name} className="text-white md:whitespace-nowrap">
                   No {name}.
                 </div>
               ))}
@@ -335,7 +335,10 @@ function Home() {
           <div className="hidden md:block flex-1">
             <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-lg font-medium rounded p-6 font-mono">
               {FEATURE_LIST.map((it) => (
-                <div className="flex-shrink leading-none text-center text-neutral-300 hover:text-neutral-400 transition-colors">
+                <div
+                  key={it.name}
+                  className="flex-shrink leading-none text-center text-neutral-300 hover:text-neutral-400 transition-colors"
+                >
                   {it.name}
                 </div>
               ))}
@@ -490,8 +493,8 @@ const BUYING_QUESTIONS = [
 
 function BuyLicenseSection({ label, children }) {
   return (
-    <div className="bg-white shadow rounded-lg overflow-hidden p-5">
-      <div className="leading-none mb-4 text-neutral-500 border-neutral-100 flex gap-2 items-center font-bold text-sm">
+    <div>
+      <div className="leading-none mb-3 text-neutral-600 border-neutral-100 flex gap-2 items-center font-bold">
         {label}
       </div>
       {children}
@@ -504,7 +507,7 @@ function BuyLineItem({ label, value, total }) {
     <div
       className={cx(
         "flex justify-between py-2 first:pt-0 last:pb-0",
-        !total && "border-b border-neutral-600 last:border-0"
+        !total && "border-b border-neutral-300 last:border-0"
       )}
     >
       <div className={cx(total && "font-bold")}>{label}</div>
@@ -513,18 +516,16 @@ function BuyLineItem({ label, value, total }) {
   );
 }
 
-function BuySummaryPoint({ good, text }) {
+function BuyPoint({ label, bad }) {
   return (
     <div
       className={cx(
-        "flex items-center gap-2",
-        good ? "text-neutral-100" : "text-neutral-400"
+        "flex items-center space-x-1.5 leading-6 mb-0.5 last:mb-0 text-[95%]",
+        bad ? "text-neutral-400" : "text-neutral-600"
       )}
     >
-      <span className="leading-none">
-        <Icon size={22} icon={good ? IconCircleCheck : IconCircleMinus} />
-      </span>
-      <span>{text}</span>
+      <Icon size={18} icon={bad ? IconCircleMinus : IconCheck} />
+      <span>{label}</span>
     </div>
   );
 }
@@ -535,23 +536,28 @@ function BuySelectable({ selected, label, children, onClick }) {
       onClick={onClick}
       className={twMerge(
         cx(
-          "font-inherit rounded text-left p-4 relative flex flex-col transition-colors bg-neutral-100 border-2 border-transparent",
-          selected && "border-stone-500 bg-white"
+          "font-inherit rounded-lg text-left p-4 relative flex flex-col",
+          "transition-colors border-2 border-transparent",
+          selected && "border-stone-500 bg-white",
+          !selected && "bg-neutral-100"
         )
       )}
     >
       <div
         className={cx(
-          "absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-stone-600 text-white transition-opacity",
+          "absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full transition-opacity",
           {
             "opacity-100": selected,
             "opacity-0": !selected,
+            "bg-stone-700 text-white": true,
           }
         )}
       >
         <Icon size={18} icon={IconCheck} />
       </div>
-      <div className="font-bold transition-colors text-black">{label}</div>
+      <div className={cx("font-bold transition-colors", "text-black")}>
+        {label}
+      </div>
       {children && <div className={cx("mt-1")}>{children}</div>}
     </button>
   );
@@ -562,27 +568,18 @@ function BuyLicense() {
     {
       key: "individual",
       label: "Personal",
-      features: [{ label: "Commercial use ok" }],
+      features: [
+        { label: "Commercial use ok" },
+        { label: "Can't be expensed", not: true },
+      ],
     },
     {
       key: "business",
       label: "Pro",
       features: [
-        { label: <b>Everything in Personal</b> },
-        { label: "Company can pay" },
-        { label: "Purchase can be expensed" },
+        { label: "Commercial use ok" },
+        { label: "Can be expensed" },
         { label: "Priority support" },
-      ],
-    },
-    {
-      key: "enterprise",
-      label: "Enterprise",
-      custom: true,
-      features: [
-        { label: <b>Everything in Pro</b> },
-        { label: "Volume pricing" },
-        { label: "Team licensing" },
-        { label: "Other custom requests" },
       ],
     },
   ];
@@ -590,30 +587,16 @@ function BuyLicense() {
   const PRODUCT_INFO = [
     {
       key: "license_only",
-      label: "License Only",
+      label: "License only",
       points: [
-        "Perpetual license",
-        "3 months of updates included",
-        "Version locked after 3 months",
+        { label: "Perpetual license" },
+        { label: "Version locked after 3 mo", bad: true },
       ],
     },
     {
       key: "license_and_sub",
       label: "License + Subscription",
-      points: [
-        "Perpetual license",
-        "Automatic updates",
-        "Version locked after subscription",
-      ],
-    },
-    {
-      key: "sub_only",
-      label: "Subscription Only",
-      points: [
-        "Use software during susbcription",
-        "Automatic updates",
-        "Lose access after subscription",
-      ],
+      points: [{ label: "Perpetual License" }, { label: "Automatic updates" }],
     },
   ];
 
@@ -630,13 +613,13 @@ function BuyLicense() {
   ];
 
   const [plan, setPlan] = React.useState("individual");
-  const [product, setProduct] = React.useState("license_and_sub");
+  const [product, setProduct] = React.useState("license_only");
   const [period, setPeriod] = React.useState("monthly");
 
-  const planInfo = PLAN_INFO.filter((it) => it.key === plan)[0];
+  // const planInfo = PLAN_INFO.filter((it) => it.key === plan)[0];
   const productInfo = PRODUCT_INFO.filter((it) => it.key === product)[0];
+  const periodInfo = PERIOD_INFO.filter((it) => it.key === period)[0];
 
-  const isLicense = product !== "sub_only";
   const isSub = product !== "license_only";
 
   function getPaymentLink() {
@@ -651,7 +634,6 @@ function BuyLicense() {
   }
 
   function calcLicensePrice() {
-    if (!isLicense) return 0;
     return plan === "individual" ? 39.99 : 119.99;
   }
 
@@ -674,187 +656,104 @@ function BuyLicense() {
   const licensePrice = calcLicensePrice();
   const subPrice = calcSubPrice();
 
-  const goodPoints = _.filter([
-    isLicense && "Perpetual License",
-    isSub && "Automatic updates",
-    plan !== "individual" && "Company can pay",
-  ]);
-
-  const badPoints = _.filter([
-    !isLicense && "Lose access after subscription",
-    !isSub && "No updates after 3 months",
-    plan === "individual" && "Company cannot pay",
-  ]);
-
   return (
     <div className="mt-12 md:mt-24">
       <div className="title text-center text-3xl md:text-5xl mb-6 md:mb-12">
         Buy License
       </div>
+
       <div className="md:max-w-screen-xl mx-auto md:mb-16">
-        <div className="flex flex-col md:flex-row gap-4 md:gap-8 md:items-start">
-          <div className="flex-1 flex flex-col gap-6 px-4 lg:px-0">
-            <BuyLicenseSection label="1. Select Plan">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {PLAN_INFO.map(({ label, features, key }) => (
+        <div className="flex flex-col gap-12 md:gap-8 mx-auto w-auto md:w-[600px] shadow-lg bg-white py-8 px-6 md:rounded-lg">
+          <BuyLicenseSection label="Select Plan">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {PLAN_INFO.map(({ label, features, key }) => (
+                <BuySelectable
+                  key={key}
+                  onClick={() => setPlan(key)}
+                  label={label}
+                  selected={plan === key}
+                >
+                  <div>
+                    {features.map((it) => (
+                      <BuyPoint key={it.label} label={it.label} bad={it.not} />
+                    ))}
+                  </div>
+                </BuySelectable>
+              ))}
+            </div>
+          </BuyLicenseSection>
+          <BuyLicenseSection label="Select Product">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {PRODUCT_INFO.map(({ key, label, points }) => (
+                <BuySelectable
+                  key={key}
+                  onClick={() => setProduct(key)}
+                  selected={productInfo.key === key}
+                  label={label}
+                >
+                  {points.map((it) => (
+                    <BuyPoint key={it.label} label={it.label} bad={it.bad} />
+                  ))}
+                </BuySelectable>
+              ))}
+            </div>
+          </BuyLicenseSection>
+          {isSub && (
+            <BuyLicenseSection label="Select Billing Period">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {PERIOD_INFO.map(({ key, label, subtitle }) => (
                   <BuySelectable
                     key={key}
-                    onClick={() => setPlan(key)}
-                    label={label}
-                    selected={plan === key}
-                  >
-                    <div>
-                      {features.map((it) => (
-                        <div
-                          className={cx(
-                            "flex items-center space-x-1.5 leading-6 mb-0.5 last:mb-0 text-[95%]",
-                            {
-                              "text-red-400": it.not,
-                              "text-neutral-600": !it.not,
-                            }
-                          )}
-                        >
-                          <Icon size={18} icon={it.not ? IconX : IconCheck} />
-                          <span>{it.label}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </BuySelectable>
+                    onClick={() => setPeriod(key)}
+                    selected={periodInfo.key === key}
+                    label={
+                      <div>
+                        {label}{" "}
+                        {subtitle && (
+                          <span className="text-neutral-400 text-sm font-normal">
+                            ({subtitle})
+                          </span>
+                        )}
+                      </div>
+                    }
+                  />
                 ))}
               </div>
             </BuyLicenseSection>
-            {plan !== "enterprise" && (
-              <>
-                <BuyLicenseSection label="2. Select Product">
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    {PRODUCT_INFO.map(({ key, label, points }) => (
-                      <BuySelectable
-                        key={key}
-                        onClick={() => setProduct(key)}
-                        selected={product === key}
-                        label={label}
-                      >
-                        <ul style={{ marginTop: 0 }} className="pl-2 pt-1">
-                          {points.map((it) => (
-                            <li className="leading-tight mb-1 last:mb-0 text-[95%]">
-                              {it}
-                            </li>
-                          ))}
-                        </ul>
-                      </BuySelectable>
-                    ))}
-                  </div>
-                </BuyLicenseSection>
-                {product !== "license_only" && (
-                  <BuyLicenseSection label="3. Select Billing Period">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      {PERIOD_INFO.map(({ key, label, subtitle }) => (
-                        <BuySelectable
-                          key={key}
-                          onClick={() => setPeriod(key)}
-                          selected={period === key}
-                          label={
-                            <div>
-                              {label}
-                              {subtitle && (
-                                <span className="font-light text-neutral-400 text-sm ml-2">
-                                  ({subtitle})
-                                </span>
-                              )}
-                            </div>
-                          }
-                        />
-                      ))}
-                    </div>
-                  </BuyLicenseSection>
-                )}
-              </>
-            )}
-          </div>
-          <div className="shadow-lg rounded-lg bg-neutral-800 p-8 mx-4 md:m-0 w-auto md:w-[350px]">
-            <div className="flex flex-col">
-              <div className="leading-none">
-                <span className="text-white font-bold text-xl leading-none">
-                  CodePerfect
-                </span>
-                <span className="text-neutral-300 text-lg ml-1.5">
-                  {planInfo.label}
-                </span>
-              </div>
-              {plan === "enterprise" ? (
-                <div className="pt-4 text-neutral-300">
-                  Please get in touch with our support team to discuss your
-                  options.
-                </div>
-              ) : (
-                <>
-                  <div className="mb-6 text-amber-300 font-bold">
-                    {productInfo.label}
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    {goodPoints.map((it) => (
-                      <BuySummaryPoint good text={it} />
-                    ))}
-                    {badPoints.map((it) => (
-                      <BuySummaryPoint text={it} />
-                    ))}
-                  </div>
-                </>
+          )}
+          <div className="pt-8 border-t border-dashed border-neutral-300">
+            <div className="border-neutral-400 border rounded-lg p-4">
+              <BuyLineItem label="License" value={formatMoney(licensePrice)} />
+              {isSub && (
+                <BuyLineItem
+                  label={
+                    period === "monthly"
+                      ? "Monthly subscription"
+                      : "Annual subscription"
+                  }
+                  value={`${formatMoney(subPrice)}/${
+                    period === "monthly" ? "mo" : "yr"
+                  }`}
+                />
               )}
-              <div className="mt-6 pt-6 border-t border-neutral-500 border-dashed">
-                {plan === "enterprise" ? (
-                  <div>
-                    <A
-                      className="group btn btn2 btn-no-hover btn-lg flex gap-2 items-center justify-center"
-                      href={`mailto:${SUPPORT_EMAIL}`}
-                    >
-                      <Icon size={16} icon={IconMessages} />
-                      <span>Contact support</span>
-                    </A>
-                  </div>
-                ) : (
-                  <>
-                    <div className="text-white border-neutral-400 border rounded-lg p-4">
-                      {isLicense && (
-                        <BuyLineItem
-                          label="License"
-                          value={formatMoney(licensePrice)}
-                        />
-                      )}
-                      {isSub && (
-                        <BuyLineItem
-                          label={
-                            period === "monthly"
-                              ? "Monthly subscription"
-                              : "Annual subscription"
-                          }
-                          value={`${formatMoney(subPrice)}/${
-                            period === "monthly" ? "mo" : "yr"
-                          }`}
-                        />
-                      )}
-                      <BuyLineItem
-                        label="Due today"
-                        total
-                        value={formatMoney(licensePrice + subPrice)}
-                      />
-                    </div>
-                    <div className="mt-6">
-                      <A
-                        className="group btn btn2 btn-no-hover btn-lg flex gap-2 items-center justify-center"
-                        style={{ paddingLeft: "40px", paddingRight: "40px" }}
-                        href={getPaymentLink()}
-                      >
-                        Checkout
-                        <Icon
-                          className="group-hover:translate-x-1 transform transition-transform"
-                          icon={IconArrowRight}
-                        />
-                      </A>
-                    </div>
-                  </>
-                )}
-              </div>
+              <BuyLineItem
+                label="Due today"
+                total
+                value={formatMoney(licensePrice + subPrice)}
+              />
+            </div>
+            <div className="mt-6">
+              <A
+                className="group btn btn1 btn-no-hover btn-lg flex gap-2 items-center justify-center"
+                style={{ paddingLeft: "40px", paddingRight: "40px" }}
+                href={getPaymentLink()}
+              >
+                Checkout
+                <Icon
+                  className="group-hover:translate-x-1 transform transition-transform"
+                  icon={IconArrowRight}
+                />
+              </A>
             </div>
           </div>
         </div>
@@ -862,7 +761,10 @@ function BuyLicense() {
       <div className="bg-zinc-50 border-y border-t-neutral-200 border-b-neutral-100 md:py-12 mt-8 md:mt-16">
         <div className="md:max-w-screen-xl mx-auto grid grid-cols-1 md:grid-cols-3 md:gap-6">
           {BUYING_QUESTIONS.map((it) => (
-            <div className="border-b border-neutral-200 md:border-0 last:border-0 p-6 md:p-0">
+            <div
+              key={it.title}
+              className="border-b border-neutral-200 md:border-0 last:border-0 p-6 md:p-0"
+            >
               <div className="text-neutral-700 text-lg font-semibold mb-2">
                 {it.title}
               </div>
