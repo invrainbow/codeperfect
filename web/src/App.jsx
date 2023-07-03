@@ -507,7 +507,7 @@ function BuyLineItem({ label, value, total }) {
     <div
       className={cx(
         "flex justify-between py-2 first:pt-0 last:pb-0",
-        !total && "border-b border-neutral-300 last:border-0"
+        !total && "border-b border-dashed border-neutral-300 last:border-0"
       )}
     >
       <div className={cx(total && "font-bold")}>{label}</div>
@@ -536,16 +536,16 @@ function BuySelectable({ selected, label, children, onClick }) {
       onClick={onClick}
       className={twMerge(
         cx(
-          "font-inherit rounded-lg text-left p-4 relative flex flex-col",
+          "font-inherit first:rounded-l-lg last:rounded-r-lg text-left p-4 relative flex flex-col",
           "transition-colors border-2 border-transparent",
-          selected && "border-stone-500 bg-white",
+          selected && "border-stone-400 bg-white",
           !selected && "bg-neutral-100"
         )
       )}
     >
       <div
         className={cx(
-          "absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full transition-opacity",
+          "absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded-full transition-opacity",
           {
             "opacity-100": selected,
             "opacity-0": !selected,
@@ -553,7 +553,7 @@ function BuySelectable({ selected, label, children, onClick }) {
           }
         )}
       >
-        <Icon size={18} icon={IconCheck} />
+        <Icon size={16} icon={IconCheck} />
       </div>
       <div className={cx("font-bold transition-colors", "text-black")}>
         {label}
@@ -663,9 +663,9 @@ function BuyLicense() {
       </div>
 
       <div className="md:max-w-screen-xl mx-auto md:mb-16">
-        <div className="flex flex-col gap-12 md:gap-8 mx-auto w-auto md:w-[600px] shadow-lg bg-white py-8 px-6 md:rounded-lg">
+        <div className="flex flex-col gap-12 md:gap-8 mx-auto w-auto md:w-[550px] shadow-lg bg-white py-8 px-6 md:rounded-lg">
           <BuyLicenseSection label="Select Plan">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
               {PLAN_INFO.map(({ label, features, key }) => (
                 <BuySelectable
                   key={key}
@@ -683,7 +683,7 @@ function BuyLicense() {
             </div>
           </BuyLicenseSection>
           <BuyLicenseSection label="Select Product">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
               {PRODUCT_INFO.map(({ key, label, points }) => (
                 <BuySelectable
                   key={key}
@@ -700,7 +700,7 @@ function BuyLicense() {
           </BuyLicenseSection>
           {isSub && (
             <BuyLicenseSection label="Select Billing Period">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
                 {PERIOD_INFO.map(({ key, label, subtitle }) => (
                   <BuySelectable
                     key={key}
@@ -721,41 +721,37 @@ function BuyLicense() {
               </div>
             </BuyLicenseSection>
           )}
-          <div className="pt-8 border-t border-dashed border-neutral-300">
-            <div className="border-neutral-400 border rounded-lg p-4">
-              <BuyLineItem label="License" value={formatMoney(licensePrice)} />
-              {isSub && (
-                <BuyLineItem
-                  label={
-                    period === "monthly"
-                      ? "Monthly subscription"
-                      : "Annual subscription"
-                  }
-                  value={`${formatMoney(subPrice)}/${
-                    period === "monthly" ? "mo" : "yr"
-                  }`}
-                />
-              )}
+          <div className="border-neutral-400 border-dashed border rounded-lg p-4">
+            <BuyLineItem label="License" value={formatMoney(licensePrice)} />
+            {isSub && (
               <BuyLineItem
-                label="Due today"
-                total
-                value={formatMoney(licensePrice + subPrice)}
+                label={
+                  period === "monthly"
+                    ? "Monthly subscription"
+                    : "Annual subscription"
+                }
+                value={`${formatMoney(subPrice)}/${
+                  period === "monthly" ? "month" : "year"
+                }`}
               />
-            </div>
-            <div className="mt-6">
-              <A
-                className="group btn btn1 btn-no-hover btn-lg flex gap-2 items-center justify-center"
-                style={{ paddingLeft: "40px", paddingRight: "40px" }}
-                href={getPaymentLink()}
-              >
-                Checkout
-                <Icon
-                  className="group-hover:translate-x-1 transform transition-transform"
-                  icon={IconArrowRight}
-                />
-              </A>
-            </div>
+            )}
+            <BuyLineItem
+              label="Due today"
+              total
+              value={formatMoney(licensePrice + subPrice)}
+            />
           </div>
+          <A
+            className="group btn btn1 btn-no-hover btn-lg flex gap-2 items-center justify-center"
+            style={{ paddingLeft: "40px", paddingRight: "40px" }}
+            href={getPaymentLink()}
+          >
+            Checkout
+            <Icon
+              className="group-hover:translate-x-1 transform transition-transform"
+              icon={IconArrowRight}
+            />
+          </A>
         </div>
       </div>
       <div className="bg-zinc-50 border-y border-t-neutral-200 border-b-neutral-100 md:py-12 mt-8 md:mt-16">
