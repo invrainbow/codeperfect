@@ -81,25 +81,13 @@ const BASE_LINKS = {
   payment: {
     individual: {
       license_only: "https://buy.stripe.com/cN27sF7vd6c8euk5ky",
-      license_and_sub: {
-        monthly: "https://buy.stripe.com/8wM9ANdTB0ROfyo3co",
-        annual: "https://buy.stripe.com/7sI6oBaHpdEA0DufZb",
-      },
-      sub_only: {
-        monthly: "https://buy.stripe.com/eVa14hbLteIEae428n",
-        annual: "https://buy.stripe.com/4gwbIV8zh7gcae400g",
-      },
+      license_and_sub_monthly: "https://buy.stripe.com/8wM9ANdTB0ROfyo3co",
+      license_and_sub_annual: "https://buy.stripe.com/7sI6oBaHpdEA0DufZb",
     },
     business: {
       license_only: "https://buy.stripe.com/28oeV78zh7gc2LCbIZ",
-      license_and_sub: {
-        monthly: "https://buy.stripe.com/28ocMZeXF2ZWgCs5kE",
-        annual: "https://buy.stripe.com/eVaeV716Pbwsdqg00l",
-      },
-      sub_only: {
-        monthly: "https://buy.stripe.com/dR65kx6r9aso1HyeVc",
-        annual: "https://buy.stripe.com/fZeaER5n5584gCs3cv",
-      },
+      license_and_sub_monthly: "https://buy.stripe.com/28ocMZeXF2ZWgCs5kE",
+      license_and_sub_annual: "https://buy.stripe.com/eVaeV716Pbwsdqg00l",
     },
   },
 };
@@ -112,17 +100,13 @@ const DEV_LINKS = {
   payment: {
     individual: {
       license_only: "https://buy.stripe.com/test_cN2293fhg9KffiU4gt",
-      license_and_sub: {
-        monthly: "https://buy.stripe.com/test_dR64hbglke0vgmYeV5",
-        annual: "https://buy.stripe.com/test_6oEaFzfhg1dJc6IeVe",
-      },
+      license_and_sub_monthly: "https://buy.stripe.com/test_dR64hbglke0vgmYeV5",
+      license_and_sub_annual: "https://buy.stripe.com/test_6oEaFzfhg1dJc6IeVe",
     },
     business: {
       license_only: "https://buy.stripe.com/test_dR66pjglk7C72w8aEZ",
-      license_and_sub: {
-        monthly: "https://buy.stripe.com/test_cN2fZTfhgbSn5IkdRc",
-        annual: "https://buy.stripe.com/test_5kAdRLfhg4pVb2E9AX",
-      },
+      license_and_sub_monthly: "https://buy.stripe.com/test_cN2fZTfhgbSn5IkdRc",
+      license_and_sub_annual: "https://buy.stripe.com/test_5kAdRLfhg4pVb2E9AX",
     },
   },
 };
@@ -614,21 +598,6 @@ function BuyLicense() {
 
   const isSub = product !== "license_only";
 
-  function getPaymentLink() {
-    if (plan === "enterprise") {
-      return null;
-    }
-    const ret = LINKS.payment[plan][product];
-    if (product === "license_only") {
-      return ret;
-    }
-    return ret[period];
-  }
-
-  function calcLicensePrice() {
-    return plan === "individual" ? 39.99 : 79.99;
-  }
-
   function calcSubPrice() {
     if (!isSub) return 0;
     if (period === "monthly") {
@@ -645,7 +614,7 @@ function BuyLicense() {
     return formatter.format(amt);
   }
 
-  const licensePrice = calcLicensePrice();
+  const licensePrice = plan === "individual" ? 39.99 : 79.99;
   const subPrice = calcSubPrice();
 
   return (
@@ -736,7 +705,7 @@ function BuyLicense() {
           <A
             className="group btn btn1 btn-no-hover btn-lg flex gap-2 items-center justify-center"
             style={{ paddingLeft: "40px", paddingRight: "40px" }}
-            href={getPaymentLink()}
+            href={LINKS.payment[plan][isSub ? `${product}_${period}` : product]}
           >
             Checkout
             <Icon
