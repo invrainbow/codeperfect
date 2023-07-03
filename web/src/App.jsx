@@ -116,20 +116,12 @@ const DEV_LINKS = {
         monthly: "https://buy.stripe.com/test_dR64hbglke0vgmYeV5",
         annual: "https://buy.stripe.com/test_6oEaFzfhg1dJc6IeVe",
       },
-      sub_only: {
-        monthly: "https://buy.stripe.com/test_fZe6pjd987C7fiUdR4",
-        annual: "https://buy.stripe.com/test_00g2939WW4pV3Ac6oF",
-      },
     },
     business: {
-      license_only: "https://buy.stripe.com/test_bIYcNH3yy2hN0o07sI",
+      license_only: "https://buy.stripe.com/test_dR66pjglk7C72w8aEZ",
       license_and_sub: {
-        monthly: "https://buy.stripe.com/test_aEU2933yy2hNb2E00c",
-        annual: "https://buy.stripe.com/test_aEU293fhg9Kfc6I6oH",
-      },
-      sub_only: {
-        monthly: "https://buy.stripe.com/test_7sI6pj7OOcWr8UwbIX",
-        annual: "https://buy.stripe.com/test_4gwcNH7OO3lR8Uw14m",
+        monthly: "https://buy.stripe.com/test_cN2fZTfhgbSn5IkdRc",
+        annual: "https://buy.stripe.com/test_5kAdRLfhg4pVb2E9AX",
       },
     },
   },
@@ -634,15 +626,15 @@ function BuyLicense() {
   }
 
   function calcLicensePrice() {
-    return plan === "individual" ? 39.99 : 119.99;
+    return plan === "individual" ? 39.99 : 79.99;
   }
 
   function calcSubPrice() {
     if (!isSub) return 0;
     if (period === "monthly") {
-      return plan === "individual" ? 4.99 : 14.99;
+      return plan === "individual" ? 4.99 : 9.99;
     }
-    return plan === "individual" ? 49.99 : 149.99;
+    return plan === "individual" ? 49.99 : 99.99;
   }
 
   function formatMoney(amt) {
