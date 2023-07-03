@@ -749,13 +749,15 @@ const faqs = [
             Use a low level language (C/C++) and render our own UI with OpenGL.
           </li>
           <li style={{ marginBottom: "0.75em" }}>
-            Write straightforward,{" "}
-            <A href={LINKS.nonPessimized}>non-pessimized</A> code that just
-            executes the actual CPU instructions that do the thing it's supposed
-            to.
+            Eschew large dependencies like Electron, language servers, etc.
+          </li>
+          <li style={{ marginBottom: "0.75em" }}>
+            Write simple, linear-control-flow, straightforward,{" "}
+            <A href={LINKS.nonPessimized}>non-pessimized</A> code, without
+            unnecessary abstractions or patterns.
             <br />
           </li>
-          <li>Manage our own memory with amortized arena allocation.</li>
+          <li>Amortize memory allocations with arenas.</li>
         </ol>
         <p>
           We especially try to limit use of third-party libraries and frameworks
@@ -1381,7 +1383,7 @@ function Header() {
     [LINKS.docs, "Docs"],
     [LINKS.changelog, "Changelog"],
     ["/features", "Features"],
-    ["/faq", "FAQ"],
+    // ["/faq", "FAQ"],
     ["/buy", "Buy"],
     ["/download", "Download"],
     [LINKS.discord, <Icon size={24} icon={FaDiscord} />],
@@ -1473,7 +1475,7 @@ function Footer() {
           </FootSection>
           <FootSection>
             <FootLink href={`mailto:${SUPPORT_EMAIL}`}>Support</FootLink>
-            <FootLink href="/faq">FAQ</FootLink>
+            {/* <FootLink href="/faq">FAQ</FootLink> */}
             <FootLink href="/terms">Terms &amp; Privacy</FootLink>
           </FootSection>
           <div className="flex gap-x-4 text-2xl mt-3 md:mt-0">
@@ -1514,7 +1516,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route path="download" element={<Download />} />
-            <Route path="faq" element={<FAQ />} />
+            {/* <Route path="faq" element={<FAQ />} /> */}
             <Route path="features" element={<Features />} />
             <Route path="buy" element={<BuyLicense />} />
             <Route path="payment-done" element={<PaymentDone />} />
