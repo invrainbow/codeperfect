@@ -219,13 +219,10 @@ const BAD_FEATURES = [
 
 function Home() {
   return (
-    <div className="bg-neutral-50 mx-auto md:pt-12 w-full">
-      <div className="max-w-full leading-relaxed px-8 py-12 md:py-8 md:pb-20">
+    <div className="bg-neutral-50 mx-auto w-full">
+      <div className="bg-white max-w-full leading-relaxed px-8 py-12 md:pt-20 md:pb-24">
         <div className="md:text-center font-bold text-5xl md:text-5xl mb-1 md:mb-2 text-black tracking-tight leading-[1.1] md:leading-[1.1]">
           A fast, lightweight Go IDE
-        </div>
-        <div className="md:text-center text-[120%] text-gray-600 leading-normal">
-          CodePerfect is a power tool with a small resource footprint.
         </div>
         <div className="mt-8 md:mt-8 md:text-center flex flex-col md:flex-row gap-4 md:justify-center">
           <A
@@ -257,18 +254,14 @@ function Home() {
             </div>
             <div className="text-lg leading-normal mt-6 md:mt-8 text-neutral-400">
               <p>
-                We threw out the modern software stack and redesigned the IDE in
+                We threw out the modern software stack and rebuilt the IDE in
                 blazing fast C/C++.
               </p>
               <p>
-                Performance like a video game. Instant startup. 144 FPS. No
-                latency between keystrokes. An indexer that gobbles through
-                large codebases.
-              </p>
-              <p>
-                With predictable operations, ergonomic shortcuts, and a
-                streamlined workflow, CodePerfect does the right thing and gets
-                out of your way.
+                Built like a video game. Instant startup. 144 FPS. A zero
+                latency experience. An indexer that gobbles through large
+                codebases. CodePerfect does the right thing and gets out of your
+                way.
               </p>
             </div>
           </div>
@@ -291,8 +284,8 @@ function Home() {
             </h1>
             <div className="max-w-screen-sm mx-auto mt-4 mb-6 text-lg">
               <p>
-                CodePerfect comes with a full IDE out of the box. Get the best
-                of both worlds: the speed of Vim, the power of an IDE.
+                Get the best of both worlds: the speed of Vim, the power of an
+                IDE.
               </p>
             </div>
             <A
@@ -428,7 +421,7 @@ const BUYING_QUESTIONS = [
         </p>
         <p>
           <A href="/download" className="btn btn1 btn-sm">
-            Visit Downloads
+            Download for Mac
           </A>
         </p>
       </>
@@ -1250,7 +1243,7 @@ function Download() {
       <div className="mt-8 md:text-center">
         <p className="md:max-w-xs mx-auto flex flex-wrap flex-col justify-center">
           {DOWNLOADS.map((it, index) => (
-            <div className="mb-3 md:mb-2">
+            <div className="mb-3 md:mb-2 last:mb-0">
               <WithTooltip
                 className="w-full h-full"
                 show={it.disabledText}
@@ -1282,15 +1275,15 @@ function Download() {
               </WithTooltip>
             </div>
           ))}
-          <div className="mt-4">
-            <span className="rounded-full text-sm font-semibold bg-neutral-200 text-neutral-500 py-1.5 px-4 inline-flex items-center gap-1.5">
-              <Icon icon={IconCalendar} size={20} />
-              <span className="relative" style={{ top: 1 }}>
-                Windows &amp; Linux coming soon!
-              </span>
-            </span>
-          </div>
         </p>
+        <div className="mt-8">
+          <span className="rounded-full text-sm font-semibold bg-neutral-200 text-neutral-500 py-1.5 px-4 inline-flex items-center gap-1.5">
+            <Icon icon={IconCalendar} size={20} />
+            <span className="relative" style={{ top: 1 }}>
+              Windows &amp; Linux coming soon!
+            </span>
+          </span>
+        </div>
         <div className="flex items-center justify-center">
           <div className="mt-8">
             CodePerfect is free to evaluate for 7 days. Then you'll need a{" "}
