@@ -636,9 +636,7 @@ void World::init() {
 
     {
         SCOPED_MEM(&ui_mem);
-        if (!(::ui.init())) {
-            cp_panic("Unable to initialize UI.");
-        }
+        ::ui.init();
     }
 
     t.log("init ui");

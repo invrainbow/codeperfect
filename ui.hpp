@@ -181,7 +181,7 @@ struct Font {
     ccstr filepath;
 
     bool init(ccstr font_name, u32 font_size, bool dont_check_name);
-    bool init(ccstr font_name, u32 font_size, Font_Data *data);
+    bool init(ccstr font_name, u32 font_size, Font_Data *data, bool notify_error = false);
     void cleanup();
     bool can_render_grapheme(Grapheme gr);
 };

@@ -950,22 +950,22 @@ void UI::render_ts_cursor(TSTreeCursor *curr, Parse_Lang lang, cur2 open_cur) {
 }
 
 
-Font *init_builtin_font(u8 *data, u32 len, int size, ccstr name) {
+Font *init_builtin_font(u8 *data, u32 len, int size, ccstr name, bool notify_error) {
     auto fd = new_object(Font_Data);
     fd->type = FONT_DATA_FIXED;
     fd->data = data;
     fd->len = len;
 
     auto ret = new_object(Font);
-    return ret->init(name, size, fd) ? ret : NULL;
+    return ret->init(name, size, fd, notify_error) ? ret : NULL;
 }
 
 Font *init_builtin_base_font() {
-    return init_builtin_font(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE, "Bitstream Vera Sans Mono");
+    return init_builtin_font(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE, "Bitstream Vera Sans Mono", true);
 }
 
 Font *init_builtin_base_ui_font() {
-    return init_builtin_font(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE, "Open Sans");
+    return init_builtin_font(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE, "Open Sans", true);
 }
 
 Font* UI::acquire_system_ui_font() {
@@ -1002,7 +1002,10 @@ bool UI::init() {
         }
 
         if (!base_font) base_font = init_builtin_base_font();
-        if (!base_font) return false;
+        if (!base_font) {
+            tell_user_error("Sorry, we were unable to initialize the base font.");
+            cp_panic("unable to initialize base font");
+        }
 
         {
             // base_ui_font = acquire_system_ui_font();
@@ -1014,11 +1017,17 @@ bool UI::init() {
         }
 
         if (!base_ui_font) base_ui_font = init_builtin_base_ui_font();
-        if (!base_ui_font) return false;
+        if (!base_ui_font) {
+            tell_user_error("Sorry, we were unable to initialize the base UI font.");
+            cp_panic("unable to initialize base ui font");
+        }
 
         // list available font names
         all_font_names = new_list(ccstr);
-        if (!list_all_fonts(all_font_names)) return false;
+        if (!list_all_fonts(all_font_names)) {
+            tell_user_error("Sorry, we were unable to list available fonts.");
+            cp_panic("unable to list available fonts");
+        }
     }
 
     editor_sizes.init(LIST_FIXED, _countof(_editor_sizes), _editor_sizes);
@@ -9070,7 +9079,7 @@ Font* UI::find_font_for_grapheme(Grapheme grapheme) {
     return font;
 }
 
-bool Font::init(ccstr font_name, u32 font_size, Font_Data *fontdata) {
+bool Font::init(ccstr font_name, u32 font_size, Font_Data *fontdata, bool notify_error) {
     ptr0(this);
     name = font_name;
     height = font_size;
@@ -9084,14 +9093,31 @@ bool Font::init(ccstr font_name, u32 font_size, Font_Data *fontdata) {
 
     // create harfbuzz crap
     hbblob = hb_blob_create((char*)data_ptr, data_len, HB_MEMORY_MODE_READONLY, NULL, NULL);
-    if (!hbblob) return false;
+    if (!hbblob) {
+        if (notify_error)
+            tell_user_error(cp_sprintf("Unable to initialize font. (hb_blob_create, %s)", font_name));
+        return false;
+    }
+
     hbface = hb_face_create(hbblob, 0);
-    if (!hbface) return false;
+    if (!hbface) {
+        if (notify_error)
+            tell_user_error(cp_sprintf("Unable to initialize font. (hb_face_create, %s)", font_name));
+        return false;
+    }
     hbfont = hb_font_create(hbface);
-    if (!hbfont) return false;
+    if (!hbfont) {
+        if (notify_error)
+            tell_user_error(cp_sprintf("Unable to initialize font. (hb_font_create, %s)", font_name));
+        return false;
+    }
 
     // create stbtt font
-    if (!stbtt_InitFont(&stbfont, data_ptr, stbtt_GetFontOffsetForIndex(data_ptr, 0))) return false;
+    if (!stbtt_InitFont(&stbfont, data_ptr, stbtt_GetFontOffsetForIndex(data_ptr, 0))) {
+        if (notify_error)
+            tell_user_error(cp_sprintf("Unable to initialize font. (stbtt_InitFont, %s)", font_name));
+        return false;
+    }
 
     int unscaled_width = 0, unscaled_offset_y = 0;
     stbtt_GetCodepointHMetrics(&stbfont, 'A', &unscaled_width, NULL);

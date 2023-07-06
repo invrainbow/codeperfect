@@ -284,7 +284,7 @@ func readInfoFromApp() {
 	}
 
 	os.Remove(pipeFile)
-	err = syscall.Mkfifo(pipeFile, 0666)
+	err = syscall.Mkfifo(pipeFile, 0o666)
 	if err != nil {
 		log.Print(err)
 		return
@@ -503,32 +503,36 @@ func main() {
 	}()
 
 	select {
-	case <-signal:
-		log.Print("got close signal")
-		// if the app closed before we got something, just exit
-		break
+	case crashed := <-signal:
+		if !crashed {
+			break
+		}
+		log.Print("crashed before getting info, sending crash report")
+		SendCrashReports(nil)
 
 	case info := <-appInfoChan:
 		if info.shouldUpdate {
 			doUpdate()
 		}
 
-		if info.sendCrashReports {
-			crashed := <-signal // wait for cmd to finish
-			if !crashed {
-				break
-			}
-
-			log.Print("got close signal, waiting to send crash report")
-
-			var license *utils.License
-			if info.email != "" && info.licenseKey != "" {
-				license = &utils.License{
-					Email:      info.email,
-					LicenseKey: info.licenseKey,
-				}
-			}
-			SendCrashReports(license)
+		if !info.sendCrashReports {
+			break
 		}
+
+		crashed := <-signal // wait for cmd to finish
+		if !crashed {
+			break
+		}
+
+		log.Print("got close signal, waiting to send crash report")
+
+		var license *utils.License
+		if info.email != "" && info.licenseKey != "" {
+			license = &utils.License{
+				Email:      info.email,
+				LicenseKey: info.licenseKey,
+			}
+		}
+		SendCrashReports(license)
 	}
 }
