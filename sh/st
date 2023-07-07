@@ -1,0 +1,11 @@
+#!/bin/bash
+
+filename="debug-symbols-$1"
+filepath="debug-symbols/$filename"
+
+if [ ! -f $filepath ]; then
+    mkdir -p debug-symbols
+    aws s3 cp s3://codeperfect-private/$filename $filepath
+fi
+
+atos -o $filepath -l $2 $3

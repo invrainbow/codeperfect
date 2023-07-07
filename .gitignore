@@ -71,3 +71,5 @@ go/.idea
 
 .x64
 *.core
+
+debug-symbols/
