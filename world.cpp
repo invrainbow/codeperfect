@@ -407,9 +407,9 @@ void World::init() {
         auto go_binary_path = GHGetGoBinaryPath();
         if (!go_binary_path) {
 #if OS_WINDOWS
-            cp_panic("Unable to find go binary.\n\nUsually, CodePerfect searches for go by running `where go` inside `cmd`, but we did that and couldn't find anything.\n\nPlease visit docs.codeperfect95.com to see how to manually tell CodePerfect where go is.");
+            cp_exit("Unable to find go binary.\n\nUsually, CodePerfect searches for go by running `where go` inside `cmd`, but we did that and couldn't find anything.\n\nPlease visit docs.codeperfect95.com to see how to manually tell CodePerfect where go is.");
 #else
-            cp_panic("Unable to find a go binary.\n\nUsually, CodePerfect searches for go by running `which go` inside `bash`, but we did that and couldn't find anything.\n\nPlease visit docs.codeperfect95.com to see how to manually tell CodePerfect where go is.");
+            cp_exit("Unable to find a go binary.\n\nUsually, CodePerfect searches for go by running `which go` inside `bash`, but we did that and couldn't find anything.\n\nPlease visit docs.codeperfect95.com to see how to manually tell CodePerfect where go is.");
 #endif
         }
 
@@ -576,7 +576,7 @@ void World::init() {
 #endif
 
         if (check_path(current_path) != CPR_DIRECTORY)
-            cp_panic("Unable to open selected folder.");
+            cp_exit("Unable to open selected folder (not a directory).");
 
         GHGitIgnoreInit(current_path);
         cp_chdir(current_path);
