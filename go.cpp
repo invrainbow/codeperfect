@@ -2824,21 +2824,31 @@ Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx
             case GSOP_CLOSE_SCOPE:
                 table.pop_scope();
                 break;
-            case GSOP_DECL:
-                if (!streq(it.decl->name, id_to_find)) break;
-                if (it.decl->decl_start <= id_pos && id_pos < it.decl->decl_end)
+            case GSOP_DECL: {
+                auto decl = it.decl;
+
+                if (!streq(decl->name, id_to_find)) break;
+                if (decl->decl_start <= id_pos && id_pos < decl->decl_end)
                     if (it.decl_scope_depth == table.frames.len)
-                        if (!(it.decl->name_start <= id_pos && id_pos < it.decl->name_end))
+                        if (!(decl->name_start <= id_pos && id_pos < decl->name_end))
                             break;
-                table.set(it.decl->name, it.decl);
+
+                // don't match with methods (we're trying to resolve a lone id)
+                if (decl->type == GODECL_FUNC)
+                    if (decl->gotype->type == GOTYPE_FUNC) // should be true
+                        if (decl->gotype->func_recv)
+                            break;
+
+                table.set(decl->name, decl);
 
                 // ENG-133: handle the specific case where pos is on the name of a func decl
                 // because if we don't it might conflict with the generic type params
-                if (it.decl->type == GODECL_FUNC)
-                    if (it.decl->name_start <= id_pos && id_pos < it.decl->name_end)
+                if (decl->type == GODECL_FUNC)
+                    if (decl->name_start <= id_pos && id_pos < decl->name_end)
                         get_out = true;
 
                 break;
+            }
             }
 
             if (get_out) break;
