@@ -1,0 +1,2 @@
+#!/bin/bash
+rm ~/Library/Application\ Support/CodePerfect/.last_folder
