@@ -1049,9 +1049,13 @@ void Go_Indexer::background_thread() {
             defer { stop_writing(); };
             module_resolver.init(world.current_path, gomodcache);
         }
-        package_lookup.init();
         package_queue.init();
         already_enqueued_packages.init();
+    }
+
+    {
+        SCOPED_MEM(&package_lookup_mem);
+        package_lookup.init();
     }
 
     // now that we successfully initialized in the current folder,
@@ -1120,7 +1124,13 @@ void Go_Indexer::background_thread() {
     };
 
     auto rebuild_package_lookup = [&]() {
-        package_lookup.clear();
+        package_lookup_mem.reset();
+
+        {
+            SCOPED_MEM(&package_lookup_mem);
+            ptr0(&package_lookup);
+            package_lookup.init();
+        }
 
         if (!index.packages) return;
 
@@ -1136,7 +1146,11 @@ void Go_Indexer::background_thread() {
                 print("duplicate entry detected");
 #endif
             }
-            package_lookup.set(it.import_path, i);
+
+            {
+                SCOPED_MEM(&package_lookup_mem);
+                package_lookup.set(cp_strdup(it.import_path), i);
+            }
         }
 
         check_duplicate_packages();
@@ -1489,7 +1503,11 @@ void Go_Indexer::background_thread() {
                         pkg->pool->init("go_package");
                         pkg->pool->disable_alignment = true;
                     }
-                    package_lookup.set(import_path, idx);
+
+                    {
+                        SCOPED_MEM(&package_lookup_mem);
+                        package_lookup.set(cp_strdup(import_path), idx);
+                    }
                 }
 
                 {
@@ -1970,11 +1988,15 @@ Goresult* new_primitive_type_goresult(ccstr name) {
 void Go_Indexer::check_duplicate_packages() {
 #ifdef DEBUG_BUILD
     SCOPED_FRAME();
-    auto lookup = new_table(bool);
-    For (index.packages) {
-        if (lookup->get(it.import_path))
+    auto lookup = new_table(int);
+    Fori (index.packages) {
+        bool found = false;
+        int idx = lookup->get(it.import_path, &found);
+        if (found) {
+            print("current index is %lu, already exists at %d", i, idx);
             cp_panic("duplicate found");
-        lookup->set(it.import_path, true);
+        }
+        lookup->set(it.import_path, i);
     }
 #endif
 }
@@ -1986,11 +2008,7 @@ Go_Package *Go_Indexer::find_package_in_index(ccstr import_path) {
     auto ret = package_lookup.get(import_path, &found);
     if (!found) return NULL;
 
-    if (ret < 0 || ret >= index.packages->len) {
-        index_print("package_lookup points to an invalid package for %s", import_path);
-        return NULL;
-    }
-
+    cp_assert(ret >= 0 && ret < index.packages->len);
     return &index.packages->at(ret);
 }
 
@@ -6442,6 +6460,7 @@ void Go_Indexer::init() {
     final_mem.init("final_mem");
     ui_mem.init("ui_mem");
     scoped_table_mem.init("scoped_table_mem");
+    package_lookup_mem.init("package_lookup_mem");
 
     SCOPED_MEM(&mem);
 
@@ -6564,6 +6583,7 @@ void Go_Indexer::cleanup() {
     final_mem.cleanup();
     ui_mem.cleanup();
     scoped_table_mem.cleanup();
+    package_lookup_mem.cleanup();
     lock.cleanup();
 
     For (index.packages) it.cleanup();

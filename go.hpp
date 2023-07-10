@@ -1208,6 +1208,7 @@ struct Go_Indexer {
     Pool final_mem;  // memory that holds the final value of `this->index`
     Pool ui_mem;     // memory used by UI when it calls jump to definition, etc.
 
+    Pool package_lookup_mem;
     Pool scoped_table_mem;
 
     Module_Resolver module_resolver;
