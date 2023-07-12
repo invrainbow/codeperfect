@@ -834,7 +834,7 @@ void handle_window_event(Window_Event *it) {
 
         Type_Char_Opts opts; ptr0(&opts);
         opts.replace_mode = world.vim_mode() == VI_REPLACE;
-        editor->type_char(ch, &opts);
+        editor->type_char(ch, &opts, world.time_type_char);
         break;
     }
     }

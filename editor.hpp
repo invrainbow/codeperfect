@@ -353,7 +353,7 @@ struct Editor {
     void trigger_parameter_hint();
     void trigger_escape();
 
-    void type_char(uchar ch, Type_Char_Opts *opts = NULL);
+    void type_char(uchar ch, Type_Char_Opts *opts = NULL, bool time = false);
     void update_autocomplete(bool triggered_by_ident);
     void update_parameter_hint();
 

@@ -414,6 +414,7 @@ struct World {
 
     char configdir[MAX_PATH];
 
+    bool time_type_char;
     bool test_running;
     char test_name[256];
 

@@ -2644,6 +2644,7 @@ void UI::draw_everything() {
             im::MenuItem("Disable framerate cap", NULL, &world.turn_off_framerate_cap);
             im::MenuItem("Show frame index", NULL, &world.show_frame_index);
             im::MenuItem("Show frameskips", NULL, &world.show_frameskips);
+            im::MenuItem("Time type_char()", NULL, &world.time_type_char);
 
             im::Separator();
 

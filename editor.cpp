@@ -1937,7 +1937,11 @@ void Editor::backspace_in_replace_mode() {
     vim.replace_end = start;
 }
 
-void Editor::type_char(uchar ch, Type_Char_Opts *opts) {
+void Editor::type_char(uchar ch, Type_Char_Opts *opts, bool time) {
+    Timer t;
+    t.init("type_char", time);
+    t.always_log = true;
+
     if (!opts) opts = new_object(Type_Char_Opts);
 
     // ...wait, why did i comment this out
@@ -1983,6 +1987,8 @@ void Editor::type_char(uchar ch, Type_Char_Opts *opts) {
     } else {
         move_cursor(buf->insert(cur, ch));
     }
+
+    t.log("insert & move");
 
     if (lang != LANG_GO) return;
 
@@ -2061,8 +2067,12 @@ void Editor::type_char(uchar ch, Type_Char_Opts *opts) {
     }
     }
 
+    t.log("handle braces");
+
     if (opts->replace_mode || opts->automated) return;
     if (world.vim.macro_state == MACRO_RUNNING) return;
+
+    t.log("macros");
 
     switch (ch) {
     case '.':
@@ -2082,6 +2092,8 @@ void Editor::type_char(uchar ch, Type_Char_Opts *opts) {
         }
         break;
     }
+
+    t.log("triggers");
 
     do {
         if (!isident(ch)) break;
@@ -2106,11 +2118,17 @@ void Editor::type_char(uchar ch, Type_Char_Opts *opts) {
         trigger_autocomplete(false, false);
     } while (0);
 
+    t.log("autocomplete");
+
     if (!did_autocomplete)
         if (autocomplete.ac.results)
             trigger_autocomplete(false, isident(ch), ch);
 
+    t.log("more autocomplete");
+
     if (!did_parameter_hint) update_parameter_hint();
+
+    t.log("parameter hint");
 }
 
 void Editor::vim_save_inserted_indent(cur2 start, cur2 end) {
@@ -6296,7 +6314,7 @@ bool Editor::vim_handle_input(Vim_Command_Input *input) {
 
             Type_Char_Opts opts; ptr0(&opts);
             opts.replace_mode = world.vim_mode() == VI_REPLACE;
-            type_char(input->ch, &opts);
+            type_char(input->ch, &opts, world.time_type_char);
             return true;
         }
         break;
