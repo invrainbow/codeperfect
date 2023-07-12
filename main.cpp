@@ -309,8 +309,8 @@ void handle_key_event(Window_Event *it) {
 
     if (keymods == CP_MOD_PRIMARY) {
         switch (key) {
-        case '[':
-        case ']': {
+        case CP_KEY_LEFT_BRACKET:
+        case CP_KEY_RIGHT_BRACKET: {
             if (world.vim.on) {
                 auto mode = world.vim_mode();
                 if (mode == VI_INSERT || mode == VI_REPLACE)
@@ -333,9 +333,20 @@ void handle_key_event(Window_Event *it) {
 
             int y1 = selection->ranges->at(0).start.y;
             int y2 = selection->ranges->last()->end.y;
-            editor->indent_block(y1, y2, key == '[' ? -1 : 1);
+            editor->indent_block(y1, y2, key == CP_KEY_LEFT_BRACKET ? -1 : 1);
             return;
         }
+        }
+    }
+
+    if (key == CP_KEY_TAB && (keymods == CP_MOD_NONE || keymods == CP_MOD_SHIFT)) {
+        auto selection = editor->get_selection();
+        if (selection) {
+            bool dedent = (keymods & CP_MOD_SHIFT);
+            int y1 = selection->ranges->at(0).start.y;
+            int y2 = selection->ranges->last()->end.y;
+            editor->indent_block(y1, y2, dedent ? -1 : 1);
+            return;
         }
     }
 
@@ -412,7 +423,7 @@ void handle_key_event(Window_Event *it) {
         if (keymods & CP_MOD_ALT) break;
 #endif
         editor->handle_type_tab(keymods);
-        return;
+        break;
     }
 
     // now handle insert mode non-vim movement
