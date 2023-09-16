@@ -152,7 +152,7 @@ function Home() {
         </p>
         <p>
           It's no longer in active development, but is now{" "}
-          <A href={LINKS.github}>open source</A> and available for download.
+          <A href={LINKS.github}>open source</A> and available for free use.
         </p>
       </div>
 
