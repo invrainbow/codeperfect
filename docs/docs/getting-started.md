@@ -4,11 +4,9 @@ title: "Getting Started"
 
 ## Install
 
-CodePerfect currently supports MacOS. (Windows and Linux support coming soon!)
+CodePerfect only supports MacOS. There are no plans to port to Windows or Linux.
 
-### Install on MacOS
-
-1. [Download](https://codeperfect95.com/download) the appropriate binary for
+1. [Download](https://codeperfect95.com) the appropriate binary for
    your architecture.
 2. Unzip and drag `CodePerfect.app` into your Applications folder and run it.
 
@@ -29,9 +27,9 @@ like [brew](https://formulae.brew.sh/formula/go) or
 
 ### Find Go installation (automatic)
 
-By default, CodePerfect uses whatever `go` binary your terminal does, which it detects
-by running `which go` in `bash`. The way to make the `go` binary findable is
-to ensure it's in your `PATH`.
+By default, CodePerfect uses whatever `go` binary your terminal does, which it
+detects by running `which go` in `bash`. The way to make the `go` binary
+findable is to ensure it's in your `PATH`.
 
 :::note
 
@@ -127,6 +125,7 @@ incorrect results, however, there are two fixes you can try. (And please
 
 ## Automatic updates
 
-CodePerfect automatically, unintrusively keeps itself up-to-date in the
-background. But you can also always grab the latest version from the
-[download page](https://codeperfect95.com/download).
+CodePerfect no longer automatically updates. It's no longer really in
+development anyway. But you can always grab the latest version from the
+[website](https://codeperfect95.com) or the latest source from
+[Github](https://github.com/codeperfect95/codeperfect).

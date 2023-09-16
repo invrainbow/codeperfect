@@ -66,7 +66,7 @@ const sidebars = {
     {
       type: "category",
       label: "Overview",
-      items: ["getting-started", "getting-license"],
+      items: ["getting-started"],
     },
     {
       type: "category",

@@ -274,4 +274,7 @@ table.postfixes {
     Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: auto;
   -moz-osx-font-smoothing: auto;
+  span {
+    font-weight: normal;
+  }
 }

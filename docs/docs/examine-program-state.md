@@ -4,7 +4,7 @@ title: "Examine Program State"
 
 When your program is stopped, you can inspect the state of the program.
 
-## Call stack
+## Call Stack
 
 In the Call Stack window, you can view the list of currently running goroutines,
 and within each goroutine, the stack of calls that led to the program's current

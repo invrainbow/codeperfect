@@ -50,18 +50,13 @@ const config = {
         items: [
           {
             label: "Changelog",
-            position: "right",
+            position: "left",
             href: "/changelog",
           },
           {
             label: "Website",
-            position: "right",
+            position: "left",
             href: "https://codeperfect95.com",
-          },
-          {
-            label: "Download",
-            position: "right",
-            href: "https://codeperfect95.com/download",
           },
         ],
       },
