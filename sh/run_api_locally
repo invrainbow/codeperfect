@@ -1,4 +1,0 @@
-#!/bin/bash
-cd go
-[[ -f .env ]] && source .env
-go run ./cmd/api "$@"
