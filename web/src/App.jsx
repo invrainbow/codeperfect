@@ -16,7 +16,7 @@ import {
 import "./index.css";
 
 const CURRENT_BUILD = process.env.REACT_APP_BUILD_VERSION;
-const CURRENT_BUILD_RELEASE_DATE = "July 15, 2023";
+const CURRENT_BUILD_RELEASE_DATE = "September 16, 2023";
 
 const isDev = process.env.REACT_APP_CPENV === "development";
 const isStaging = process.env.REACT_APP_CPENV === "staging";
