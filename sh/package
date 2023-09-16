@@ -24,8 +24,6 @@ if [[ "$(../sh/detect_m1)" = "1" ]]; then
     slug=arm
 fi
 
-mv ../build/dsym debug-symbols
-
 # create .app from ide
 rm -rf CodePerfect.app
 appify -name CodePerfect \
@@ -45,5 +43,4 @@ ditto -c -k --keepParent CodePerfect.app app.zip
 if [[ -z "$SKIP_UPLOAD" ]]; then
     filename="mac-$slug-$version_string.zip"
     aws s3 cp app.zip "s3://codeperfect95/app/$filename"
-    aws s3 cp debug-symbols "s3://codeperfect-private/debug-symbols-$os-$slug-$version_string"
 fi

@@ -4,10 +4,6 @@ set -e
 if [[ "$RELEASE" == "1" ]]; then
     sh/make clean
     sh/make
-
-    mv build/bin/ide.dSYM/Contents/Resources/DWARF/ide build/dsym
-    rm -rf build/bin/ide.dSYM
-    strip -u -r -S -x build/bin/ide
 else
     sh/make prep
     sh/make
