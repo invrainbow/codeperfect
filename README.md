@@ -9,3 +9,24 @@ with Delve. See more of the features [here](https://codeperfect95.com/features).
 
 It's no longer in active development, but is now open source and available for
 download.
+
+### Install dependencies
+
+```
+sh/install_deps
+```
+
+### Building raw binary
+
+```
+sh/build
+```
+
+### Building an .app
+
+```
+SKIP_UPLOAD=1 sh/package
+```
+
+Without `SKIP_UPLOAD=1` it tries to upload to the S3 bucket, which only I have
+access to.
