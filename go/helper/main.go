@@ -11,10 +11,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"unicode"
 	"unsafe"
 
-	"github.com/codeperfect95/codeperfect/go/utils"
 	"github.com/codeperfect95/codeperfect/go/versions"
 	"github.com/denormal/go-gitignore"
 	"github.com/fatih/structtag"
@@ -101,10 +99,8 @@ func GHStartBuild(cmdstr *C.char) bool {
 		log.Println(err)
 
 		shouldReadErrors := func() bool {
-			if err != nil {
-				if _, ok := err.(*exec.ExitError); ok {
-					return true
-				}
+			if _, ok := err.(*exec.ExitError); ok {
+				return true
 			}
 			return len(out) > 0 && out[0] == '?'
 		}
@@ -268,7 +264,7 @@ func GHRenameFileOrDirectory(oldpath, newpath *C.char) bool {
 
 //export GHEnableDebugMode
 func GHEnableDebugMode() {
-	utils.DebugModeFlag = true
+	DebugModeFlag = true
 }
 
 //export GHGetVersion
@@ -366,7 +362,7 @@ func GHGetGoEnvVars() *C.GH_Env_Vars {
 		log.Print("couldn't find go")
 		return nil
 	}
-	out, err := utils.MakeExecCommand(binpath, "env", "GOMODCACHE", "GOROOT").Output()
+	out, err := MakeExecCommand(binpath, "env", "GOMODCACHE", "GOROOT").Output()
 	if err != nil {
 		log.Print(err)
 		return nil
@@ -395,28 +391,6 @@ func GHFreeGoEnvVars(vars *C.GH_Env_Vars) {
 	C.free(unsafe.Pointer(vars))
 }
 
-//export GHGetMessage
-func GHGetMessage(p unsafe.Pointer) bool {
-	select {
-	case msg := <-MessageChan:
-		log.Println("msg received")
-		log.Println(msg)
-		out := (*C.GH_Message)(p)
-		out.text = C.CString(msg.Text)
-		out.title = C.CString(msg.Title)
-		out.is_panic = C.int32_t(BoolToInt(msg.IsPanic))
-		return true
-	default:
-		return false
-	}
-}
-
-//export GHFreeMessage
-func GHFreeMessage(p unsafe.Pointer) {
-	out := (*C.GH_Message)(p)
-	C.free(unsafe.Pointer(out.text))
-}
-
 //export GHGetConfigDir
 func GHGetConfigDir() *C.char {
 	configDir, err := PrepareConfigDir()
@@ -440,7 +414,7 @@ var buildenv struct {
 }
 
 func getBuildContextFile() (string, error) {
-	dir, err := utils.GetConfigDir()
+	dir, err := GetConfigDir()
 	if err != nil {
 		return "", err
 	}
@@ -500,7 +474,7 @@ func getBuildContext() bool {
 
 	log.Printf("binpath: %s", binpath)
 
-	cmd := utils.MakeExecCommand(binpath, "run", filepath)
+	cmd := MakeExecCommand(binpath, "run", filepath)
 	cmd.Dir = dirpath
 	out, err := cmd.Output()
 	if err != nil {
@@ -559,18 +533,6 @@ func GHBuildEnvGoVersionSupported() bool {
 	return false
 }
 
-//export GHIsUnicodeLetter
-func GHIsUnicodeLetter(code rune) bool {
-	log.Println(code)
-	return unicode.IsLetter(code)
-}
-
-//export GHIsUnicodeDigit
-func GHIsUnicodeDigit(code rune) bool {
-	log.Println(code)
-	return unicode.IsDigit(code)
-}
-
 //export GHHasTag
 func GHHasTag(tagstr, lang *C.char, ok *bool) bool {
 	tags, err := structtag.Parse(C.GoString(tagstr))
@@ -619,7 +581,7 @@ func GHGetGoWork(filepath *C.char) *C.char {
 		return nil
 	}
 
-	cmd := utils.MakeExecCommand(binpath, "env", "GOWORK")
+	cmd := MakeExecCommand(binpath, "env", "GOWORK")
 	cmd.Dir = C.GoString(filepath)
 
 	out, err := cmd.Output()
@@ -633,28 +595,6 @@ func GHGetGoWork(filepath *C.char) *C.char {
 	}
 
 	return C.CString(ret)
-}
-
-//export GHCopyJblowTestSuite
-func GHCopyJblowTestSuite(src *C.char) *C.char {
-	configDir, err := utils.GetConfigDir()
-	if err != nil {
-		log.Print(err)
-		return nil
-	}
-
-	path := filepath.Join(configDir, "test-suite")
-	if err := os.RemoveAll(path); err != nil {
-		log.Print(err)
-		return nil
-	}
-
-	cmd := exec.Command("cp", "-R", C.GoString(src), path)
-	if err := cmd.Run(); err != nil {
-		log.Print(err)
-		return nil
-	}
-	return C.CString(path)
 }
 
 func main() {}

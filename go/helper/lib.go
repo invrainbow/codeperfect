@@ -1,24 +1,16 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
-
-	"github.com/codeperfect95/codeperfect/go/utils"
+	"strings"
 )
 
-// read file located in same folder as executable
-func ReadFileFromExeFolder(filename string) ([]byte, error) {
-	exepath, err := os.Executable()
-	if err != nil {
-		return nil, err
-	}
-	return os.ReadFile(filepath.Join(filepath.Dir(exepath), filename))
-}
-
 func PrepareConfigDir() (string, error) {
-	appdir, err := utils.GetConfigDir()
+	appdir, err := GetConfigDir()
 	if err != nil {
 		return "", err
 	}
@@ -41,4 +33,34 @@ func ReadFile(fp string) (string, error) {
 	}
 
 	return string(buf), nil
+}
+
+func MakeExecCommand(name string, args ...string) *exec.Cmd {
+	return exec.Command(name, args...)
+}
+
+func IsTestMode() bool {
+	return strings.HasSuffix(os.Args[0], ".test")
+}
+
+var DebugModeFlag = false
+
+func IsDebugMode() bool {
+	return DebugModeFlag || os.Getenv("DEBUG") == "1"
+}
+
+func GetConfigDir() (string, error) {
+	configdir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(configdir, "CodePerfect"), nil
+}
+
+func makeShellCommand(s string) *exec.Cmd {
+	return MakeExecCommand("/bin/bash", "-lc", s)
+}
+
+func makeFindBinaryPathCommand(bin string) *exec.Cmd {
+	return makeShellCommand(fmt.Sprintf("which %s", bin))
 }

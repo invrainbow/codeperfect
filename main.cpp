@@ -1335,15 +1335,6 @@ int main(int argc, char **argv) {
         Timer t;
         t.init("frame tracer", &world.trace_next_frame);
 
-        {
-            GH_Message msg; ptr0(&msg);
-            if (GHGetMessage(&msg)) {
-                print("GHGetMessage returned: %s", msg.text);
-                tell_user(msg.text, msg.title);
-                if (msg.is_panic) return EXIT_FAILURE;
-            }
-        }
-
         auto frame_start_time = current_time_nano();
 
         world.frame_mem.reset();
