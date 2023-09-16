@@ -19,7 +19,6 @@ const CURRENT_BUILD = process.env.REACT_APP_BUILD_VERSION;
 const CURRENT_BUILD_RELEASE_DATE = "September 16, 2023";
 
 const isDev = process.env.REACT_APP_CPENV === "development";
-const isStaging = process.env.REACT_APP_CPENV === "staging";
 
 const BASE_LINKS = {
   docs: "https://docs.codeperfect95.com",
@@ -32,15 +31,9 @@ const DEV_LINKS = {
   changelog: "http://localhost:3000/changelog",
 };
 
-const STAGING_LINKS = {
-  docs: "https://dev-docs.codeperfect95.com",
-  changelog: "https://dev-docs.codeperfect95.com/changelog",
-};
-
 const LINKS = {
   ...BASE_LINKS,
   ...(isDev ? DEV_LINKS : {}),
-  ...(isStaging ? STAGING_LINKS : {}),
 };
 
 const DOWNLOADS = [
@@ -97,7 +90,7 @@ function Icon({ block, noshift, icon: IconComponent, ...props }) {
 
 function Home() {
   return (
-    <div className="mx-auto w-full py-16">
+    <div className="mx-auto w-full py-20">
       <div className="md:text-center font-bold text-5xl md:text-5xl mb-12 text-black tracking-tight leading-[1.1] md:leading-[1.1]">
         A fast, lightweight Go IDE
       </div>
@@ -138,7 +131,7 @@ function Home() {
         </p>
       </div>
 
-      <div className="max-w-[500px] mx-auto my-20">
+      <div className="max-w-[500px] mx-auto mt-20">
         <p>
           CodePerfect was an experiment to try and build a faster IDE. It
           eschews the modern tech stack and is instead written from scratch in
@@ -154,14 +147,6 @@ function Home() {
           It's no longer in active development, but is now{" "}
           <A href={LINKS.github}>open source</A> and available for free use.
         </p>
-      </div>
-
-      <div className="max-w-screen-lg mx-auto mt-12">
-        <img
-          className="max-w-full shadow-lg rounded-lg overflow-hidden"
-          alt="screenshot"
-          src={asset("/download.png")}
-        />
       </div>
     </div>
   );
@@ -648,7 +633,9 @@ function Layout() {
             <div className="opacity-50 hidden md:block">
               <Logo hideText />
             </div>
-            <div>&copy; {new Date().getFullYear()} CodePerfect 95</div>
+            <div className="text-sm">
+              &copy; {new Date().getFullYear()} CodePerfect 95
+            </div>
           </div>
         </div>
       </div>
