@@ -1,7 +1,3 @@
-
-#define XSTR(x) STR(x)
-#define STR(x) #x
-
 #include "utils.hpp"
 #include "os.hpp"
 #include "world.hpp"
@@ -243,4 +239,3 @@ bool write_file(ccstr filepath, ccstr s) {
 void *alloc_table_stub(int size) {
     return alloc_mem(size);
 }
-
