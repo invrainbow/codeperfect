@@ -113,8 +113,7 @@ modules.
 
 In theory the indexer runs in the background and automagically keeps up to date
 as your code and dependencies change. If it's ever broken or giving you
-incorrect results, however, there are two fixes you can try. (And please
-[report the bug](https://github.com/codeperfect95/issue-tracker) to us!)
+incorrect results, however, there are two fixes you can try:
 
 - `Tools` &gt; `Rescan Index` looks for missing and changed packages, and
   processes them. Most of the time, this should fix your problem. This also runs

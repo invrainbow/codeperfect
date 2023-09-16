@@ -155,14 +155,6 @@ function Home() {
           <A href={LINKS.github}>open source</A> and available for free use.
         </p>
       </div>
-
-      <div className="max-w-screen-lg mx-auto mt-12">
-        <img
-          className="max-w-full shadow-lg rounded-lg overflow-hidden"
-          alt="screenshot"
-          src={asset("/download.png")}
-        />
-      </div>
     </div>
   );
 }
