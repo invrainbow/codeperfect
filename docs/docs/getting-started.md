@@ -6,15 +6,16 @@ title: "Getting Started"
 
 CodePerfect only supports MacOS. There are no plans to port to Windows or Linux.
 
-1. [Download](https://codeperfect95.com) the appropriate binary for
-   your architecture.
+1. [Download](https://codeperfect95.com) the appropriate binary for your
+   architecture.
 2. Unzip and drag `CodePerfect.app` into your Applications folder and run it.
 
-:::info
+:::danger
 
-The first time you run it, you may get an "Unidentified developer" warning. If
-this happens, right click CodePerfect.app and click Open, then press Open again.
-You'll only need to do this once.
+CodePerfect is not codesigned. I'm no longer actively developing this project
+and have no other use for an Apple Developer membership. Please search online to
+see how to bypass the codesign warning, or build yourself from
+source.
 
 :::
 
