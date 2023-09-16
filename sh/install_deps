@@ -1,25 +1,11 @@
 #!/bin/bash
-
-# on windows, ensure visual studio is finished installing first
-
 set -e
 
 # download submodules
 git submodule update --init --recursive
 
-if [[ -n $APP_CONNECT_PASSWORD ]]; then
-    if [[ -n "$(which xcrun)" ]]; then
-        xcrun notarytool store-credentials AC_PASSWORD --apple-id bh.apple@codeperfect95.com --team-id XCW98WVBHN --password $APP_CONNECT_PASSWORD
-    else
-        echo "xcrun not found, please install xcode-tools"
-    fi
-else
-    echo "please set APP_CONNECT_PASSWORD, it's in 1password"
-fi
-
 # vcpkg
 ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
-
 export VCPKG_DEFAULT_TRIPLET=$(sh/vcpkg_triplet)
 export VCPKG_OSX_DEPLOYMENT_TARGET=10.12
 export MACOSX_DEPLOYMENT_TARGET=10.12
