@@ -33,21 +33,12 @@ appify -name CodePerfect \
     -version $version_string \
     -author "CodePerfect" \
     -id com.codeperfect95 \
-    ../build/ide
+    ../build/bin/ide
+rm ../build/bin/ide
 cp ../build/bin/* "CodePerfect.app/Contents/MacOS"
 rm -rf CodePerfect.app/Contents/README
 
-# codesign garbage
-codesign --force --options runtime --sign 'Developer ID Application: Brandon Hsiao' CodePerfect.app/Contents/MacOS/bin/ide
-codesign --deep --force --options runtime --sign 'Developer ID Application: Brandon Hsiao' CodePerfect.app
-
 # zip up app
-ditto -c -k --keepParent CodePerfect.app app.zip
-
-# notarize
-xcrun notarytool submit app.zip --keychain-profile AC_PASSWORD --wait
-xcrun stapler staple CodePerfect.app
-rm app.zip
 ditto -c -k --keepParent CodePerfect.app app.zip
 
 # push to s3
