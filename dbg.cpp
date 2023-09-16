@@ -28,16 +28,12 @@ when a frame is opened
 #include <stdio.h>
 #include <stdlib.h>
 
-#if OS_WINBLOWS
-#include "win32.hpp"
-#elif OS_MAC || OS_LINUX
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
-#endif
 
 #include <inttypes.h>
 
@@ -366,12 +362,6 @@ void Debugger::init() {
     calls_mem.init("dbg calls");
 
     State_Passer::init();
-
-#if OS_WINBLOWS
-    WSADATA wsa;
-    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
-        cp_panic("WSAStartup failed");
-#endif
 }
 
 void Debugger::cleanup() {
@@ -379,10 +369,6 @@ void Debugger::cleanup() {
         kill_thread(thread);
         close_thread_handle(thread);
     }
-
-#if OS_WINBLOWS
-    WSACleanup();
-#endif
 
     calls.cleanup();
     calls_lock.cleanup();
@@ -392,13 +378,8 @@ void Debugger::cleanup() {
     loop_mem.cleanup();
 }
 
-#if OS_WINBLOWS
-#define ioctl_stub ioctlsocket
-#define close_stub closesocket
-#else
 #define ioctl_stub ioctl
 #define close_stub close
-#endif
 
 Packet* Debugger::send_packet(ccstr packet_name, lambda f, bool read) {
     Timer t; t.init("send_packet", step_over_time);
@@ -946,12 +927,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
             if (!test_function_name || test_function_name[0] == '\0')
                 return false;
 
-        ccstr binary_name = NULL;
-#if OS_WINBLOWS
-        binary_name = "__debug_bin.exe";
-#else
-        binary_name = "__debug_bin";
-#endif
+        ccstr binary_name = "__debug_bin";
 
         ccstr cmd = NULL;
         if (debug_profile->type == DEBUG_RUN_PACKAGE)

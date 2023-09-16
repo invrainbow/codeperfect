@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"log"
-	"strings"
 	"text/template"
 	"time"
 
@@ -117,13 +116,4 @@ func ExecuteTemplate(text string, params interface{}) ([]byte, error) {
 	}
 
 	return buf.Bytes(), nil
-}
-
-func GenerateLicenseKey() string {
-	s := strings.ToUpper(GenerateKey(36))
-	ret := []string{}
-	for i := 0; i < 36; i += 6 {
-		ret = append(ret, s[i:i+6])
-	}
-	return strings.Join(ret, "-")
 }

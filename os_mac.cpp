@@ -1,7 +1,5 @@
 #include "os.hpp"
 
-#if OS_MAC // whole file is mac only
-
 #include <stdio.h>
 #include <dirent.h>
 #include <errno.h>
@@ -218,5 +216,3 @@ ccstr generate_stack_trace(ccstr message) {
     r.write("base = 0x%lx", (uptr)_dyld_get_image_header(0));
     return r.finish();
 }
-
-#endif

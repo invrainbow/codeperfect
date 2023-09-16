@@ -1,33 +1,12 @@
 #pragma once
 
-#include "ostype.hpp"
+#include <pthread.h>
+#include <errno.h>
+#include <unistd.h>
 
-#if OS_WINBLOWS
-#   include "win32.hpp"
-#   include <direct.h>
-#   define getcwd _getcwd
-#elif OS_MAC || OS_LINUX
-#   include <pthread.h>
-#   include <errno.h>
-#   include <unistd.h>
-#   if OS_LINUX
-#       include <sys/epoll.h>
-#       include <sys/inotify.h>
-#       include <limits.h>
-#   endif
-#endif
+#define PATH_SEP '/'
 
-#if OS_WINBLOWS
-#   define PATH_SEP '\\'
-#else
-#   define PATH_SEP '/'
-#endif
-
-#if OS_LINUX
-#   define FILEPATHS_CASE_SENSITIVE 1
-#else
-#   define FILEPATHS_CASE_SENSITIVE 0
-#endif
+#define FILEPATHS_CASE_SENSITIVE 0
 
 #ifdef DEBUG_BUILD
 #   if defined (_MSC_VER)
@@ -79,14 +58,6 @@ struct Process {
     bool skip_shell; // don't run command through a shell
     Process_Status saved_status;
 
-#if OS_WINBLOWS
-    HANDLE stdin_w;
-    HANDLE stdin_r;
-    HANDLE stdout_w;
-    HANDLE stdout_r;
-    DWORD pid;
-    HANDLE proc;
-#elif OS_MAC || OS_LINUX
     union {
         struct {
             int stdin_pipe[2];
@@ -102,7 +73,6 @@ struct Process {
     int pid;
     char peek_buffer;
     bool peek_buffer_full;
-#endif
 
     char read_buffer[1024];
     int read_buffer_ptr;
@@ -152,12 +122,7 @@ bool are_filepaths_same_file(ccstr path1, ccstr path2);
 bool are_filepaths_equal(ccstr a, ccstr b);
 
 struct Lock {
-#if OS_WINBLOWS
-    CRITICAL_SECTION lock;
-#elif OS_MAC || OS_LINUX
     pthread_mutex_t lock;
-#endif
-
     void init();
     void cleanup();
     bool try_enter();
@@ -183,20 +148,8 @@ enum Check_Path_Result {
 
 Check_Path_Result check_path(ccstr path);
 
-#if OS_WINBLOWS
-
-#define get_last_error() get_win32_error()
-#define get_specific_error(x) get_win32_error(x)
-#define get_socket_error() get_win32_error(WSAGetLastError())
-
-ccstr get_win32_error(DWORD error = -1);
-
-#elif OS_MAC || OS_LINUX
-
 #define get_last_error() cp_sprintf("(%d) %s", errno, strerror(errno))
 #define get_socket_error() strerror(errno)
-
-#endif
 
 #ifndef MAX_PATH
 #define MAX_PATH 260
@@ -244,11 +197,7 @@ enum File_Result {
 #define FILE_SEEK_ERROR (u32)(-1)
 
 struct File {
-#if OS_WINBLOWS
-    HANDLE h;
-#elif OS_MAC || OS_LINUX
     int fd;
-#endif
 
     File_Result init(ccstr path, int access, File_Open_Mode open_mode);
 
@@ -303,14 +252,8 @@ struct File_Mapping {
     i64 len;
     File_Mapping_Opts opts;
 
-#if OS_WINBLOWS
-    HANDLE file;
-    HANDLE mapping;
-    bool create_actual_file_mapping(LARGE_INTEGER size);
-#elif OS_MAC || OS_LINUX
     int fd;
     bool create_actual_file_mapping(i64 size);
-#endif
 
     bool init(ccstr path) {
         File_Mapping_Opts opts = {0};
@@ -334,23 +277,10 @@ struct Fs_Event {
     char filepath[MAX_PATH];
 };
 
-#if OS_LINUX
-#define INOTIFY_BUFSIZE (64 * (sizeof(struct inotify_event) + NAME_MAX + 1))
-#endif
-
 struct Fs_Watcher {
     ccstr path;
     Pool mem;
 
-#if OS_WINBLOWS
-    FILE_NOTIFY_INFORMATION *buf;
-    bool has_more;
-    s32 offset;
-    HANDLE dir_handle;
-    OVERLAPPED ol;
-
-    bool initiate_wait();
-#elif OS_MAC
     List<Fs_Event> events;
     int curr;
 
@@ -360,20 +290,6 @@ struct Fs_Watcher {
 
     void handle_event(size_t count, ccstr *paths);
     void run_thread();
-#elif OS_LINUX
-    int ino_fd;
-    int epoll_fd;
-    epoll_event epoll_ev;
-    char curr_buf[INOTIFY_BUFSIZE];
-    u32 curr_len;
-    u32 curr_off;
-    void *wd_table;
-
-    ccstr wd_to_key(int wd);
-    void wd_table_set(int wd, ccstr name);
-    ccstr wd_table_get(int wd);
-    void wd_table_remove(int wd);
-#endif
 
     bool init(ccstr _path) {
         ptr0(this);

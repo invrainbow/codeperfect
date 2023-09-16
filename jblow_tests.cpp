@@ -2,7 +2,6 @@
 
 #include "world.hpp"
 #include "win.hpp"
-#include "ostype.hpp"
 #include "defer.hpp"
 #include "enums.hpp"
 #include "mtwist_shim.hpp"

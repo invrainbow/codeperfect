@@ -1,7 +1,3 @@
-#include "wintype.hpp"
-
-#if WIN_COCOA
-
 #include "world.hpp"
 
 #include <stdint.h>
@@ -1100,5 +1096,3 @@ void destroy_bootstrap_context() {
         bootstrap_context = nil;
     }
 }
-
-#endif // WIN_COCOA

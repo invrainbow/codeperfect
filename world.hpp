@@ -219,8 +219,6 @@ enum Command {
     CMD_DOCUMENTATION,
     CMD_VIEW_CALLER_HIERARCHY,
     CMD_VIEW_CALLEE_HIERARCHY,
-    CMD_BUY_LICENSE,
-    CMD_ENTER_LICENSE,
     CMD_REPLACE,
     CMD_FIND,
     CMD_GENERATE_FUNCTION,
@@ -306,47 +304,9 @@ struct Command_Info {
 
 extern Command_Info command_info_table[_CMD_COUNT_];
 
-enum Auth_State {
-    AUTH_NOTHING,
-    AUTH_TRIAL,
-    AUTH_REGISTERED,
-};
-
-enum GH_Auth_Status {
-    GH_AUTH_WAITING,
-    GH_AUTH_OK,
-    GH_AUTH_INTERNETERROR,
-    GH_AUTH_UNKNOWNERROR,
-    GH_AUTH_BADCREDS,
-	GH_AUTH_VERSIONLOCKED,
-	GH_AUTH_USERINACTIVE,
-};
-
-struct Auth_To_Disk {
-    Auth_State state;
-    u64 grace_period_start;
-
-    union {
-        struct {
-            u64 trial_start;
-        };
-
-        struct {
-            char reg_email[256];
-            int reg_email_len;
-            char reg_license[256];
-            int reg_license_len;
-        };
-    };
-};
-
 struct Last_Closed {
     char filepath[MAX_PATH];
     cur2 pos;
-};
-
-struct Auth_Extras {
-    // ???
 };
 
 struct Drawn_Quad {
@@ -462,12 +422,6 @@ struct World {
     int xdpi;
     int ydpi;
 
-    Auth_To_Disk auth;
-    Auth_Extras auth_extras;
-    bool auth_error;
-    GH_Auth_Status auth_status;
-    char authed_email[256];
-
     bool cmd_unfocus_all_windows;
 
     bool dont_push_history;
@@ -580,9 +534,6 @@ struct World {
 
     Fs_Watcher fswatch;
 
-    bool auth_update_done;
-    u64 auth_update_last_check;
-
     // i guess this should go in wnd_run_command, but i don't want it to get cleared out if
     // i ptr0 the whole wnd, and i also don't want to have to worry about not doing that
     Command last_manually_run_command;
@@ -608,11 +559,6 @@ struct World {
         bool use_regex;
         bool opened_from_vim;
     } wnd_local_search;
-
-    struct Wnd_Enter_License : Wnd {
-        char email[256];
-        char license[256];
-    } wnd_enter_license;
 
     struct Wnd_Hover_Info : Wnd {
         // ...
@@ -977,9 +923,6 @@ void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results
 void do_find_interfaces();
 void do_find_implementations();
 void do_generate_function();
-
-void read_auth();
-void write_auth();
 
 bool write_project_settings();
 void handle_window_focus(bool focus);

@@ -14,37 +14,18 @@ PKGS =
 
 BINARY_SUFFIX =
 
-ifeq ($(OSTYPE), mac)
-	CFLAGS += -DOSTYPE_MAC
-	CFLAGS += -mmacosx-version-min=10.12
-	PKGS += fontconfig freetype2 libpcre harfbuzz
+CFLAGS += -mmacosx-version-min=10.12
+PKGS += fontconfig freetype2 libpcre harfbuzz
 
-	frameworks = OpenGL Cocoa IOKit CoreFoundation Security
-	LDFLAGS += $(foreach it, $(frameworks), -framework $(it))
+frameworks = OpenGL Cocoa IOKit CoreFoundation Security
+LDFLAGS += $(foreach it, $(frameworks), -framework $(it))
 
-	ifeq ($(shell sh/detect_m1), 1)
-		CFLAGS += -arch arm64
-		GOARCH = arm64
-	else
-		CFLAGS += -arch x86_64
-		GOARCH = amd64
-	endif
-else ifeq ($(OSTYPE), windows)
-	# a bunch of clang on windows specific warnings idgaf about
-	BINARY_SUFFIX = .exe
+ifeq ($(shell sh/detect_m1), 1)
+	CFLAGS += -arch arm64
+	GOARCH = arm64
+else
+	CFLAGS += -arch x86_64
 	GOARCH = amd64
-
-	CFLAGS += -DOSTYPE_WINDOWS
-	CFLAGS += -Wno-ignored-attributes -Wno-constant-conversion -Wno-static-in-inline -Wno-microsoft-include
-	CFLAGS += -gcodeview
-
-	PKGS += fontconfig freetype2 libpcre glfw3 harfbuzz
-	LDFLAGS += -lopengl32 -ladvapi32 -lshlwapi -lole32 -lpathcch -lshell32 -lwinmm -lws2_32 -lgdi32 -lshcore  # link windows dlls
-	LDFLAGS += --for-linker "/IGNORE:4217"  # do we still need this?
-else ifeq ($(OSTYPE), linux)
-	CFLAGS += -DOSTYPE_LINUX -arch x86_64
-	GOARCH = amd64
-	PKGS += fontconfig freetype2 libpcre gtk+-3.0 glfw3 gl harfbuzz
 endif
 
 CFLAGS += $(shell sh/pkgconfig --cflags $(PKGS))
@@ -71,16 +52,12 @@ DEP_FILES += obj/clibs.d obj/tsgo.d
 OBJ_DEPS = $(OBJ_FILES) obj/clibs.o obj/gohelper.a obj/tsgo.o obj/tsgomod.o obj/tsgowork.o
 GO_DEPS = $(shell find go/ -type f -name '*.go')
 
-ifeq ($(OSTYPE), mac)
-	DEP_FILES += obj/objclibs.d
-	OBJ_DEPS += obj/objclibs.o
-endif
+DEP_FILES += obj/objclibs.d
+OBJ_DEPS += obj/objclibs.o
 
-.PHONY: all clean prep launcher
+.PHONY: all clean prep
 
 all: build/bin/ide$(BINARY_SUFFIX) build/bin/buildcontext.go
-
-launcher: build/launcher$(BINARY_SUFFIX)
 
 prep:
 	mkdir -p obj build/bin
@@ -103,23 +80,17 @@ obj/enums.o: enums.cpp # Makefile
 obj/objclibs.o: objclibs.mm
 	$(CC) $(CFLAGS) -fobjc-arc -c -o $@ $<
 
-PIC_FLAGS =
-ifeq ($(OSTYPE), windows)
-else
-	PIC_FLAGS = -fPIC
-endif
-
 obj/clibs.o: clibs.c
-	clang $(CFLAGS) -std=gnu99 $(PIC_FLAGS) -c -o $@ $<
+	clang $(CFLAGS) -std=gnu99 -fPIC -c -o $@ $<
 
 obj/tsgo.o: tsgo.c
-	clang $(CFLAGS) -std=gnu99 $(PIC_FLAGS) -c -o $@ $<
+	clang $(CFLAGS) -std=gnu99 -fPIC -c -o $@ $<
 
 obj/tsgomod.o: tree-sitter-go-mod/src/parser.c
-	clang $(CFLAGS) -std=gnu99 $(PIC_FLAGS) -c -o $@ $<
+	clang $(CFLAGS) -std=gnu99 -fPIC -c -o $@ $<
 
 obj/tsgowork.o: tree-sitter-go-work/src/parser.c
-	clang $(CFLAGS) -std=gnu99 $(PIC_FLAGS) -c -o $@ $<
+	clang $(CFLAGS) -std=gnu99 -fPIC -c -o $@ $<
 
 binaries.c: .cpcolors vert.glsl frag.glsl im.vert.glsl im.frag.glsl
 	$(PYTHON) sh/create_binaries_c.py $^
@@ -129,14 +100,6 @@ COMMON_GOFLAGS = GOARCH=$(GOARCH) CC=clang CGO_CFLAGS="-mmacosx-version-min=10.1
 obj/gohelper.a: $(GO_DEPS)
 	$(COMMON_GOFLAGS) CGO_ENABLED=1 go build -ldflags "$(GOLDFLAGS)" -o $@ -buildmode=c-archive github.com/codeperfect95/codeperfect/go/helper && \
 		mv obj/gohelper.h .
-
-LAUNCHER_LDFLAGS =
-ifeq ($(OSTYPE), windows)
-	LAUNCHER_LDFLAGS += -H windowsgui
-endif
-
-build/launcher$(BINARY_SUFFIX): $(GO_DEPS)
-	$(COMMON_GOFLAGS) GOARCH=$(GOARCH) go build -ldflags "$(GOLDFLAGS) $(LAUNCHER_LDFLAGS)" -o $@ github.com/codeperfect95/codeperfect/go/cmd/launcher
 
 gohelper.h: obj/gohelper.a
 

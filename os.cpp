@@ -2,9 +2,7 @@
 #include "world.hpp"
 #include "cwalk.h"
 #include "defer.hpp"
-#if !OS_WINBLOWS
-#   include <unistd.h>
-#endif
+#include <unistd.h>
 
 ccstr normalize_path_sep(ccstr path, char sep) {
     if (!sep) sep = PATH_SEP;
@@ -197,4 +195,3 @@ NORETURN void cp_exit(ccstr s) {
         exit_thread(1);
     }
 }
-

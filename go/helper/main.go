@@ -7,17 +7,13 @@ import (
 	"go/build"
 	"go/format"
 	"log"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
-	"syscall"
 	"unicode"
 	"unsafe"
 
-	"github.com/codeperfect95/codeperfect/go/models"
 	"github.com/codeperfect95/codeperfect/go/utils"
 	"github.com/codeperfect95/codeperfect/go/versions"
 	"github.com/denormal/go-gitignore"
@@ -228,132 +224,6 @@ func GHFmtFinish(useGofumpt bool) *C.char {
 	}
 
 	return C.CString(string(newSource))
-}
-
-const (
-	AuthWaiting = iota
-	AuthOk
-	AuthInternetError
-	AuthUnknownError
-	AuthBadCreds
-	AuthVersionLocked
-	AuthUserInactive
-)
-
-var authStatus int = AuthWaiting
-
-//export GHGetAuthStatus
-func GHGetAuthStatus() int {
-	return authStatus
-}
-
-func sendInfoToLauncher(update bool, email, licenseKey string, sendCrashReport bool) error {
-	pipeFile, err := utils.GetAppToLauncherPipeFile()
-	if err != nil {
-		return err
-	}
-
-	f, err := os.OpenFile(pipeFile, os.O_WRONLY, os.ModeNamedPipe)
-	if err != nil {
-		return err
-	}
-
-	updateMessage := "autoupdate"
-	if !update {
-		updateMessage = "noautoupdate"
-	}
-
-	sendCrashMessage := "sendcrash"
-	if !sendCrashReport {
-		sendCrashMessage = "nosendcrash"
-	}
-
-	lines := []string{
-		updateMessage + "\n",
-		email + "\n",
-		licenseKey + "\n",
-		sendCrashMessage + "\n",
-	}
-
-	for _, val := range lines {
-		_, err = f.WriteString(val)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-//export GHAuth
-func GHAuth(rawEmail, rawLicenseKey *C.char, sendCrashReport bool) {
-	var license *utils.License
-	var endpoint string
-
-	if rawEmail != nil && rawLicenseKey != nil {
-		license = &utils.License{
-			Email:      C.GoString(rawEmail),
-			LicenseKey: C.GoString(rawLicenseKey),
-		}
-		endpoint = "v2/auth"
-	} else {
-		endpoint = "v2/trial"
-	}
-
-	osSlug, _ := versions.GetOSSlug(runtime.GOOS, runtime.GOARCH)
-	req := &models.AuthRequestV2{
-		OS: osSlug,
-	}
-
-	var resp models.AuthResponseV2
-
-	shouldUpdate := false
-
-	doAuth := func() {
-		if err := utils.CallServer(endpoint, license, req, &resp); err != nil {
-			log.Printf("error calling %s: %v", endpoint, err)
-			switch err.(type) {
-			case net.Error, *net.OpError, syscall.Errno:
-				authStatus = AuthInternetError
-			default:
-				authStatus = AuthUnknownError
-			}
-			log.Printf("authStatus: %v", authStatus)
-			return
-		}
-		log.Printf("resp.Result: %v", resp.Result)
-		switch resp.Result {
-		case models.AuthSuccessLocked:
-			authStatus = AuthOk
-		case models.AuthSuccessUnlocked:
-			shouldUpdate = true
-			authStatus = AuthOk
-		case models.AuthFailVersionLocked:
-			authStatus = AuthVersionLocked
-		case models.AuthFailInvalidCredentials:
-			authStatus = AuthBadCreds
-		// This means the version we passed in X-Version is bad, but that shouldn't happen.
-		case models.AuthFailInvalidVersion:
-			authStatus = AuthUnknownError
-		case models.AuthFailOther:
-			authStatus = AuthUnknownError
-		case models.AuthFailUserInactive:
-			authStatus = AuthUserInactive
-		default:
-			authStatus = AuthUnknownError
-		}
-	}
-
-	run := func() {
-		doAuth()
-		email, licenseKey := "", ""
-		if license != nil {
-			email = license.Email
-			licenseKey = license.LicenseKey
-		}
-		sendInfoToLauncher(shouldUpdate, email, licenseKey, sendCrashReport)
-	}
-
-	go run()
 }
 
 type GitignoreChecker struct {
@@ -699,11 +569,6 @@ func GHIsUnicodeLetter(code rune) bool {
 func GHIsUnicodeDigit(code rune) bool {
 	log.Println(code)
 	return unicode.IsDigit(code)
-}
-
-//export GHForceServerLocalhost
-func GHForceServerLocalhost() {
-	utils.ForceServerLocalhost = true
 }
 
 //export GHHasTag

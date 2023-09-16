@@ -3,15 +3,7 @@
 #include "os.hpp"
 #include "common.hpp"
 #include "objc_id_shim.hpp"
-#include "wintype.hpp"
-
-#if WIN_WIN32
-#   include "win32.hpp"
-#elif WIN_COCOA
-#   include <Carbon/Carbon.h>
-#elif WIN_GLFW
-#   include "glcrap.hpp"
-#endif
+#include <Carbon/Carbon.h>
 
 enum Window_Event_Type {
     WINEV_WINDOW_SIZE,
@@ -218,13 +210,8 @@ enum Key {
     __CP_KEY_COUNT,
 };
 
-#if OS_MAC
-#   define CP_MOD_PRIMARY CP_MOD_CMD
-#   define CP_MOD_TEXT CP_MOD_ALT
-#else
-#   define CP_MOD_PRIMARY CP_MOD_CTRL
-#   define CP_MOD_TEXT CP_MOD_CTRL
-#endif
+#define CP_MOD_PRIMARY CP_MOD_CMD
+#define CP_MOD_TEXT CP_MOD_ALT
 
 enum Cursor_Type {
     CP_CUR_RESIZE_EW,
@@ -240,15 +227,8 @@ enum Cursor_Type {
 };
 
 struct Cursor {
-#if WIN_WIN32
-    HCURSOR handle;
-#elif WIN_COCOA
     id object;
-#elif WIN_GLFW
-    GLFWcursor *cursor;
-#endif
     Cursor_Type type;
-
     bool init(Cursor_Type _type);
 };
 
@@ -280,22 +260,12 @@ struct Window {
         return init_os_specific(width, height, title);
     }
 
-#if WIN_WIN32
-    HWND win32_window;
-    ATOM win32_window_class;
-    HGLRC wgl_context; // what type?
-    HDC wgl_dc;
-    WCHAR win32_high_surrogate;
-#elif WIN_COCOA
     id ns_window;
     id ns_view;
     id ns_delegate;
     id ns_layer;
     id nsgl_object;
     id nsgl_pixel_format;
-#elif WIN_GLFW
-    GLFWwindow *window;
-#endif
 
     void dispatch_event(Window_Event_Type type, fn<void(Window_Event*)> cb) {
         Window_Event ev; ptr0(&ev);
@@ -332,30 +302,18 @@ struct Window {
     void set_cursor(Cursor *_cursor);
     void *get_native_handle();
 
-#if WIN_WIN32
-    LRESULT callback(HWND hwnd, UINT msg, WPARAM w, LPARAM l);
-    void adjust_rect_using_windows_gayness(RECT *rect);
-    bool create_actual_window(int width, int height, ccstr title);
-    bool create_wgl_context();
-    void dispatch_mouse_event_win32(Mouse_Button button, bool press);
-#elif WIN_COCOA
     void dispatch_mouse_event_cocoa(Mouse_Button button, bool press, void* /* NSEvent* */ event);
     bool is_cursor_in_content_area();
     void update_cursor_image();
     bool create_actual_window(int width, int height, ccstr title);
     void create_nsgl_context();
-#endif
 };
 
 bool window_init_everything();
 void poll_window_events();
 
-#if WIN_GLFW
-void* get_native_window_handle(GLFWwindow *window);
-#else
 // The purpose of this is function to get us to a point where the current
 // OpenGL context is a valid one, basically so we can initialize GLEW. Once GLEW is initialized the bootstrap context will be destroyed.
 // Panics if it can't do it.
 void make_bootstrap_context();
 void destroy_bootstrap_context();
-#endif

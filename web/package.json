@@ -22,7 +22,7 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "export REACT_APP_BUILD_VERSION=$(../sh/printversion); export REACT_APP_CPENV=development; bun dev",
+    "start": "export REACT_APP_BUILD_VERSION=$(../sh/printversion); export REACT_APP_CPENV=development; react-scripts start",
     "css": "postcss -w -o src/index.css src/index.scss",
     "build": "export REACT_APP_BUILD_VERSION=$(../sh/printversion); postcss -o src/index.css src/index.scss && react-scripts build"
   },
@@ -44,7 +44,7 @@
     ]
   },
   "devDependencies": {
-    "react-refresh": "0.10.0",
+    "react-refresh": "0.11.0",
     "react-scripts": "^5.0.1",
     "typescript": "latest"
   }

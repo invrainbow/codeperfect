@@ -11,12 +11,7 @@
 #include "unicode.hpp"
 #include "enums.hpp"
 #include "copy.hpp"
-
-#if OS_WINBLOWS
-#include <windows.h>
-#elif OS_MAC || OS_LINUX
 #include <dlfcn.h>
-#endif
 
 #define GO_DEBUG 0
 

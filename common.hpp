@@ -10,9 +10,7 @@
 #include <functional>
 #include <utility>
 
-#if OS_MAC || OS_LINUX
 #include <inttypes.h>
-#endif
 
 #ifdef __GNUC__
 #define NORETURN __attribute__((noreturn))
@@ -23,8 +21,6 @@
 #elif _MSC_VER
 #define NORETURN __declspec(noreturn)
 #endif
-
-#include "ostype.hpp"
 
 // tools for macros
 #define TOKENPASTE0(a, b) a##b
@@ -367,11 +363,7 @@ struct Panic_Exception : std::runtime_error {
     Panic_Exception(ccstr error) : std::runtime_error(error) {}
 };
 
-#if OS_WINBLOWS
-#define strcmpi stricmp
-#else
 #define strcmpi strcasecmp
-#endif
 
 void _error(ccstr fmt, ...);
 

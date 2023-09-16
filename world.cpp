@@ -406,11 +406,7 @@ void World::init() {
     {
         auto go_binary_path = GHGetGoBinaryPath();
         if (!go_binary_path) {
-#if OS_WINDOWS
-            cp_exit("Unable to find go binary.\n\nUsually, CodePerfect searches for go by running `where go` inside `cmd`, but we did that and couldn't find anything.\n\nPlease visit docs.codeperfect95.com to see how to manually tell CodePerfect where go is.");
-#else
             cp_exit("Unable to find a go binary.\n\nUsually, CodePerfect searches for go by running `which go` inside `bash`, but we did that and couldn't find anything.\n\nPlease visit docs.codeperfect95.com to see how to manually tell CodePerfect where go is.");
-#endif
         }
 
         defer { GHFree(go_binary_path); };
@@ -446,13 +442,9 @@ void World::init() {
     for (int i = 1; i < gargc; i++) {
         auto it = gargv[i];
 
-        if (streq(it, "--force-server-localhost")) {
-            GHForceServerLocalhost();
-        }
-
 #ifndef RELEASE_MODE
 
-        else if (streq(it, "--test")) {
+        if (streq(it, "--test")) {
             if (i+1 >= gargc) cp_panic("missing test name");
             auto name = gargv[++i];
 
@@ -1944,10 +1936,6 @@ ccstr get_command_name(Command cmd) {
         }
         return "Save file...";
     }
-    case CMD_ENTER_LICENSE:
-        if (world.auth.state == AUTH_REGISTERED)
-            return "Re-enter License...";
-        return "Enter License...";
     }
 
     return info.name;
@@ -1975,11 +1963,7 @@ void init_command_info_table() {
 
     mem0(command_info_table, sizeof(command_info_table));
 
-#if OS_WINBLOWS || OS_LINUX
-    command_info_table[CMD_EXIT] = k(CP_MOD_ALT, CP_KEY_F4, "Exit");
-#elif OS_MAC
     command_info_table[CMD_EXIT] = k(CP_MOD_CMD, CP_KEY_Q, "Quit");
-#endif
     command_info_table[CMD_NEW_FILE] = k(CP_MOD_PRIMARY, CP_KEY_N, "New File");
     command_info_table[CMD_SAVE_FILE] = k(CP_MOD_PRIMARY, CP_KEY_S, "Save File");
     command_info_table[CMD_SAVE_ALL] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_S, "Save All");
@@ -1995,10 +1979,8 @@ void init_command_info_table() {
     command_info_table[CMD_GO_TO_NEXT_EDITOR] = k(CP_MOD_CTRL, CP_KEY_TAB, "Go To Next Editor");
     command_info_table[CMD_GO_TO_PREVIOUS_EDITOR] = k(CP_MOD_CTRL | CP_MOD_SHIFT, CP_KEY_TAB, "Go To Previous Editor");
 
-#if OS_MAC
     add_shortcut(&command_info_table[CMD_GO_TO_NEXT_EDITOR], CP_MOD_CMD | CP_MOD_SHIFT, CP_KEY_RIGHT_BRACKET);
     add_shortcut(&command_info_table[CMD_GO_TO_PREVIOUS_EDITOR], CP_MOD_CMD | CP_MOD_SHIFT, CP_KEY_LEFT_BRACKET);
-#endif
 
     command_info_table[CMD_FIND_NEXT] = k(0, CP_KEY_F3, "Find: Go To Next", true);
     command_info_table[CMD_FIND_PREVIOUS] = k(CP_MOD_SHIFT, CP_KEY_F3, "Find: Go To Previous", true);
@@ -2053,8 +2035,6 @@ void init_command_info_table() {
     command_info_table[CMD_FIND_IMPLEMENTATIONS] = k(0, 0, "Find Implementations");
     command_info_table[CMD_FIND_INTERFACES] = k(0, 0, "Find Interfaces");
     command_info_table[CMD_DOCUMENTATION] = k(0, 0, "Documentation");
-    command_info_table[CMD_BUY_LICENSE] = k(0, 0, "Buy License...");
-    command_info_table[CMD_ENTER_LICENSE] = k(0, 0, "Enter License...");
     command_info_table[CMD_ADD_JSON_TAG] = k(0, 0, "Struct: Add JSON tag");
     command_info_table[CMD_ADD_YAML_TAG] = k(0, 0, "Struct: Add YAML tag");
     command_info_table[CMD_ADD_XML_TAG] = k(0, 0, "Struct: Add XML tag");
@@ -2072,13 +2052,8 @@ void init_command_info_table() {
     command_info_table[CMD_ZOOM_IN] = k(CP_MOD_PRIMARY, CP_KEY_EQUAL, "Zoom In", true);
     command_info_table[CMD_ZOOM_OUT] = k(CP_MOD_PRIMARY, CP_KEY_MINUS, "Zoom Out", true);
     command_info_table[CMD_ZOOM_ORIGINAL] = k(CP_MOD_PRIMARY, CP_KEY_0, "Original Size", true);
-#if OS_MAC
     command_info_table[CMD_GO_BACK] = k(CP_MOD_CTRL, CP_KEY_MINUS, "Go Back");
     command_info_table[CMD_GO_FORWARD] = k(CP_MOD_CTRL, CP_KEY_EQUAL, "Go Forward");
-#else
-    command_info_table[CMD_GO_BACK] = k(CP_MOD_CTRL | CP_MOD_ALT, CP_KEY_MINUS, "Go Back");
-    command_info_table[CMD_GO_FORWARD] = k(CP_MOD_CTRL | CP_MOD_ALT, CP_KEY_EQUAL, "Go Forward");
-#endif
 }
 
 void do_find_interfaces() {
@@ -2558,28 +2533,6 @@ void handle_command(Command cmd, bool from_menu) {
     case CMD_FIND:
         open_current_file_search(cmd == CMD_REPLACE, false);
         break;
-
-    case CMD_BUY_LICENSE:
-        GHOpenURLInBrowser("https://codeperfect95.com/buy");
-        break;
-
-    case CMD_ENTER_LICENSE: {
-        auto &wnd = world.wnd_enter_license;
-        if (wnd.show) {
-            wnd.cmd_focus = true;
-            wnd.cmd_focus_textbox = true;
-            break;
-        }
-        if (world.auth.state == AUTH_REGISTERED) {
-            cp_strcpy_fixed(wnd.email, world.auth.reg_email);
-            cp_strcpy_fixed(wnd.license, world.auth.reg_license);
-        } else {
-            cp_strcpy_fixed(wnd.email, "");
-            cp_strcpy_fixed(wnd.license, "");
-        }
-        wnd.show = true;
-        break;
-    }
 
     case CMD_DOCUMENTATION:
         GHOpenURLInBrowser("https://docs.codeperfect95.com/");
@@ -4031,28 +3984,6 @@ void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results
     });
 
     fstlog("fuzzysort - actual sorting");
-}
-
-ccstr get_auth_filepath() {
-    return path_join(world.configdir, ".auth");
-}
-
-void read_auth() {
-    File f;
-    if (f.init_read(get_auth_filepath()) != FILE_RESULT_OK) {
-        ptr0(&world.auth);
-        return;
-    }
-    defer { f.cleanup(); };
-    f.read((char*)&world.auth, sizeof(world.auth));
-}
-
-void write_auth() {
-    File f;
-    if (f.init_write(get_auth_filepath()) != FILE_RESULT_OK)
-        return;
-    defer { f.cleanup(); };
-    f.write((char*)&world.auth, sizeof(world.auth));
 }
 
 bool write_project_settings() {

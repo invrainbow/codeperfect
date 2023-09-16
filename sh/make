@@ -2,20 +2,13 @@
 
 set -e
 
-os=$(sh/detect_os)
 cmd="make"
 nprocs=4
 
-if [ $os = "windows" ]; then
-    nprocs=$NUMBER_OF_PROCESSORS
-elif [ $os = "mac" ]; then
-    export MACOSX_DEPLOYMENT_TARGET=10.12
-    nprocs=$(sysctl hw.ncpu | grep -o '[0-9]\+')
-    if [ "$(sh/detect_m1)" = "1" ]; then
-        cmd="arch -arm64 $cmd"
-    fi
-elif [ $os = "linux" ]; then
-    nprocs=$(nproc)
+export MACOSX_DEPLOYMENT_TARGET=10.12
+nprocs=$(sysctl hw.ncpu | grep -o '[0-9]\+')
+if [ "$(sh/detect_m1)" = "1" ]; then
+    cmd="arch -arm64 $cmd"
 fi
 
-OSTYPE=$os $cmd -j $nprocs $@
+$cmd -j $nprocs $@

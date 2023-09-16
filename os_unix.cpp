@@ -1,7 +1,5 @@
 #include "os.hpp"
 
-#if OS_MAC || OS_LINUX // whole file is mac/linux
-
 #include <filesystem>
 
 #include <stdio.h>
@@ -464,5 +462,3 @@ ccstr get_path_relative_to(ccstr full, ccstr base) {
     p.init(ret);
     return p.str();
 }
-
-#endif // OS_MAC || OS_LINUX

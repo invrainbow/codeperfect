@@ -419,9 +419,6 @@ void handle_key_event(Window_Event *it) {
         editor->handle_type_backspace(keymods);
         break;
     case CP_KEY_TAB:
-#if OS_WINBLOWS
-        if (keymods & CP_MOD_ALT) break;
-#endif
         editor->handle_type_tab(keymods);
         break;
     }
@@ -557,7 +554,7 @@ void handle_key_event(Window_Event *it) {
         }
         break;
 
-#if OS_MAC // emacs style keybindings on macos
+    // emacs style keybindings on macos
     case CP_MOD_CTRL:
     case CP_MOD_CTRL | CP_MOD_SHIFT:
         switch (key) {
@@ -597,7 +594,6 @@ void handle_key_event(Window_Event *it) {
             break;
         }
         break;
-#endif
     }
 
     if (!handled) return;
@@ -851,7 +847,7 @@ void handle_window_event(Window_Event *it) {
     }
 }
 
-int realmain(int argc, char **argv) {
+int main(int argc, char **argv) {
     is_main_thread = true;
 
 #ifdef DEBUG_BUILD
@@ -907,7 +903,6 @@ int realmain(int argc, char **argv) {
         return true;
     };
 
-#if !WIN_GLFW
     {
         // init glew using a dummy context
         make_bootstrap_context();
@@ -921,7 +916,6 @@ int realmain(int argc, char **argv) {
         if (!init_glew()) return EXIT_FAILURE;
         t.log("bootstrap context, init glew");
     }
-#endif
 
     if (!world.window->init(1280, 720, WINDOW_TITLE))
         return error("could not create window"), EXIT_FAILURE;
@@ -930,77 +924,12 @@ int realmain(int argc, char **argv) {
     world.window->make_context_current();
     t.log("make context current");
 
-#if WIN_GLFW
-    if (!init_glew()) return EXIT_FAILURE;
-    t.log("init glew");
-#endif
-
 #ifdef DEBUG_BUILD
     GHEnableDebugMode();
     t.log("enable debug mode");
 #endif
 
-    read_auth();
-
-    t.log("read auth");
-
-    switch (world.auth.state) {
-    case AUTH_NOTHING: {
-        world.auth.state = AUTH_TRIAL;
-        world.auth.trial_start = get_unix_time();
-        write_auth();
-        tell_user("CodePerfect is free to evaluate for a 7-day trial, with access to full functionality. After that, you'll need a license for continued use.\n\nYou can buy a license at any time by selecting Help > Buy License.", "Trial");
-        break;
-    }
-
-    case AUTH_TRIAL:
-        if (get_unix_time() - world.auth.trial_start > 1000 * 60 * 60 * 24 * 7) {
-            world.auth_error = true;
-            auto res = ask_user_yes_no("Your trial has ended. A license is required for continued use.\n\nDo you want to buy one now?", NULL, "Purchase License", "No");
-            if (res == ASKUSER_YES) {
-                GHOpenURLInBrowser("https://codeperfect95.com/buy");
-            }
-        } else {
-            GHAuth(NULL, NULL, options.send_crash_reports);
-        }
-        break;
-
-    case AUTH_REGISTERED: {
-        auto &auth = world.auth;
-        cp_assert(auth.reg_email_len <= _countof(auth.reg_email));
-        cp_assert(auth.reg_license_len <= _countof(auth.reg_license));
-
-        auto email = cp_sprintf("%.*s", auth.reg_email_len, auth.reg_email);
-        auto license = cp_sprintf("%.*s", auth.reg_license_len, auth.reg_license);
-        cp_strcpy_fixed(world.authed_email, auth.reg_email);
-
-        GHAuth((char*)email, (char*)license, options.send_crash_reports);
-        break;
-    }
-    }
-
-    auto set_window_title = [&](ccstr note) {
-        ccstr s = NULL;
-        if (!note)
-            s = cp_sprintf("%s - %s", WINDOW_TITLE, world.current_path);
-        else
-            s = cp_sprintf("%s (%s) - %s", WINDOW_TITLE, note, world.current_path);
-
-        world.window->set_title(s);
-    };
-
-    auto get_window_note = [&]() -> ccstr {
-        if (world.auth.state == AUTH_TRIAL) {
-            auto time_elapsed = (get_unix_time() - world.auth.trial_start);
-            auto days_left = 7 - floor((double)time_elapsed / (double)(1000 * 60 * 60 * 24));
-            if (world.auth_error)
-                return "trial expired";
-            return cp_sprintf("%d days left in trial", (int)days_left);
-        }
-        return NULL;
-    };
-
-    set_window_title(get_window_note());
+    world.window->set_title(cp_sprintf("%s - %s", WINDOW_TITLE, world.current_path));
     world.window->swap_interval(0);
 
     t.log("set window title");
@@ -1405,58 +1334,6 @@ int realmain(int argc, char **argv) {
 
         Timer t;
         t.init("frame tracer", &world.trace_next_frame);
-
-        if (world.auth.state == AUTH_REGISTERED && world.auth_status == GH_AUTH_WAITING) {
-            auto &auth = world.auth;
-
-            auto in_grace_period = [&](int days) {
-                if (!auth.grace_period_start) {
-                    auth.grace_period_start = get_unix_time();
-                    write_auth();
-                }
-                return (get_unix_time() - auth.grace_period_start) < (1000 * 60 * 60 * 24 * days);
-            };
-
-            // TODO: timeout?
-            world.auth_status = (GH_Auth_Status)GHGetAuthStatus();
-
-            auto handle_error = [&](ccstr problem, ccstr title, int grace_period_days) {
-                set_window_title("unregistered");
-
-                if (in_grace_period(grace_period_days)) {
-                    ccstr fmt = "%s.\n\nCodePerfect will continue to work for %d days. Please contact support@codeperfect95.com if you need assistance.";
-                    tell_user(cp_sprintf(fmt, problem, grace_period_days), title);
-                } else {
-                    ccstr fmt = "%s.\n\nUnfortunately, the grace period has ended, so many features are now disabled. Please contact support@codeperfect95.com to resolve this. Thanks!";
-                    tell_user(cp_sprintf(fmt, problem), title);
-                    world.auth_error = true;
-                }
-            };
-
-            switch (world.auth_status) {
-            case GH_AUTH_OK:
-                auth.grace_period_start = get_unix_time();
-                write_auth();
-                break;
-            case GH_AUTH_USERINACTIVE:
-                handle_error("Your subscription is no longer active", "Inactive subscription", 3);
-                break;
-            case GH_AUTH_BADCREDS:
-                handle_error("We were unable to validate your license key", "Invalid credentials", 3);
-                break;
-            case GH_AUTH_INTERNETERROR:
-                handle_error("We were unable to connect to the internet to validate your license key", "Unable to connect to the internet", 7);
-                break;
-            case GH_AUTH_VERSIONLOCKED:
-                handle_error("Your license is locked to a version older than this version", "Version not covered by license", 3);
-                break;
-            case GH_AUTH_UNKNOWNERROR:
-                // for now do nothing, don't punish user for something not their fault
-                break;
-            }
-        }
-
-        t.log("auth");
 
         {
             GH_Message msg; ptr0(&msg);

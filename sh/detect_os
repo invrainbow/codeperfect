@@ -1,6 +1,0 @@
-case "$(uname -s)" in
-    Linux*)  echo linux;;
-    Darwin*) echo mac;;
-    CYGWIN*) echo windows;;
-    *)       echo shit done fucked up; exit 1
-esac

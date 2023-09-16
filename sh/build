@@ -1,28 +1,13 @@
 #!/bin/bash
 set -e
 
-os="$(sh/detect_os)"
-# if [[ $os = "windows" ]]; then
-#     if [[ ! -z "$(tasklist /FI "IMAGENAME eq remedybg.exe" | grep remedybg)" ]]; then
-#         remedybg stop-debugging
-#     fi
-# fi
-
 if [[ "$RELEASE" == "1" ]]; then
     sh/make clean
     sh/make
-    sh/make launcher
 
-    if [[ $os == "mac" ]]; then
-        mv build/bin/ide.dSYM/Contents/Resources/DWARF/ide build/dsym
-        rm -rf build/bin/ide.dSYM
-        strip -u -r -S -x build/bin/ide
-    elif [[ $os == "windows" ]]; then
-        mv build/bin/ide.pdb build/pdb
-        pushd build/bin
-        rm -f ide.exe.manifest ide.exp ide.ilk ide.lib
-        popd
-    fi
+    mv build/bin/ide.dSYM/Contents/Resources/DWARF/ide build/dsym
+    rm -rf build/bin/ide.dSYM
+    strip -u -r -S -x build/bin/ide
 else
     sh/make prep
     sh/make

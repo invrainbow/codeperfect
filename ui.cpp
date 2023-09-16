@@ -53,17 +53,9 @@ void init_global_colors() {
 ccstr format_key(int mods, ccstr key, bool icon) {
     List<ccstr> parts; parts.init();
 
-#ifndef OS_MAC
-    icon = false;
-#endif
-
     if (mods & CP_MOD_CMD)   parts.append(icon ? ICON_MD_KEYBOARD_COMMAND_KEY : "Cmd");
     if (mods & CP_MOD_SHIFT) parts.append(icon ? ICON_MD_ARROW_UPWARD : "Shift");
-#if OS_MAC
     if (mods & CP_MOD_ALT)   parts.append(icon ? ICON_MD_KEYBOARD_OPTION_KEY : "Option");
-#else
-    if (mods & CP_MOD_ALT)   parts.append("Alt");
-#endif
     if (mods & CP_MOD_CTRL)  parts.append(icon ? ICON_MD_KEYBOARD_CONTROL_KEY : "Ctrl");
 
     Text_Renderer rend; rend.init();
@@ -1112,7 +1104,6 @@ void UI::draw_quad(boxf box, boxf uv, vec4f color, Draw_Mode mode, Texture_Id te
         {uv.x + uv.w, uv.y + uv.h}
     );
 
-#if OS_MAC
     auto &wnd = world.wnd_poor_mans_gpu_debugger;
     do {
         if (!wnd.tracking) break;
@@ -1145,7 +1136,6 @@ void UI::draw_quad(boxf box, boxf uv, vec4f color, Draw_Mode mode, Texture_Id te
         }
         wnd.logs->append(&item);
     } while (0);
-#endif
 }
 
 void UI::draw_rect(boxf b, vec4f color) {
@@ -2763,50 +2753,16 @@ void UI::draw_everything() {
                 });
             }
 
-            im::Separator();
-
-            if (im::MenuItem("Expire trial")) {
-                if (world.auth.state != AUTH_TRIAL) {
-                    tell_user_error("User is not currently in a trial state.");
-                } else {
-                    world.auth.trial_start = get_unix_time() - 1000 * 60 * 60 * 24 * 14;
-                    write_auth();
-                }
-            }
-
-            if (im::MenuItem("Start new trial")) {
-                world.auth.state = AUTH_TRIAL;
-                world.auth.trial_start = get_unix_time();
-                write_auth();
-
-                auto res = ask_user_yes_no("New trial started, restart to take effect?", "Restart needed", "Restart", "Don't restart");
-                if (res == ASKUSER_YES)
-                    fork_self();
-            }
-
-            if (im::MenuItem("Fake being registered")) {
-                world.auth.state = AUTH_REGISTERED;
-                world.window->set_title(cp_sprintf("CodePerfect 95 - %s", world.current_path));
-            }
-
 #endif
             im::EndMenu();
         }
 
         if (im_begin_menu("Help")) {
             im::MenuItem(cp_sprintf("CodePerfect %s", world.gh_version), NULL, false, false);
-            if (world.auth.state == AUTH_REGISTERED)
-                if (world.auth_status == GH_AUTH_OK)
-                    im::MenuItem(cp_sprintf("Registered to %s", world.authed_email), NULL, false, false);
 
             im::Separator();
 
             menu_command(CMD_DOCUMENTATION);
-
-            im::Separator();
-
-            menu_command(CMD_BUY_LICENSE);
-            menu_command(CMD_ENTER_LICENSE);
 
             im::EndMenu();
         }
@@ -3854,68 +3810,6 @@ void UI::draw_everything() {
 
         im::End();
         fstlog("wnd_index_log");
-    }
-
-    if (world.wnd_enter_license.show) {
-        auto &wnd = world.wnd_enter_license;
-        bool entered = false;
-
-        begin_centered_window("Enter License Key", &wnd, 0, 500);
-
-        focus_keyboard_here(&wnd);
-
-        if (im_input_text_fixbuf("Email", wnd.email, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll))
-            entered = true;
-
-        if (check_cmd_flag(&wnd.cmd_focus_textbox))
-            im_select_all_last();
-
-        im_small_newline();
-
-        if (im_input_text_fixbuf("License Key", wnd.license, ImGuiInputTextFlags_EnterReturnsTrue))
-            entered = true;
-
-        im_small_newline();
-
-        if (im::Button("Enter"))
-            entered = true;
-
-        do {
-            if (!entered) break;
-
-            wnd.show = false;
-
-            auto &auth = world.auth;
-            auto old_state = auth.state;
-
-            auth.state = AUTH_REGISTERED;
-
-            auto email_len = strlen(wnd.email);
-            auto license_len = strlen(wnd.license);
-
-            if (email_len + 1 > _countof(auth.reg_email)) {
-                tell_user_error("Sorry, that email is too long.");
-                break;
-            }
-
-            if (license_len + 1 > _countof(auth.reg_license)) {
-                tell_user_error("Sorry, that license key is too long.");
-                break;
-            }
-
-            cp_strcpy_fixed(auth.reg_email, wnd.email);
-            cp_strcpy_fixed(auth.reg_license, wnd.license);
-            auth.reg_email_len = email_len;
-            auth.reg_license_len = license_len;
-            write_auth();
-
-            auto res = ask_user_yes_no("Your license key was saved. You'll need to restart CodePerfect for it to take effect. Restart now?", "License key saved", "Restart", "Don't restart");
-            if (res == ASKUSER_YES)
-                fork_self();
-        } while (0);
-
-        im::End();
-        fstlog("wnd_enter_license");
     }
 
     if (world.wnd_debug_output.show) {
@@ -6530,7 +6424,7 @@ void UI::draw_everything() {
 
                     if (pressed[0]) {
                         auto &io = im::GetIO();
-                        if (OS_MAC ? io.KeySuper : io.KeyCtrl) {
+                        if (io.KeySuper) {
                             handle_goto_definition(pos);
                         } else {
                             if (!world.vim.on) {

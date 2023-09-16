@@ -8,7 +8,6 @@ version=${version_arr[0]}
 version_string=${version_arr[1]}
 popd
 
-os="$(sh/detect_os)"
 slug=x64
 
 # build the actual app
@@ -21,74 +20,39 @@ rm -rf scratch/
 mkdir scratch/
 cd scratch
 
-if [[ $os = "windows" ]]; then
-    rm -rf CodePerfect
-    mkdir CodePerfect
-    cp -R ../build/bin/ CodePerfect/bin/
-    cp ../build/launcher.exe CodePerfect/codeperfect.exe
-
-    mv ../build/pdb debug-symbols
-
-    # zip up app
-    zip -r app.zip CodePerfect/
-
-    # zip up update
-    pushd CodePerfect/bin
-    zip -r ../../update.zip *
-    popd
-elif [[ $os = "mac" ]]; then
-    if [[ "$(../sh/detect_m1)" = "1" ]]; then
-        slug=arm
-    fi
-
-    mv ../build/dsym debug-symbols
-
-    # create .app from launcher
-    rm -rf CodePerfect.app
-    appify -name CodePerfect \
-        -icon ../logo.png \
-        -version $version_string \
-        -author "CodePerfect" \
-        -id com.codeperfect95 \
-        ../build/launcher
-
-    # create bin folder inside .app
-    cp -R ../build/bin/ "CodePerfect.app/Contents/MacOS/bin/"
-    rm -rf CodePerfect.app/Contents/README
-
-    # codesign garbage
-    codesign --force --options runtime --sign 'Developer ID Application: Brandon Hsiao' CodePerfect.app/Contents/MacOS/bin/ide
-    codesign --deep --force --options runtime --sign 'Developer ID Application: Brandon Hsiao' CodePerfect.app
-
-    # zip up app & update
-    ditto -c -k --keepParent CodePerfect.app app.zip
-    ditto -c -k CodePerfect.app/Contents/MacOS/bin update.zip
-
-    # notarize
-    xcrun notarytool submit app.zip --keychain-profile AC_PASSWORD --wait
-    xcrun stapler staple CodePerfect.app
-    rm app.zip
-    ditto -c -k --keepParent CodePerfect.app app.zip
-
-elif [[ $os = "linux" ]]; then
-    rm -rf CodePerfect
-    mkdir CodePerfect
-    cp -R ../build/bin/ CodePerfect/bin/
-    cp ../build/launcher CodePerfect/codeperfect
-
-    # zip up app
-    zip -r app.zip CodePerfect/
-
-    # zip up update
-    pushd CodePerfect/bin
-    zip -r ../../update.zip *
-    popd
+if [[ "$(../sh/detect_m1)" = "1" ]]; then
+    slug=arm
 fi
+
+mv ../build/dsym debug-symbols
+
+# create .app from ide
+rm -rf CodePerfect.app
+appify -name CodePerfect \
+    -icon ../logo.png \
+    -version $version_string \
+    -author "CodePerfect" \
+    -id com.codeperfect95 \
+    ../build/ide
+cp ../build/bin/* "CodePerfect.app/Contents/MacOS"
+rm -rf CodePerfect.app/Contents/README
+
+# codesign garbage
+codesign --force --options runtime --sign 'Developer ID Application: Brandon Hsiao' CodePerfect.app/Contents/MacOS/bin/ide
+codesign --deep --force --options runtime --sign 'Developer ID Application: Brandon Hsiao' CodePerfect.app
+
+# zip up app
+ditto -c -k --keepParent CodePerfect.app app.zip
+
+# notarize
+xcrun notarytool submit app.zip --keychain-profile AC_PASSWORD --wait
+xcrun stapler staple CodePerfect.app
+rm app.zip
+ditto -c -k --keepParent CodePerfect.app app.zip
 
 # push to s3
 if [[ -z "$SKIP_UPLOAD" ]]; then
-    filename="$os-$slug-$version_string.zip"
+    filename="mac-$slug-$version_string.zip"
     aws s3 cp app.zip "s3://codeperfect95/app/$filename"
-    aws s3 cp update.zip "s3://codeperfect95/update/$filename"
     aws s3 cp debug-symbols "s3://codeperfect-private/debug-symbols-$os-$slug-$version_string"
 fi

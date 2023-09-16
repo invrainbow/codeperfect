@@ -23,16 +23,3 @@ func GetConfigDir() (string, error) {
 	}
 	return filepath.Join(configdir, "CodePerfect"), nil
 }
-
-func GetAppToLauncherPipeFile() (string, error) {
-	configdir, err := GetConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(configdir, ".launcher_pipe"), nil
-}
-
-type License struct {
-	Email      string `json:"email"`
-	LicenseKey string `json:"key"`
-}

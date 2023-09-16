@@ -4,47 +4,26 @@
 
 set -e
 
-os=$(sh/detect_os)
-
 # download submodules
 git submodule update --init --recursive
 
-if [[ "$os" = "linux" ]]; then
-    sudo apt update
-    sudo apt upgrade
-    sudo apt install autoconf bison clang cloc cmake coreutils curl gcc git make neovim perl pkg-config python3 python-is-python3 silversearcher-ag tmux tree wget xclip
-    sudo apt install libx11-dev libxft-dev autoconf libtool bison gperf libgles2-mesa-dev libxext-dev libxrandr-dev libxi-dev libxcursor-dev libxdamage-dev libxinerama-dev
-    sudo apt install libgl1-mesa-dev libglu1-mesa-dev
-    sudo apt install libgtk-3-dev
-elif [[ $os = mac ]]; then
-    if [[ -n $APP_CONNECT_PASSWORD ]]; then
-        if [[ -n "$(which xcrun)" ]]; then
-            xcrun notarytool store-credentials AC_PASSWORD --apple-id bh.apple@codeperfect95.com --team-id XCW98WVBHN --password $APP_CONNECT_PASSWORD
-        else
-            echo "xcrun not found, please install xcode-tools"
-        fi
+if [[ -n $APP_CONNECT_PASSWORD ]]; then
+    if [[ -n "$(which xcrun)" ]]; then
+        xcrun notarytool store-credentials AC_PASSWORD --apple-id bh.apple@codeperfect95.com --team-id XCW98WVBHN --password $APP_CONNECT_PASSWORD
     else
-        echo "please set APP_CONNECT_PASSWORD, it's in 1password"
+        echo "xcrun not found, please install xcode-tools"
     fi
+else
+    echo "please set APP_CONNECT_PASSWORD, it's in 1password"
 fi
 
 # vcpkg
-
-if [[ $os = windows ]]; then
-    cmd /c "vcpkg\bootstrap-vcpkg.bat -disableMetrics"
-else
-    ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
-fi
-
-vcpkg_binary=vcpkg/vcpkg
-if [[ "$os" = "windows" ]]; then
-    vcpkg_binary=${vcpkg_binary}.exe
-fi
+./vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
 export VCPKG_DEFAULT_TRIPLET=$(sh/vcpkg_triplet)
 export VCPKG_OSX_DEPLOYMENT_TARGET=10.12
 export MACOSX_DEPLOYMENT_TARGET=10.12
-$vcpkg_binary install --x-install-root=vcpkg/installed
+vcpkg/vcpkg install --x-install-root=vcpkg/installed
 
 # appify
 go install github.com/machinebox/appify@latest
