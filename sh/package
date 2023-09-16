@@ -33,6 +33,7 @@ appify -name CodePerfect \
     -id com.codeperfect95 \
     ../build/bin/ide
 rm ../build/bin/ide
+rm -rf ../build/bin/ide.dSYM
 cp ../build/bin/* "CodePerfect.app/Contents/MacOS"
 rm -rf CodePerfect.app/Contents/README
 
