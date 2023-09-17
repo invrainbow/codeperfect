@@ -11,6 +11,10 @@ It's no longer in active development, but is now open source and available for
 free. Currently it only supports MacOS and there are no plans to port it to Windows or
 Linux.
 
+### Prebuilt binaries
+
+You can find them on the [website](https://codeperfect95.com).
+
 ### Install dependencies
 
 ```
