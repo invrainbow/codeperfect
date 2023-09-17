@@ -90,12 +90,12 @@ function Icon({ block, noshift, icon: IconComponent, ...props }) {
 
 function Home() {
   return (
-    <div className="mx-auto w-full py-20">
-      <div className="md:text-center font-bold text-5xl md:text-5xl mb-12 text-black tracking-tight leading-[1.1] md:leading-[1.1]">
-        A fast, lightweight Go IDE
+    <div className="mx-auto w-full py-8 md:py-20">
+      <div className="md:text-center font-bold text-5xl md:text-5xl px-4 mb-8 md:mb-12 text-black tracking-tight leading-tight">
+        A fast, lightweight <span className="whitespace-nowrap">Go IDE</span>
       </div>
 
-      <div className="mb-4 text-center mt-2 px-6 md:px-0">
+      <div className="mb-4 text-center mt-2 px-4 md:px-0">
         <A
           href={`${LINKS.changelog}/${CURRENT_BUILD}`}
           className={cx(
@@ -118,8 +118,8 @@ function Home() {
         </A>
       </div>
 
-      <div className="mt-4 md:text-center">
-        <p className="md:max-w-md mx-auto grid grid-cols-1 md:grid-cols-2 gap-x-2">
+      <div className="mt-4 md:text-center px-4">
+        <p className="md:max-w-md mx-auto grid grid-cols-1 md:grid-cols-2 gap-2">
           {DOWNLOADS.map((it) => (
             <A
               href={`https://codeperfect95.s3.us-east-2.amazonaws.com/app/${it.platform}-${CURRENT_BUILD}.zip`}
@@ -131,7 +131,7 @@ function Home() {
         </p>
       </div>
 
-      <div className="max-w-[500px] mx-auto mt-20">
+      <div className="max-w-[550px] mx-auto mt-12 md:mt-20 px-4">
         <p>
           CodePerfect was an experiment to try and build a faster IDE. It
           eschews the modern tech stack and is instead written from scratch in
@@ -474,14 +474,14 @@ function Features() {
   };
 
   return (
-    <div className="max-w-screen-lg flex mx-auto mt-8 border-b border-neutral-100 md:border-0 md:my-16 gap-12 features">
+    <div className="max-w-screen-lg flex mx-auto my-8 md:my-16 gap-12 features">
       <div className="w-[175px] hidden md:block">
         <div className="sticky top-8">
           {FEATURE_LIST.map((it) => (
             <div className="mb-3 last:mb-0 leading-none">
               <button
                 onClick={() => onScroll(it.name)}
-                className="p-0 leading-none font-medium text-neutral-600 hover:text-neutral-900 text-left"
+                className="px-0 leading-none font-medium text-neutral-600 hover:text-neutral-900 text-left"
                 key={it.name}
               >
                 {it.name}
@@ -491,7 +491,7 @@ function Features() {
         </div>
       </div>
       <div className="flex-1">
-        <div className="px-5 md:px-0">
+        <div className="px-4 md:px-0">
           <div className="title text-3xl md:text-5xl mb-4">Features</div>
           <div className="mb-16">
             This is a brief overview of the features inside CodePerfect. For a
@@ -499,7 +499,7 @@ function Features() {
             <A href={LINKS.docs}>docs</A>.
           </div>
         </div>
-        <div className="flex flex-col gap-16">
+        <div className="flex flex-col gap-12 md:gap-16 px-4">
           {FEATURE_LIST.map((it) => (
             <div data-feature-name={it.name} key={it.name}>
               <div className="mb-4 font-bold text-lg leading-none">
@@ -630,7 +630,7 @@ function Layout() {
       <div className="bg-white px-6 py-8">
         <div className="text-center">
           <div className="text-gray-500">
-            <div className="opacity-50 hidden md:block">
+            <div className="opacity-50">
               <Logo hideText />
             </div>
             <div className="text-sm">
