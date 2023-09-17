@@ -112,7 +112,7 @@ function Home() {
           <span className="inline-block">
             <span className="font-semibold text-sm text-neutral-700 gap-x-1.5 items-center flex">
               <Icon size={18} icon={IconClockHour4} />
-              <span>Released {CURRENT_BUILD_RELEASE_DATE}</span>
+              <span>{CURRENT_BUILD_RELEASE_DATE}</span>
             </span>
           </span>
         </A>
@@ -631,7 +631,7 @@ function Layout() {
             <div className="opacity-50">
               <Logo hideText />
             </div>
-            <div className="text-sm">
+            <div className="text-xs">
               &copy; {new Date().getFullYear()} CodePerfect
             </div>
           </div>
