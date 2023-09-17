@@ -1,4 +1,4 @@
-# CodePerfect 95
+# CodePerfect
 
 CodePerfect was an experiment to try and build a faster Go IDE. It eschews the
 modern tech stack, is written from scratch in C/C++ like a video game. It starts

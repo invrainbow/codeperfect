@@ -53,7 +53,7 @@ function Logo(props) {
           themedImage
         ))}
       <b className={cx(titleClassName, "codeperfect-logo")}>
-        CodePerfect 95
+        CodePerfect
         <span style={{ color: "rgba(156, 163, 175)" }}>Docs</span>
       </b>
     </Link>

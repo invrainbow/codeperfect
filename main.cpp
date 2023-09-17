@@ -34,7 +34,7 @@
 #include "imgui.h"
 #include "tests.hpp"
 
-static const char WINDOW_TITLE[] = "CodePerfect 95";
+static const char WINDOW_TITLE[] = "CodePerfect";
 
 GLint compile_program(cstr vert_code, u32 vert_len, cstr frag_code, u32 frag_len) {
     auto compile_shader = [](GLchar *code, GLint len, u32 type) -> GLuint {

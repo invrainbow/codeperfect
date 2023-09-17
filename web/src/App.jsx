@@ -474,7 +474,7 @@ function Features() {
   };
 
   return (
-    <div className="max-w-screen-lg flex mx-auto my-8 md:my-16 gap-12 features">
+    <div className="max-w-screen-lg flex mx-auto my-8 md:my-16 gap-12 features px-4">
       <div className="w-[175px] hidden md:block">
         <div className="sticky top-8">
           {FEATURE_LIST.map((it) => (
@@ -499,7 +499,7 @@ function Features() {
             <A href={LINKS.docs}>docs</A>.
           </div>
         </div>
-        <div className="flex flex-col gap-12 md:gap-16 px-4">
+        <div className="flex flex-col gap-12 md:gap-16 px-4 md:px-0">
           {FEATURE_LIST.map((it) => (
             <div data-feature-name={it.name} key={it.name}>
               <div className="mb-4 font-bold text-lg leading-none">
@@ -539,9 +539,7 @@ function Logo({ onClick, hideText }) {
         src={asset("/logo.png")}
       />
       {!hideText && (
-        <span className="inline-block logo text-lg font-bold">
-          CodePerfect 95
-        </span>
+        <span className="inline-block logo text-lg font-bold">CodePerfect</span>
       )}
     </A>
   );
@@ -634,7 +632,7 @@ function Layout() {
               <Logo hideText />
             </div>
             <div className="text-sm">
-              &copy; {new Date().getFullYear()} CodePerfect 95
+              &copy; {new Date().getFullYear()} CodePerfect
             </div>
           </div>
         </div>
@@ -648,7 +646,7 @@ function App() {
     <>
       <Helmet>
         <meta charSet="utf-8" />
-        <title>CodePerfect 95</title>
+        <title>CodePerfect</title>
       </Helmet>
       <BrowserRouter>
         <Routes>

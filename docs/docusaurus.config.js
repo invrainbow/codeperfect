@@ -5,8 +5,8 @@ const lightCodeTheme = require("prism-react-renderer/themes/github");
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: "CodePerfect 95 Docs",
-  tagline: "Documentation for CodePerfect 95",
+  title: "CodePerfect Docs",
+  tagline: "Documentation for CodePerfect",
   url: "https://docs.codeperfect95.com",
   baseUrl: "/",
   onBrokenLinks: "throw",
@@ -42,9 +42,9 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       navbar: {
-        title: "CodePerfect 95 Docs",
+        title: "CodePerfect Docs",
         logo: {
-          alt: "CodePerfect 95",
+          alt: "CodePerfect",
           src: "logo.png",
         },
         items: [
@@ -63,13 +63,13 @@ const config = {
       footer: {
         style: "dark",
         logo: {
-          alt: "CodePerfect 95",
+          alt: "CodePerfect",
           src: "logo.png",
           href: "https://codeperfect95.com",
           width: 48,
           height: 48,
         },
-        copyright: `© ${new Date().getFullYear()} CodePerfect 95`,
+        copyright: `© ${new Date().getFullYear()} CodePerfect`,
       },
       prism: {
         theme: lightCodeTheme,
