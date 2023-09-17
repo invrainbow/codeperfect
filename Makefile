@@ -2,7 +2,6 @@ CC = clang++
 
 CFLAGS = -std=c++17 -I. -Iimgui/ -ferror-limit=100 -Itree-sitter/lib/include
 CFLAGS += -Wno-switch -Wno-writable-strings -Wno-arc-performSelector-leaks -Wno-deprecated
-# CFLAGS += -mavx -maes
 
 ifeq ($(TESTING_BUILD), 1)
 	CFLAGS += -DTESTING_BUILD
@@ -33,10 +32,8 @@ LDFLAGS += $(shell sh/pkgconfig --libs $(PKGS))
 
 GOLDFLAGS =
 ifeq ($(RELEASE), 1)
-	# CFLAGS += -O3
 	CFLAGS += -g -O3
 	GOLDFLAGS += -s -w
-	# LDFLAGS += -Wl,-S,-x
 else
 	CFLAGS += -DDEBUG_BUILD -g -O0
 	CFLAGS += -MMD -MP
