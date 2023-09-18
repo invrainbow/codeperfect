@@ -5,7 +5,7 @@ stack and is instead written from scratch in C/C++/OpenGL like a video game.
 
 It starts instantly, runs at 144 FPS, has near-zero latency, and comes with
 native, full-featured code intelligence and integrated debugging with Delve. See
-more of the features [here](https://codeperfect95.com/features).
+more of the features [here](https://docs.codeperfect95.com).
 
 It's no longer actively developed, but is now open source and available for
 free.
@@ -15,13 +15,13 @@ Linux.
 
 ### Links
 
-- [Docs](https://docs.codeperfect95.com)
+- [Documentation](https://docs.codeperfect95.com)
 - [Changelog](https://docs.codeperfect95.com/changelog)
 
 ### Download
 
-- [Download build 23.09 — macOS Intel](https://codeperfect95.s3.us-east-2.amazonaws.com/app/mac-x64-23.09.zip)
-- [Download build 23.09 — macOS M1](https://codeperfect95.s3.us-east-2.amazonaws.com/app/mac-arm-23.09.zip)
+- [Build 23.09 — macOS Intel](https://codeperfect95.s3.us-east-2.amazonaws.com/app/mac-x64-23.09.zip)
+- [Build 23.09 — macOS M1](https://codeperfect95.s3.us-east-2.amazonaws.com/app/mac-arm-23.09.zip)
 
 ### Building
 
