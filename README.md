@@ -13,23 +13,31 @@ free.
 Currently it only supports MacOS and there are no plans to port it to Windows or
 Linux.
 
-### Prebuilt binaries
+### Links
 
-You can find them on the [website](https://codeperfect95.com).
+- [Docs](https://docs.codeperfect95.com)
+- [Changelog](https://docs.codeperfect95.com/changelog)
 
-### Install dependencies
+### Download
+
+- [Download build 23.09 — macOS Intel](https://codeperfect95.s3.us-east-2.amazonaws.com/app/mac-x64-23.09.zip)
+- [Download build 23.09 — macOS M1](https://codeperfect95.s3.us-east-2.amazonaws.com/app/mac-arm-23.09.zip)
+
+### Building
+
+#### Install dependencies
 
 ```
 sh/install_deps
 ```
 
-### Building raw binary
+#### Building raw binary
 
 ```
 sh/build
 ```
 
-### Building an .app
+#### Building an .app
 
 ```
 SKIP_UPLOAD=1 sh/package
