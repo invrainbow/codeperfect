@@ -1,6 +1,6 @@
 # CodePerfect
 
-![](img/download.png)
+<center><img src='img/download.png' width='500'></center>
 
 CodePerfect was an experiment to build a faster IDE. It eschews the modern tech
 stack and is instead written from scratch in C/C++/OpenGL like a video game.
@@ -15,7 +15,7 @@ free.
 Currently it only supports MacOS and there are no plans to port it to Windows or
 Linux.
 
-<img width="300" src="img/feature-autocomplete.png"> <img width="300" src="img/feature-find-references.png"> <img width="300" src="img/feature-goto-file.png"> <img width="300" src="img/feature-command-palette.png"> <img width="300" src="img/feature-generate-implementation.png"> <img width="300" src="img/feature-postfix.png">
+<img width="150" src="img/feature-autocomplete.png"> <img width="150" src="img/feature-find-references.png"> <img width="150" src="img/feature-goto-file.png"> <img width="150" src="img/feature-command-palette.png"> <img width="150" src="img/feature-generate-implementation.png"> <img width="150" src="img/feature-postfix.png">
 
 ### Links
 
