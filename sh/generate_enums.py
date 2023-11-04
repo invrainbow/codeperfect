@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # Enums must not contain any blank lines between the "enum X {" and "}"
 import os
 import pathlib
@@ -16,8 +18,11 @@ def main():
     write_cpp('#include "enums.hpp"')
     write_cpp("")
 
-    for file in os.listdir("."):
+    for _file in os.listdir("src"):
+        file = os.path.join("src", _file)
+
         if os.path.isdir(file):
+
             continue
         if not file.endswith(".hpp"):
             continue
@@ -70,9 +75,9 @@ def main():
 
 if __name__ == "__main__":
     try:
-        with open("enums.hpp", "w") as fhpp:
-            with open("enums.cpp", "w") as fcpp:
+        with open("src/enums.hpp", "w") as fhpp:
+            with open("src/enums.cpp", "w") as fcpp:
                 main()
     except:
-        pathlib.Path('enums.hpp').unlink(missing_ok=True)
-        pathlib.Path('enums.cpp').unlink(missing_ok=True)
+        pathlib.Path('src/enums.hpp').unlink(missing_ok=True)
+        pathlib.Path('src/enums.cpp').unlink(missing_ok=True)

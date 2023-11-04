@@ -2,7 +2,7 @@
 set -e
 
 # download submodules
-git submodule update --init --recursive
+git submodule update --init --recursive --depth=1
 
 # vcpkg
 ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
