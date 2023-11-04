@@ -1,0 +1,51 @@
+{
+  "name": "web2",
+  "version": "0.1.2",
+  "private": true,
+  "dependencies": {
+    "@csstools/postcss-sass": "^5.0.1",
+    "@react-icons/all-files": "^4.1.0",
+    "@tabler/icons": "^1.115.0",
+    "classnames": "^2.3.1",
+    "concurrently": "^7.3.0",
+    "postcss": "^8.4.16",
+    "postcss-cli": "^10.0.0",
+    "posthog-js": "^1.28.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-helmet": "^6.1.0",
+    "react-icons": "^4.4.0",
+    "react-responsive": "^9.0.0-beta.10",
+    "react-router-dom": "^6.3.0",
+    "sass": "^1.54.4",
+    "tailwind-merge": "^1.7.0",
+    "web-vitals": "^2.1.4"
+  },
+  "scripts": {
+    "start": "export REACT_APP_BUILD_VERSION=$(../sh/printversion); export REACT_APP_CPENV=development; react-scripts start",
+    "css": "postcss -w -o src/index.css src/index.scss",
+    "build": "export REACT_APP_BUILD_VERSION=$(../sh/printversion); postcss -o src/index.css src/index.scss && react-scripts build"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "react-refresh": "0.10.0",
+    "react-scripts": "^5.0.1",
+    "typescript": "latest"
+  }
+}

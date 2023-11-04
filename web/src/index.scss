@@ -1,0 +1,271 @@
+@use "sass:math";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html {
+    font-size: 16px;
+  }
+
+  body {
+    background: #f6f6f6;
+    color: #555;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  * {
+    @apply outline-none;
+  }
+
+  a {
+    @apply text-primary underline;
+    @apply break-words underline-offset-2;
+  }
+  a.btn {
+    @apply no-underline;
+  }
+
+  p,
+  ul,
+  ol,
+  blockquote,
+  center,
+  pre,
+  form {
+    &:not(:first-child) {
+      @apply mt-4;
+    }
+  }
+
+  ul,
+  ol {
+    @apply pl-4;
+  }
+
+  li {
+    @apply list-outside;
+    @apply ml-4;
+  }
+
+  ul li {
+    @apply list-disc;
+  }
+  ol li {
+    @apply list-decimal;
+  }
+
+  code {
+    @apply rounded-md px-1.5 py-0.5;
+    margin-bottom: 1px;
+    display: inline-block;
+  }
+  pre {
+    @apply rounded-md px-3 py-2;
+  }
+  code,
+  pre {
+    background: #eef2ee;
+    color: #383;
+    font-size: 82.5%;
+  }
+
+  button {
+    outline: none !important;
+  }
+  svg {
+    display: block;
+  }
+
+  * {
+    outline: 0 !important;
+  }
+}
+
+@layer components {
+  .title {
+    @apply font-bold text-black tracking-tight;
+  }
+  .btn {
+    @apply rounded-md shadow leading-none;
+    @apply py-3 px-6;
+    @apply disabled:opacity-50 no-underline outline-none;
+    @apply whitespace-nowrap;
+    @apply inline-flex items-center;
+    @apply text-base font-ui font-medium box-border;
+
+    &:not(:disabled):not(.disabled):not(.btn-no-hover) {
+      @apply hover:scale-[1.015] active:top-[1px] active:scale-[.985] transition-transform duration-100;
+    }
+    &:disabled,
+    &.disabled {
+      @apply cursor-not-allowed opacity-30;
+    }
+
+    &.btn-sm {
+      @apply py-1.5 px-4;
+      font-size: 0.9em;
+    }
+    &.btn-lg {
+      @apply py-4 px-8;
+      font-size: 1.15em;
+      letter-spacing: 0.05px;
+    }
+
+    &.btn1 {
+      @apply bg-primary text-white;
+      filter: saturate(0.8);
+    }
+    &.btn2 {
+      @apply bg-white text-neutral-700;
+    }
+  }
+
+  .caps-title {
+    letter-spacing: 0.015em;
+    font-style: normal;
+    font-weight: 700;
+    font-size: 18px;
+    line-height: 20px;
+    text-transform: uppercase;
+  }
+}
+
+@layer utilities {
+  .text-shadow {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .text-shadow-md {
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08);
+  }
+
+  .text-shadow-lg {
+    text-shadow: 0 15px 30px rgba(0, 0, 0, 0.11), 0 5px 15px rgba(0, 0, 0, 0.08);
+  }
+
+  .text-shadow-none {
+    text-shadow: none;
+  }
+
+  .thick-list li {
+    @apply mb-3;
+  }
+  .prose {
+    h2:not(:first-child) {
+      @apply mt-4;
+    }
+    h3 {
+      @apply mt-4 text-neutral-700 font-semibold;
+    }
+    p,
+    ol,
+    ul,
+    blockquote {
+      &:not(:first-child) {
+        @apply mt-4;
+      }
+    }
+  }
+
+  @media (min-width: 640px) {
+    .nice-image {
+      border-color: #242424;
+    }
+  }
+
+  .lds-ring {
+    display: inline-block;
+    position: relative;
+  }
+  .lds-ring div {
+    border: solid 1px #ddd;
+    box-sizing: border-box;
+    display: block;
+    position: absolute;
+    border-radius: 50%;
+    animation: lds-ring 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+    border-color: #ddd transparent transparent transparent;
+  }
+  .lds-ring div:nth-child(1) {
+    animation-delay: -0.45s;
+  }
+  .lds-ring div:nth-child(2) {
+    animation-delay: -0.3s;
+  }
+  .lds-ring div:nth-child(3) {
+    animation-delay: -0.15s;
+  }
+  @keyframes lds-ring {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+
+  .back-to-basics {
+    position: relative;
+    color: #555555;
+    overflow: hidden;
+    background: white;
+  }
+
+  .batteries-included {
+    position: relative;
+    z-index: 0;
+    color: #242424;
+    overflow: hidden;
+    background: linear-gradient(
+      180deg,
+      rgb(246, 246, 250) 0%,
+      rgb(232, 232, 236) 100%
+    );
+    .batteries-included-tile {
+      background: white;
+      &:hover {
+        transform: scale(1.03);
+      }
+    }
+  }
+
+  .handmade-link {
+    @apply text-neutral-700 no-underline relative inline-block leading-none font-semibold;
+    &::after {
+      position: absolute;
+      content: " ";
+      top: 100%;
+      left: 0;
+      right: 0;
+      margin-top: 2px;
+      height: 3px;
+      @apply bg-neutral-200;
+    }
+    &:hover {
+      @apply text-neutral-600;
+      &::after {
+        @apply bg-neutral-300;
+      }
+    }
+  }
+
+  .features {
+    code {
+      @apply leading-none py-0.5 px-1;
+    }
+    pre {
+      @apply py-2 px-3 rounded;
+    }
+    img {
+      @apply block rounded-xl border border-neutral-400 shadow;
+    }
+  }
+}
