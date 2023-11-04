@@ -1,25 +1,25 @@
 [submodule "tree-sitter-go"]
-	path = tree-sitter-go
+	path = src/tree-sitter-go
 	url = git@github.com:codeperfect95/tree-sitter-go.git
     branch = codeperfect
 [submodule "stb"]
-	path = stb
+	path = src/stb
 	url = https://github.com/nothings/stb
 [submodule "imgui"]
-	path = imgui
+	path = src/imgui
 	url = https://github.com/codeperfect95/imgui
     branch = codeperfect
 [submodule "vcpkg"]
-	path = vcpkg
+	path = src/vcpkg
 	url = git@github.com:codeperfect95/vcpkg.git
 [submodule "tree-sitter"]
-	path = tree-sitter
+	path = src/tree-sitter
 	url = https://github.com/tree-sitter/tree-sitter
 [submodule "tree-sitter-go-work"]
-	path = tree-sitter-go-work
+	path = src/tree-sitter-go-work
 	url = https://github.com/codeperfect95/tree-sitter-go-work
 [submodule "tree-sitter-go-mod"]
-	path = tree-sitter-go-mod
+	path = src/tree-sitter-go-mod
 	url = git@github.com:codeperfect95/tree-sitter-go-mod.git
 [submodule "jblow_tests/workspace/packer"]
 	path = jblow_tests/workspace/packer

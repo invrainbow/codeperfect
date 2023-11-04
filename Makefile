@@ -1,6 +1,6 @@
 CC = clang++
 
-CFLAGS = -std=c++17 -I. -Isrc -Iimgui/ -ferror-limit=100 -Itree-sitter/lib/include
+CFLAGS = -std=c++17 -I. -Isrc -Isrc/imgui/ -ferror-limit=100 -Isrc/tree-sitter/lib/include
 CFLAGS += -Wno-switch -Wno-writable-strings -Wno-arc-performSelector-leaks -Wno-deprecated
 
 ifeq ($(TESTING_BUILD), 1)
@@ -83,13 +83,13 @@ obj/clibs.o: src/clibs.c
 obj/tsgo.o: src/tsgo.c
 	clang $(CFLAGS) -std=gnu99 -fPIC -c -o $@ $<
 
-obj/tsgomod.o: tree-sitter-go-mod/src/parser.c
+obj/tsgomod.o: src/tree-sitter-go-mod/src/parser.c
 	clang $(CFLAGS) -std=gnu99 -fPIC -c -o $@ $<
 
-obj/tsgowork.o: tree-sitter-go-work/src/parser.c
+obj/tsgowork.o: src/tree-sitter-go-work/src/parser.c
 	clang $(CFLAGS) -std=gnu99 -fPIC -c -o $@ $<
 
-src/binaries.c: .cpcolors vert.glsl frag.glsl im.vert.glsl im.frag.glsl
+src/binaries.c: src/.cpcolors src/vert.glsl src/frag.glsl src/im.vert.glsl src/im.frag.glsl
 	$(PYTHON) sh/create_binaries_c.py $^
 
 COMMON_GOFLAGS = GOARCH=$(GOARCH) CC=clang CGO_CFLAGS="-mmacosx-version-min=10.12" CGO_LDFLAGS="-mmacosx-version-min=10.12"
@@ -100,7 +100,7 @@ obj/gohelper.a: $(GO_DEPS)
 
 src/gohelper.h: obj/gohelper.a
 
-src/tstypes.hpp: tree-sitter-go/src/parser.c sh/generate_tstypes.py
+src/tstypes.hpp: src/tree-sitter-go/src/parser.c sh/generate_tstypes.py
 	$(PYTHON) sh/generate_tstypes.py
 
 src/enums.cpp: src/enums.hpp

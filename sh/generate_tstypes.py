@@ -1,9 +1,9 @@
 #!/usr/bin/env python3.9
 
 PARSER_FILES = (
-    ('tree-sitter-go/src/parser.c', 'ts'),
-    ('tree-sitter-go-work/src/parser.c', 'tsgw'),
-    ('tree-sitter-go-mod/src/parser.c', 'tsgm'),
+    ('src/tree-sitter-go/src/parser.c', 'ts'),
+    ('src/tree-sitter-go-work/src/parser.c', 'tsgw'),
+    ('src/tree-sitter-go-mod/src/parser.c', 'tsgm'),
 )
 
 #  ----------------------
