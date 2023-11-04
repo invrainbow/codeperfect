@@ -1,4 +1,4 @@
-![](logo.png)
+<img src="logo.png" width="64">
 
 # CodePerfect
 
