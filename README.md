@@ -1,4 +1,4 @@
-<img src="logo.png" width="64">
+<img src="web/public/logo.png" width="64">
 
 # CodePerfect
 
