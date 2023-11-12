@@ -20,15 +20,11 @@ export default function Home() {
           </div>
           <div className="max-w-[550px] mx-auto leading-relaxed">
             <p>
-              CodePerfect was an experiment to build a faster IDE. It eschews
-              the modern tech stack and is instead written from scratch in
-              C/C++/OpenGL like a video game.
-            </p>
-            <p>
-              It starts instantly, runs at 144 FPS, has near-zero latency, and
-              comes with native, full-featured code intelligence and integrated
-              debugging with Delve. See more of the features{" "}
-              <A href="/features">here</A>.
+              CodePerfect is a fast Go IDE, built from scratch in C/C++/OpenGL
+              like a video game. It starts instantly, runs at 144 FPS, has
+              near-zero latency, and comes with native, full-featured code
+              intelligence and integrated debugging with Delve. See more
+              features <A href="/features">here</A>.
             </p>
             <p>
               It's no longer actively developed, but is now{" "}
