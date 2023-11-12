@@ -1,6 +1,10 @@
+/** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ["./src/**/*.{js,jsx,ts,tsx}", "./public/index.html"],
-  darkMode: "media",
+  content: [
+    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+  ],
   theme: {
     extend: {
       colors: {
@@ -25,26 +29,10 @@ module.exports = {
         wide: "0.015em",
       },
     },
+
     fontFamily: {
-      serif: [
-        "New York",
-        "-apple-system-ui-serif",
-        "ui-serif",
-        "Georgia",
-        "serif",
-      ],
       sans: [
-        "DM Sans",
-        "system-ui",
-        "-apple-system",
-        "BlinkMacSystemFont",
-        "Segoe UI",
-        "Roboto",
-        "Helvetica Neue",
-        "Ubuntu",
-        "sans-serif",
-      ],
-      ui: [
+        "var(--font-inter)",
         "system-ui",
         "-apple-system",
         "BlinkMacSystemFont",
@@ -55,6 +43,7 @@ module.exports = {
         "sans-serif",
       ],
       mono: [
+        "var(--font-jetbrains-mono)",
         "SF Mono",
         "SFMono-Regular",
         "ui-monospace",
@@ -63,27 +52,9 @@ module.exports = {
         "Consolas",
         "monospace",
       ],
-      title: [
-        "system-ui",
-        "-apple-system",
-        "BlinkMacSystemFont",
-        "Segoe UI",
-        "Roboto",
-        "Helvetica Neue",
-        "Ubuntu",
-        "sans-serif",
-      ],
-      title2: [
-        "-apple-system",
-        "BlinkMacSystemFont",
-        "Segoe UI",
-        "Roboto",
-        "Helvetica Neue",
-        "Ubuntu",
-        "sans-serif",
-      ],
     },
   },
+
   variants: {
     extend: {
       opacity: ["disabled", "group-hover"],
