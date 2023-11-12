@@ -1,11 +1,9 @@
-import { AiFillApple } from "@react-icons/all-files/ai/AiFillApple";
 import { SiVim } from "@react-icons/all-files/si/SiVim";
 import {
   IconBinaryTree,
   IconBrain,
   IconBulb,
   IconChevronRight,
-  IconClockHour4,
   IconCommand,
   IconDiamond,
   IconDownload,
@@ -14,7 +12,6 @@ import {
   IconMenu2,
   IconRobot,
   IconSearch,
-  IconTag,
   IconTags,
   IconTelescope,
   IconTools,
@@ -22,7 +19,6 @@ import {
   IconX,
 } from "@tabler/icons";
 
-import cx from "classnames";
 import React from "react";
 import { Helmet } from "react-helmet";
 import { twMerge } from "tailwind-merge";
@@ -40,8 +36,6 @@ import {
 import "./index.css";
 
 const SUPPORT_EMAIL = "support@codeperfect95.com";
-const CURRENT_BUILD = process.env.REACT_APP_BUILD_VERSION;
-const CURRENT_BUILD_RELEASE_DATE = "July 15, 2023";
 
 const isDev = process.env.REACT_APP_CPENV === "development";
 const isStaging = process.env.REACT_APP_CPENV === "staging";
@@ -54,6 +48,7 @@ const BASE_LINKS = {
   oldSoftwareOpenedInstantly:
     "https://www.youtube.com/watch?v=GC-0tCy4P1U&t=2168s",
   github: "https://github.com/codeperfect95/codeperfect",
+  download: "https://github.com/codeperfect95/codeperfect/releases",
 };
 
 const DEV_LINKS = {
@@ -71,19 +66,6 @@ const LINKS = {
   ...(isDev ? DEV_LINKS : {}),
   ...(isStaging ? STAGING_LINKS : {}),
 };
-
-const DOWNLOADS = [
-  {
-    platform: "mac-x64",
-    icon: AiFillApple,
-    label: "macOS Intel",
-  },
-  {
-    platform: "mac-arm",
-    icon: AiFillApple,
-    label: "macOS M1",
-  },
-];
 
 function asset(path) {
   return isDev ? `${path}` : path;
@@ -178,7 +160,7 @@ function Home() {
         </div>
         <div className="md:text-center flex flex-col md:flex-row gap-4 md:justify-center">
           <A
-            href="/download"
+            href={LINKS.download}
             className="btn btn1 justify-center flex md:inline-flex text-center"
           >
             <Icon size={18} className="mr-1" icon={IconDownload} />
@@ -743,56 +725,6 @@ function FAQ() {
   );
 }
 
-function Download() {
-  return (
-    <div className="my-12 md:my-28 px-6 md:px-0">
-      <div className="md:px-4 md:text-center text-3xl md:text-5xl title leading-none">
-        CodePerfect for Mac
-      </div>
-      <div className="text-center mt-2">
-        <A
-          href={`${LINKS.changelog}/${CURRENT_BUILD}`}
-          className={cx(
-            "flex items-start md:items:center md:justify-center flex-col md:flex-row",
-            "gap-1 md:gap-4 no-underline opacity-90 hover:opacity-100 font-ui"
-          )}
-        >
-          <span className="inline-block">
-            <span className="font-semibold text-sm text-neutral-700 flex gap-x-1.5 items-center">
-              <Icon size={18} icon={IconTag} />
-              <span>Build {CURRENT_BUILD}</span>
-            </span>
-          </span>
-          <span className="inline-block">
-            <span className="font-semibold text-sm text-neutral-700 gap-x-1.5 items-center flex">
-              <Icon size={18} icon={IconClockHour4} />
-              <span>Released {CURRENT_BUILD_RELEASE_DATE}</span>
-            </span>
-          </span>
-        </A>
-      </div>
-      <div className="mt-8 md:text-center md:max-w-xs mx-auto flex flex-wrap flex-col justify-center">
-        {DOWNLOADS.map((it) => (
-          <div key={it.platform} className="mb-3 md:mb-2 last:mb-0">
-            <A
-              href={`https://codeperfect95.s3.us-east-2.amazonaws.com/app/${it.platform}-${CURRENT_BUILD}.zip`}
-              className="btn btn1 flex leading-none py-4 px-5 relative"
-            >
-              <Icon
-                size={18}
-                stroke={2}
-                className="relative mt-0.5 mr-1"
-                icon={it.icon}
-              />
-              <span>{it.label}</span>
-            </A>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function Terms() {
   return (
     <WallOfText>
@@ -851,7 +783,7 @@ function Header() {
     [LINKS.docs, "Docs"],
     [LINKS.changelog, "Changelog"],
     ["/features", "Features"],
-    ["/download", "Download"],
+    [LINKS.download, "Download"],
     [LINKS.github, "Github"],
   ];
 
@@ -930,7 +862,7 @@ function Footer() {
         <div className="flex flex-col md:flex-row md:items-start gap-y-3 md:gap-x-14 leading-none">
           <FootSection>
             <FootLink href="/features">Features</FootLink>
-            <FootLink href="/download">Download for Mac</FootLink>
+            <FootLink href={LINKS.download}>Download for Mac</FootLink>
           </FootSection>
           <FootSection>
             <FootLink href={LINKS.docs}>Docs</FootLink>
@@ -971,7 +903,6 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Layout />}>
-            <Route path="download" element={<Download />} />
             <Route path="features" element={<Features />} />
             <Route path="terms" element={<Terms />} />
             <Route path="faq" element={<FAQ />} />

@@ -17,7 +17,7 @@ supports MacOS and there are currently no plans to port it.
 - [Website](https://codeperfect95.com)
 - [Docs](https://docs.codeperfect95.com)
 - [Changelog](https://docs.codeperfect95.com/changelog)
-- [Download](https://codeperfect95.com/download)
+- [Download](https://github.com/codeperfect95/codeperfect/releases/)
 
 ### Build
 
@@ -36,8 +36,7 @@ sh/build
 #### Build .app
 
 ```
-SKIP_UPLOAD=1 sh/package
+sh/package
 ```
 
-Without `SKIP_UPLOAD=1` it tries to upload to the S3 bucket, which only I can
-access.
+The resulting .app (and .zip) will be in the `scratch` folder.

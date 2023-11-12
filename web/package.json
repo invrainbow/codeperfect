@@ -1,5 +1,5 @@
 {
-  "name": "web2",
+  "name": "codeperfect-web",
   "version": "0.1.2",
   "private": true,
   "dependencies": {
@@ -22,9 +22,9 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "export REACT_APP_BUILD_VERSION=$(../sh/printversion); export REACT_APP_CPENV=development; react-scripts start",
+    "start": "export REACT_APP_CPENV=development; react-scripts start",
     "css": "postcss -w -o src/index.css src/index.scss",
-    "build": "export REACT_APP_BUILD_VERSION=$(../sh/printversion); postcss -o src/index.css src/index.scss && react-scripts build"
+    "build": "postcss -o src/index.css src/index.scss && react-scripts build"
   },
   "eslintConfig": {
     "extends": [
