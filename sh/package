@@ -27,7 +27,7 @@ fi
 # create .app from ide
 rm -rf CodePerfect.app
 appify -name CodePerfect \
-    -icon ../logo.png \
+    -icon ../web/public/logo.png \
     -version $version_string \
     -author "CodePerfect" \
     -id com.codeperfect95 \
@@ -38,10 +38,4 @@ cp ../build/bin/* "CodePerfect.app/Contents/MacOS"
 rm -rf CodePerfect.app/Contents/README
 
 # zip up app
-ditto -c -k --keepParent CodePerfect.app app.zip
-
-# push to s3
-if [[ -z "$SKIP_UPLOAD" ]]; then
-    filename="mac-$slug-$version_string.zip"
-    aws s3 cp app.zip "s3://codeperfect95/app/$filename"
-fi
+ditto -c -k --keepParent CodePerfect.app "mac-$slug-$version_string.zip"
