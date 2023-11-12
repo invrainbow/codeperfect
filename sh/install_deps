@@ -5,11 +5,11 @@ set -e
 git submodule update --init --recursive --depth=1
 
 # vcpkg
-./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+src/vcpkg/bootstrap-vcpkg.sh -disableMetrics
 export VCPKG_DEFAULT_TRIPLET=$(sh/vcpkg_triplet)
 export VCPKG_OSX_DEPLOYMENT_TARGET=10.12
 export MACOSX_DEPLOYMENT_TARGET=10.12
-vcpkg/vcpkg install --x-install-root=vcpkg/installed
+src/vcpkg/vcpkg install --x-install-root=src/vcpkg/installed
 
 # appify
 go install github.com/machinebox/appify@latest
