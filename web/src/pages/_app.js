@@ -112,6 +112,7 @@ const FOOTER_LINKS = [
   [
     { href: LINKS.docs, label: "Docs" },
     { href: LINKS.changelog, label: "Changelog" },
+    { href: LINKS.github, label: "Github" },
   ],
   [
     { href: `mailto:${SUPPORT_EMAIL}`, label: "Support" },
