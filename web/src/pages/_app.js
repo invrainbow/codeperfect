@@ -1,11 +1,11 @@
 import "@/styles/globals.scss";
 
-import { A, Icon, wrap } from "@/components";
+import { A, Icon } from "@/components";
+import { inter, jetbrainsMono } from "@/components/fonts";
 import { LINKS, SUPPORT_EMAIL } from "@/constants";
-import { useEffect, useState } from "react";
 import { IconMenu2, IconX } from "@tabler/icons-react";
-import classNames from "classnames";
-import { inter } from "@/components/fonts";
+import cx from "classnames";
+import { useEffect, useState } from "react";
 
 function Logo({ onClick, hideText }) {
   return (
@@ -30,7 +30,7 @@ function Header() {
   const [showMenu, setShowMenu] = useState(false);
 
   useEffect(() => {
-    const listener = (e) => {
+    const listener = () => {
       setShowMenu(false);
     };
     document.body.addEventListener("click", listener);
@@ -46,7 +46,7 @@ function Header() {
   ];
 
   return (
-    <div className="p-4 md:p-4 border-b border-gray-50 bg-white">
+    <div className="p-4 md:p-6 bg-white shadow-2xl shadow-neutral-800/5">
       <div className="flex justify-between items-center w-full md:max-w-screen-lg md:mx-auto">
         <Logo />
         <div className="md:hidden relative">
@@ -104,8 +104,20 @@ function Header() {
   );
 }
 
-const FootSection = wrap("div", "flex flex-col gap-y-3 md:gap-y-3 text-left");
-const FootLink = wrap(A, "text-gray-800 no-underline");
+const FOOTER_LINKS = [
+  [
+    { href: "/features", label: "Features" },
+    { href: LINKS.download, label: "Download for Mac" },
+  ],
+  [
+    { href: LINKS.docs, label: "Docs" },
+    { href: LINKS.changelog, label: "Changelog" },
+  ],
+  [
+    { href: `mailto:${SUPPORT_EMAIL}`, label: "Support" },
+    { href: "/faq", label: "FAQ" },
+  ],
+];
 
 function Footer() {
   return (
@@ -118,18 +130,19 @@ function Footer() {
           <div>&copy; {new Date().getFullYear()} CodePerfect</div>
         </div>
         <div className="flex flex-col md:flex-row md:items-start gap-y-3 md:gap-x-14 leading-none">
-          <FootSection>
-            <FootLink href="/features">Features</FootLink>
-            <FootLink href={LINKS.download}>Download for Mac</FootLink>
-          </FootSection>
-          <FootSection>
-            <FootLink href={LINKS.docs}>Docs</FootLink>
-            <FootLink href={LINKS.changelog}>Changelog</FootLink>
-          </FootSection>
-          <FootSection>
-            <FootLink href={`mailto:${SUPPORT_EMAIL}`}>Support</FootLink>
-            <FootLink href="/faq">FAQ</FootLink>
-          </FootSection>
+          {FOOTER_LINKS.map((group, i) => (
+            <div key={i} className="flex flex-col gap-y-3 md:gap-y-3 text-left">
+              {group.map((it) => (
+                <A
+                  key={it.href}
+                  className="text-gray-800 no-underline"
+                  href={it.href}
+                >
+                  {it.label}
+                </A>
+              ))}
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -138,7 +151,13 @@ function Footer() {
 
 export default function App({ Component, pageProps }) {
   return (
-    <div className={classNames("flex flex-col min-h-screen")}>
+    <div
+      className={cx(
+        "flex flex-col min-h-screen font-sans",
+        inter.variable,
+        jetbrainsMono.variable
+      )}
+    >
       <div className="flex-grow">
         <Header />
         <Component {...pageProps} />

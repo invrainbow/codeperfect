@@ -19,7 +19,7 @@ export default function Features() {
             <div key={it.name} className="mb-3 last:mb-0 leading-none">
               <button
                 onClick={() => onScroll(it.name)}
-                className="p-0 leading-none text-[95%] text-neutral-600 hover:text-neutral-900 text-left"
+                className="p-0 leading-none text-sm font-medium text-neutral-600 hover:text-neutral-900 text-left"
                 key={it.name}
               >
                 {it.name}

@@ -3,18 +3,7 @@
 @tailwind utilities;
 
 body {
-  @apply antialiased font-sans;
-}
-
-html {
-  font-size: 15px;
-}
-
-body {
-  background: #f6f6f6;
-  color: #555;
-  margin: 0;
-  line-height: 1.5;
+  @apply antialiased bg-neutral-50 text-neutral-600;
 }
 
 * {
@@ -59,34 +48,25 @@ ol li {
 }
 
 code {
-  @apply rounded-md px-1.5 py-0.5;
-  margin-bottom: 1px;
-  display: inline-block;
+  @apply rounded-md px-1.5 py-0.5 mb-[1px] inline-block;
 }
 pre {
   @apply rounded-md px-3 py-2;
 }
 code,
 pre {
+  @apply font-mono text-sm text-lime-700;
   background: #eef2ee;
-  color: #383;
-  font-size: 82.5%;
 }
 
-button {
-  outline: none !important;
-}
 svg {
-  display: block;
-}
-
-* {
-  outline: 0 !important;
+  @apply block;
 }
 
 .title {
   @apply font-bold text-black tracking-tight;
 }
+
 .btn {
   @apply rounded-md shadow leading-none;
   @apply py-3 px-6;
@@ -104,18 +84,14 @@ svg {
   }
 
   &.btn-sm {
-    @apply py-1.5 px-4;
-    font-size: 0.9em;
+    @apply py-1.5 px-4 text-sm;
   }
   &.btn-lg {
-    @apply py-4 px-8;
-    font-size: 1.15em;
-    letter-spacing: 0.05px;
+    @apply py-4 px-8 text-lg tracking-tight;
   }
 
   &.btn1 {
-    @apply bg-primary text-white;
-    filter: saturate(0.8);
+    @apply bg-primary text-white saturate-[0.8];
   }
   &.btn2 {
     @apply bg-white text-neutral-700;
@@ -140,20 +116,14 @@ svg {
 }
 
 .batteries-included {
-  position: relative;
-  z-index: 0;
-  color: #242424;
-  overflow: hidden;
+  @apply relative z-0 text-neutral-800 overflow-hidden;
   background: linear-gradient(
     180deg,
     rgb(246, 246, 250) 0%,
     rgb(232, 232, 236) 100%
   );
   .batteries-included-tile {
-    background: white;
-    &:hover {
-      transform: scale(1.03);
-    }
+    @apply bg-white hover:scale-[1.03];
   }
 }
 

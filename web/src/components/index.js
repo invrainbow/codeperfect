@@ -1,5 +1,4 @@
 import React from "react";
-import { twMerge } from "tailwind-merge";
 import Link from "next/link";
 
 function isExternalLink(href) {
@@ -27,18 +26,6 @@ export function A({ children, href, newWindow, ...props }) {
   }
   props.href = href;
   return <a {...props}>{children}</a>;
-}
-
-export function wrap(elem, extraClassName, defaultProps, overrideProps) {
-  return ({ children, className, ...props }) => {
-    const newProps = {
-      ...(defaultProps || {}),
-      ...props,
-      ...(overrideProps || {}),
-      className: twMerge(extraClassName, className),
-    };
-    return React.createElement(elem, newProps, children);
-  };
 }
 
 export function Icon({ block, noshift, icon: IconComponent, ...props }) {

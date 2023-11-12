@@ -1,10 +1,8 @@
-import { inter, jetbrainsMono } from "@/components/fonts";
-import { Html, Head, Main, NextScript } from "next/document";
-import cx from "classnames";
+import { Head, Html, Main, NextScript } from "next/document";
 
 export default function Document() {
   return (
-    <Html lang="en" className={cx(inter.variable, jetbrainsMono.variable)}>
+    <Html lang="en">
       <Head />
       <body>
         <Main />

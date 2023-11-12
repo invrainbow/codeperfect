@@ -116,7 +116,7 @@ export default function Home() {
           </div>
 
           <div className="hidden md:block flex-1">
-            <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-lg rounded p-6 font-mono">
+            <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-[110%] rounded p-6 font-mono">
               {FEATURE_LIST.map((it) => (
                 <div
                   key={it.name}
