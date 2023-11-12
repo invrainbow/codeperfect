@@ -17,7 +17,7 @@ supports MacOS and there are currently no plans to port it.
 - [Website](https://codeperfect95.com)
 - [Docs](https://docs.codeperfect95.com)
 - [Changelog](https://docs.codeperfect95.com/changelog)
-- [Download](https://github.com/codeperfect95/codeperfect/releases/)
+- [Download](https://github.com/codeperfect95/codeperfect/releases/latest)
 
 ### Build
 

@@ -16,36 +16,16 @@ import {
 } from "@tabler/icons-react";
 import _ from "lodash";
 
-const isDev = process.env.REACT_APP_CPENV === "development";
-const isStaging = process.env.REACT_APP_CPENV === "staging";
-
 export const SUPPORT_EMAIL = "support@codeperfect95.com";
 
-const BASE_LINKS = {
+export const LINKS = {
   docs: "https://docs.codeperfect95.com",
   changelog: "https://docs.codeperfect95.com/changelog",
-
   nonPessimized: "https://www.youtube.com/watch?v=pgoetgxecw8",
   oldSoftwareOpenedInstantly:
     "https://www.youtube.com/watch?v=GC-0tCy4P1U&t=2168s",
   github: "https://github.com/codeperfect95/codeperfect",
-  download: "https://github.com/codeperfect95/codeperfect/releases",
-};
-
-const DEV_LINKS = {
-  docs: "http://localhost:3000",
-  changelog: "http://localhost:3000/changelog",
-};
-
-const STAGING_LINKS = {
-  docs: "https://dev-docs.codeperfect95.com",
-  changelog: "https://dev-docs.codeperfect95.com/changelog",
-};
-
-export const LINKS = {
-  ...BASE_LINKS,
-  ...(isDev ? DEV_LINKS : {}),
-  ...(isStaging ? STAGING_LINKS : {}),
+  download: "https://github.com/codeperfect95/codeperfect/releases/latest",
 };
 
 const UNSORTED_FEATURE_LIST = [
