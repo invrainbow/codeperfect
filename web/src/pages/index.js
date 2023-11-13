@@ -13,23 +13,16 @@ const BAD_FEATURES = [
 export default function Home() {
   return (
     <div className="bg-neutral-50 mx-auto w-full">
-      <div className="bg-white flex flex-col gap-12 max-w-full leading-relaxed px-8 py-12 md:pt-20 md:pb-24">
+      <div className="bg-white flex flex-col gap-10 max-w-full leading-relaxed px-8 py-12 md:pt-20 md:pb-24">
         <div>
-          <div className="md:text-center font-bold text-5xl text-black tracking-tight leading-[1.1] md:leading-none mb-6">
+          <div className="md:text-center font-bold text-5xl text-black tracking-tight leading-[1.1] md:leading-none mb-8">
             A fast, lightweight Go IDE
           </div>
-          <div className="max-w-[550px] mx-auto leading-relaxed">
-            <p>
-              CodePerfect is a fast Go IDE, built from scratch in C/C++/OpenGL
-              like a video game. It starts instantly, runs at 144 FPS, has
-              near-zero latency, and comes with native, full-featured code
-              intelligence and integrated debugging with Delve. See more
-              features <A href="/features">here</A>.
-            </p>
-            <p>
-              It's no longer actively developed, but is now{" "}
-              <A href={LINKS.github}>open source</A> and free.
-            </p>
+          <div className="text-center leading-relaxed">
+            <span className="bg-slate-200 text-slate-600 rounded-full text-sm font-medium py-2 px-4 leading-none">
+              <b>Note:</b> CodePerfect is no longer actively developed, but is
+              now <A href={LINKS.github}>open source</A> and free.
+            </span>
           </div>
         </div>
         <div className="md:text-center flex flex-col md:flex-row gap-4 md:justify-center">
@@ -52,7 +45,7 @@ export default function Home() {
 
       <div className="bg-neutral-900 border-gray-100 p-8 py-12 md:pb-24 relative z-10 flex items-center justify-center">
         <div className="max-w-screen-xl flex flex-col lg:flex-row items-center gap-8 md:gap-16">
-          <div className="lg:w-1/3 md:mx-0">
+          <div className="lg:w-1/3 md:mx-0 flex flex-col gap-6 md:gap-8">
             <div className="text-[160%] md:text-[200%] font-extrabold text-black leading-tight">
               {BAD_FEATURES.map((name) => (
                 <div key={name} className="text-white md:whitespace-nowrap">
@@ -60,17 +53,18 @@ export default function Home() {
                 </div>
               ))}
             </div>
-            <div className="text-lg leading-normal mt-6 md:mt-8 text-neutral-400">
+            <div className="leading-relaxed text-neutral-400">
               <p>
-                We threw out the modern software stack and rebuilt the IDE in
-                blazing fast C/C++.
+                CodePerfect is built from scratch in C/C++/OpenGL like a video
+                game. It starts instantly, runs at 144 FPS, has near-zero
+                latency, and comes with native, full-featured code intelligence
+                and integrated debugging with Delve.
               </p>
-              <p>
-                Built like a video game. Instant startup. 144 FPS. A zero
-                latency experience. An indexer that gobbles through large
-                codebases. CodePerfect does the right thing and gets out of your
-                way.
-              </p>
+            </div>
+            <div>
+              <A className="btn btn3" href={LINKS.docs}>
+                See features
+              </A>
             </div>
           </div>
           <div className="md:flex-1">
@@ -85,7 +79,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="batteries-included z-10 px-6 md:px-12 py-12 md:py-20">
+      <div className="batteries-included z-10 px-6 md:px-12 py-12 md:py-28">
         <div className="max-w-screen-lg mx-auto flex flex-col md:flex-row gap-8 items-center">
           <div className="md:w-1/3">
             <h1 className="title text-3xl md:text-4xl">
@@ -100,9 +94,9 @@ export default function Home() {
             </div>
             <A
               href="/features"
-              className="btn btn2 btn-lg btn-no-hover justify-center flex md:inline-flex text-center group"
+              className="btn btn1 btn-lg btn-no-hover justify-center flex md:inline-flex text-center group"
             >
-              View Features
+              View Docs
               <Icon
                 size={18}
                 className="ml-1.5 relative top-[1px] group-hover:translate-x-1 transition"
@@ -116,7 +110,7 @@ export default function Home() {
               {FEATURE_LIST.map((it) => (
                 <div
                   key={it.name}
-                  className="flex-shrink leading-none text-center text-neutral-300 hover:text-neutral-400 transition-colors"
+                  className="flex-shrink leading-none text-center text-neutral-400 hover:text-neutral-600 transition-colors"
                 >
                   {it.name}
                 </div>

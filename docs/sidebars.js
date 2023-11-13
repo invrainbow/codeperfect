@@ -35,33 +35,8 @@ function parseVersion(s) {
   return ret;
 }
 
-/**
- * @returns {any} // fuck this typing garbage
- */
-function getChangelogItems() {
-  const items = fs.readdirSync("docs/changelog");
-  return items
-    .filter((it) => it.endsWith(".md"))
-    .map((it) => it.slice(0, -".md".length))
-    .filter((it) => isVersion(it))
-    .sort((a, b) => {
-      const an = parseVersion(a);
-      const bn = parseVersion(b);
-      return bn - an;
-    })
-    .map((it) => `changelog/${it}`);
-}
-
 /** @type {import('@docusaurus/plugin-content-docs').SidebarsConfig} */
 const sidebars = {
-  changelogSidebar: [
-    {
-      type: "category",
-      label: "Changelog",
-      items: getChangelogItems(),
-    },
-  ],
-
   tutorialSidebar: [
     {
       type: "category",

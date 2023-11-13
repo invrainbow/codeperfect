@@ -7,7 +7,6 @@
 <p align="center">
   <a href="https://codeperfect95.com"><b>Website</b></a> ·
   <a href="https://docs.codeperfect95.com"><b>Docs</b></a> ·
-  <a href="https://docs.codeperfect95.com/changelog"><b>Changelog</b></a> ·
   <a href="https://github.com/codeperfect95/codeperfect/releases/latest"><b>Download</b></a>
 </p>
 

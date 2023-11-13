@@ -15,10 +15,6 @@ const config = {
   organizationName: "codeperfect",
   projectName: "codeperfect",
 
-  customFields: {
-    fuckingRetardation: process.env.BUILD_VERSION,
-  },
-
   plugins: ["docusaurus-plugin-sass"],
 
   presets: [
@@ -48,11 +44,6 @@ const config = {
           src: "logo.png",
         },
         items: [
-          {
-            label: "Changelog",
-            position: "left",
-            href: "/changelog",
-          },
           {
             label: "Website",
             position: "left",

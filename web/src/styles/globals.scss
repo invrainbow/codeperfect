@@ -94,6 +94,9 @@ svg {
     @apply bg-primary text-white saturate-[0.8];
   }
   &.btn2 {
+    @apply shadow-sm border border-neutral-200 bg-white text-neutral-600;
+  }
+  &.btn3 {
     @apply bg-white text-neutral-700;
   }
 }

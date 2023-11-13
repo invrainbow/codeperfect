@@ -39,8 +39,6 @@ function Header() {
 
   const links = [
     [LINKS.docs, "Docs"],
-    [LINKS.changelog, "Changelog"],
-    ["/features", "Features"],
     [LINKS.download, "Download"],
     [LINKS.github, "Github"],
   ];
@@ -105,19 +103,11 @@ function Header() {
 }
 
 const FOOTER_LINKS = [
-  [
-    { href: "/features", label: "Features" },
-    { href: LINKS.download, label: "Download for Mac" },
-  ],
-  [
-    { href: LINKS.docs, label: "Docs" },
-    { href: LINKS.changelog, label: "Changelog" },
-    { href: LINKS.github, label: "Github" },
-  ],
-  [
-    { href: `mailto:${SUPPORT_EMAIL}`, label: "Support" },
-    { href: "/faq", label: "FAQ" },
-  ],
+  { href: LINKS.docs, label: "Docs" },
+  { href: LINKS.download, label: "Download" },
+  { href: LINKS.github, label: "Github" },
+  { href: "/faq", label: "FAQ" },
+  { href: `mailto:${SUPPORT_EMAIL}`, label: "Support" },
 ];
 
 function Footer() {
@@ -130,19 +120,15 @@ function Footer() {
           </div>
           <div>&copy; {new Date().getFullYear()} CodePerfect</div>
         </div>
-        <div className="flex flex-col md:flex-row md:items-start gap-y-3 md:gap-x-14 leading-none">
-          {FOOTER_LINKS.map((group, i) => (
-            <div key={i} className="flex flex-col gap-y-3 md:gap-y-3 text-left">
-              {group.map((it) => (
-                <A
-                  key={it.href}
-                  className="text-gray-800 no-underline"
-                  href={it.href}
-                >
-                  {it.label}
-                </A>
-              ))}
-            </div>
+        <div className="flex flex-col md:flex-row md:items-start gap-y-3 md:gap-x-8 leading-none">
+          {FOOTER_LINKS.map((it) => (
+            <A
+              key={it.href}
+              className="text-gray-800 no-underline"
+              href={it.href}
+            >
+              {it.label}
+            </A>
           ))}
         </div>
       </div>
