@@ -45,8 +45,13 @@ const config = {
         },
         items: [
           {
+            label: "Download",
+            position: "right",
+            href: "https://github.com/codeperfect95/codeperfect/releases/latest",
+          },
+          {
             label: "Website",
-            position: "left",
+            position: "right",
             href: "https://codeperfect95.com",
           },
         ],
