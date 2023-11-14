@@ -1,4 +1,3 @@
-import React from "react";
 import Link from "next/link";
 
 function isExternalLink(href) {
@@ -6,10 +5,13 @@ function isExternalLink(href) {
   return prefixes.some((it) => href.startsWith(it));
 }
 
-export function A({ children, href, newWindow, ...props }) {
+export function A({ children, href, newWindow = undefined, ...props }) {
   if (href && !isExternalLink(href) && !newWindow) {
-    props.href = href;
-    return <Link {...props}>{children}</Link>;
+    return (
+      <Link href={href} {...props}>
+        {children}
+      </Link>
+    );
   }
 
   let useNewWindow;
@@ -24,11 +26,19 @@ export function A({ children, href, newWindow, ...props }) {
   if (useNewWindow) {
     props.target = "_blank";
   }
-  props.href = href;
-  return <a {...props}>{children}</a>;
+  return (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  );
 }
 
-export function Icon({ block, noshift, icon: IconComponent, ...props }) {
+export function Icon({
+  block = undefined,
+  noshift = undefined,
+  icon: IconComponent,
+  ...props
+}) {
   return (
     <span className={block ? "block" : "inline-block"}>
       <IconComponent {...props} />

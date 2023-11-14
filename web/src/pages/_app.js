@@ -7,7 +7,7 @@ import { IconMenu2, IconX } from "@tabler/icons-react";
 import cx from "classnames";
 import { useEffect, useState } from "react";
 
-function Logo({ onClick, hideText }) {
+function Logo({ onClick = undefined, hideText = undefined }) {
   return (
     <A
       href="/"
