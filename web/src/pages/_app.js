@@ -44,7 +44,7 @@ function Header() {
   ];
 
   return (
-    <div className="p-4 md:p-6 bg-white shadow-2xl shadow-neutral-800/5">
+    <div className="p-4 md:p-6">
       <div className="flex justify-between items-center w-full md:max-w-screen-lg md:mx-auto">
         <Logo />
         <div className="md:hidden relative">
@@ -112,7 +112,7 @@ const FOOTER_LINKS = [
 
 function Footer() {
   return (
-    <div className="bg-white px-6 pt-6 lg:pt-12 pb-8 md:pb-24 border-t border-gray-50">
+    <div className="px-6 pt-6 pb-8 md:py-12">
       <div className="flex flex-col-reverse md:flex-row gap-y-4 md:gap-0 hmd:flex-row justify-between w-full md:max-w-screen-lg md:mx-auto items-start">
         <div className="text-gray-500">
           <div className="opacity-50 hidden md:block">

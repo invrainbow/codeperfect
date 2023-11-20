@@ -1,0 +1,24 @@
+import { LINKS } from "@/constants";
+
+There isn't any one single thing. CodePerfect gets its speed largely by
+declining to copy all the extreme bloat that makes the modern tech stack slow.
+In particular, we:
+
+1. Use a low level language (C/C++) and render our own UI with OpenGL.
+2. Eschew large dependencies like Electron, language servers, etc.
+3. Write simple, linear-control-flow, straightforward,
+   <a href={LINKS.nonPessimized}>non-pessimized</a> code, without unnecessary
+   abstractions or patterns.
+4. Amortize memory allocations with arenas.
+
+We especially try to limit use of third-party libraries and frameworks in order
+to own our entire stack, and maintain visibility into every line of code that
+goes into the final product. Much of the slowness of modern software comes not
+from this slow algorithm or that inefficient data structure, but from all the
+invisible bloat hidden inside the mainstream default software stack.
+
+We're not writing crazy inline assembly or SIMD intrinsics or discovering new
+algorithms or whatever. We do some optimization, like using file mappings and
+multithreading stuff where it makes sense, but mostly we are just writing
+straightforward code that performs the actual task of executing an IDE. Modern
+computers are just fast.

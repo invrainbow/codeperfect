@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 body {
-  @apply antialiased bg-neutral-50 text-neutral-600;
+  @apply antialiased text-neutral-600;
 }
 
 * {
@@ -68,36 +68,22 @@ svg {
 }
 
 .btn {
-  @apply rounded-md shadow leading-none;
-  @apply py-3 px-6;
+  @apply rounded-md leading-none py-4 px-6;
   @apply disabled:opacity-50 no-underline outline-none;
-  @apply whitespace-nowrap;
-  @apply inline-flex items-center;
+  @apply whitespace-nowrap inline-flex items-center;
   @apply text-base font-sans font-medium box-border;
-
-  &:not(:disabled):not(.disabled):not(.btn-no-hover) {
+  &:not(:disabled):not(.disabled) {
     @apply hover:scale-[1.015] active:top-[1px] active:scale-[.985] transition-transform duration-100;
   }
   &:disabled,
   &.disabled {
     @apply cursor-not-allowed opacity-30;
   }
-
-  &.btn-sm {
-    @apply py-1.5 px-4 text-sm;
-  }
-  &.btn-lg {
-    @apply py-4 px-8 text-lg tracking-tight;
-  }
-
   &.btn1 {
     @apply bg-primary text-white saturate-[0.8];
   }
   &.btn2 {
-    @apply shadow-sm border border-neutral-200 bg-white text-neutral-600;
-  }
-  &.btn3 {
-    @apply bg-white text-neutral-700;
+    @apply bg-neutral-200 text-neutral-600;
   }
 }
 
@@ -115,29 +101,5 @@ svg {
     &:not(:first-child) {
       @apply mt-4;
     }
-  }
-}
-
-.batteries-included {
-  @apply relative z-0 text-neutral-800 overflow-hidden;
-  background: linear-gradient(
-    180deg,
-    rgb(246, 246, 250) 0%,
-    rgb(232, 232, 236) 100%
-  );
-  .batteries-included-tile {
-    @apply bg-white hover:scale-[1.03];
-  }
-}
-
-.features {
-  code {
-    @apply leading-none py-0.5 px-1;
-  }
-  pre {
-    @apply py-2 px-3 rounded;
-  }
-  img {
-    @apply block rounded-xl border border-neutral-400 shadow;
   }
 }

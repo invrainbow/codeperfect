@@ -350,14 +350,14 @@ export const FEATURE_LIST = _.sortBy(UNSORTED_FEATURE_LIST, "name");
 
 export default function Home() {
   return (
-    <div className="bg-neutral-50 mx-auto w-full">
-      <div className="bg-white flex flex-col gap-10 max-w-full leading-relaxed px-8 py-12 md:pt-20 md:pb-24">
+    <div className="mx-auto w-full">
+      <div className="flex flex-col gap-10 max-w-full leading-relaxed px-8 py-12 md:pt-20 md:pb-24">
         <div>
           <div className="md:text-center font-bold text-5xl text-black tracking-tight leading-[1.1] md:leading-none mb-8">
             A fast, lightweight Go IDE
           </div>
-          <div className="text-center leading-relaxed">
-            <span className="bg-slate-200 text-slate-600 rounded-full text-sm font-medium py-2 px-4 leading-none">
+          <div className="md:text-center">
+            <span className="bg-slate-200 text-slate-600 rounded-md md:rounded-full text-sm font-medium p-3 md:py-2 md:px-4 leading-normal md:leading-none inline-block">
               <b>Note:</b> CodePerfect is no longer actively developed, but is
               now <A href={LINKS.github}>open source</A> and free.
             </span>
@@ -381,17 +381,17 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="bg-neutral-900 border-gray-100 p-8 py-12 md:pb-24 relative z-10 flex items-center justify-center">
-        <div className="max-w-screen-xl flex flex-col lg:flex-row items-center gap-8 md:gap-16">
+      <div className="border-gray-100 p-8 py-12 md:pb-24 relative z-10 flex items-center justify-center">
+        <div className="max-w-screen-xl flex flex-col-reverse md:flex-col lg:flex-row items-center gap-8 md:gap-16">
           <div className="lg:w-1/3 md:mx-0 flex flex-col gap-6 md:gap-8">
             <div className="text-[160%] md:text-[200%] font-extrabold text-black leading-tight">
               {BAD_FEATURES.map((name) => (
-                <div key={name} className="text-white md:whitespace-nowrap">
+                <div key={name} className="text-black md:whitespace-nowrap">
                   No {name}.
                 </div>
               ))}
             </div>
-            <div className="leading-relaxed text-neutral-400">
+            <div className="leading-relaxed text-neutral-600">
               <p>
                 CodePerfect is built from scratch in C/C++/OpenGL like a video
                 game. It starts instantly, runs at 144 FPS, has near-zero
@@ -400,7 +400,7 @@ export default function Home() {
               </p>
             </div>
             <div>
-              <A className="btn btn3" href={LINKS.docs}>
+              <A className="btn btn1" href={LINKS.docs}>
                 See features
               </A>
             </div>
@@ -417,7 +417,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="batteries-included z-10 px-6 md:px-12 py-12 md:py-28">
+      <div className="px-6 md:px-12 py-12 md:pb-28">
         <div className="max-w-screen-lg mx-auto flex flex-col md:flex-row gap-8 items-center">
           <div className="md:w-1/3">
             <h1 className="title text-3xl md:text-4xl">
@@ -431,8 +431,8 @@ export default function Home() {
               </p>
             </div>
             <A
-              href="/features"
-              className="btn btn1 btn-lg btn-no-hover justify-center flex md:inline-flex text-center group"
+              href={LINKS.docs}
+              className="btn btn1 justify-center flex md:inline-flex text-center group"
             >
               View Docs
               <Icon
@@ -444,7 +444,7 @@ export default function Home() {
           </div>
 
           <div className="hidden md:block flex-1">
-            <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-[110%] rounded p-6 font-mono">
+            <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-[100%] rounded p-6 font-mono">
               {FEATURE_LIST.map((it) => (
                 <div
                   key={it.name}
