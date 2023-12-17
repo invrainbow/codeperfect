@@ -1,33 +1,43 @@
 {
-  "name": "codeperfect-web",
-  "version": "0.1.0",
+  "name": "web",
   "private": true,
+  "version": "0.0.0",
+  "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@mdx-js/loader": "^3.0.0",
-    "@mdx-js/react": "^3.0.0",
-    "@next/mdx": "^14.0.3",
     "@react-icons/all-files": "^4.1.0",
-    "@tabler/icons": "^2.40.0",
-    "@tabler/icons-react": "^2.40.0",
-    "@types/mdx": "^2.0.10",
+    "@tabler/icons-react": "^2.44.0",
+    "@types/bun": "^1.0.0",
+    "@types/lodash": "^4.14.202",
+    "@types/node": "^20.10.4",
+    "@types/react-router-dom": "^5.3.3",
+    "@types/web": "^0.0.128",
+    "autoprefixer": "^10.4.16",
     "classnames": "^2.3.2",
     "lodash": "^4.17.21",
-    "next": "14.0.2",
-    "react": "^18",
-    "react-dom": "^18",
-    "react-icons": "^4.11.0",
+    "marked": "^11.1.0",
+    "postcss": "^8.4.32",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "5",
     "sass": "^1.69.5",
-    "tailwind-merge": "^2.0.0"
+    "tailwindcss": "^3.3.6"
   },
   "devDependencies": {
-    "autoprefixer": "^10.0.1",
-    "postcss": "^8",
-    "tailwindcss": "^3.3.0"
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "@typescript-eslint/eslint-plugin": "^6.14.0",
+    "@typescript-eslint/parser": "^6.14.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "typescript": "^5.2.2",
+    "vite": "^5.0.8"
   }
 }

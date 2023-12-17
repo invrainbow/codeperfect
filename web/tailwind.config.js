@@ -1,10 +1,6 @@
 /** @type {import('tailwindcss').Config} */
-module.exports = {
-  content: [
-    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
-  ],
+export default {
+  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
       colors: {
@@ -32,7 +28,7 @@ module.exports = {
 
     fontFamily: {
       sans: [
-        "var(--font-inter)",
+        "Inter",
         "system-ui",
         "-apple-system",
         "BlinkMacSystemFont",
@@ -43,7 +39,7 @@ module.exports = {
         "sans-serif",
       ],
       mono: [
-        "var(--font-jetbrains-mono)",
+        "Menlo",
         "SF Mono",
         "SFMono-Regular",
         "ui-monospace",
@@ -52,16 +48,6 @@ module.exports = {
         "Consolas",
         "monospace",
       ],
-    },
-  },
-
-  variants: {
-    extend: {
-      opacity: ["disabled", "group-hover"],
-      borderWidth: ["last"],
-      display: ["group-hover"],
-      transform: ["hover"],
-      margin: ["last"],
     },
   },
   plugins: [],

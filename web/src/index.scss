@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
 body {
   @apply antialiased text-neutral-600;
 }
@@ -22,9 +24,7 @@ p,
 ul,
 ol,
 blockquote,
-center,
-pre,
-form {
+pre {
   &:not(:first-child) {
     @apply mt-4;
   }
@@ -33,13 +33,11 @@ form {
 ul,
 ol {
   @apply pl-4;
+  li {
+    @apply list-outside;
+    @apply ml-4;
+  }
 }
-
-li {
-  @apply list-outside;
-  @apply ml-4;
-}
-
 ul li {
   @apply list-disc;
 }
@@ -55,12 +53,7 @@ pre {
 }
 code,
 pre {
-  @apply font-mono text-sm text-lime-700;
-  background: #eef2ee;
-}
-
-svg {
-  @apply block;
+  @apply font-mono text-sm text-lime-700 bg-[#eef2ee];
 }
 
 .title {
@@ -87,19 +80,8 @@ svg {
   }
 }
 
-.prose {
-  h2:not(:first-child) {
-    @apply mt-4;
-  }
+.faq {
   h3 {
-    @apply mt-4 text-neutral-700 font-semibold;
-  }
-  p,
-  ol,
-  ul,
-  blockquote {
-    &:not(:first-child) {
-      @apply mt-4;
-    }
+    @apply text-neutral-700 font-semibold text-lg;
   }
 }
