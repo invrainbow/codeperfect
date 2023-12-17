@@ -1,5 +1,14 @@
-import { AnchorHTMLAttributes } from "react";
+import { Box, Props as BoxProps } from "./Box";
 
-export const A = (props: AnchorHTMLAttributes<HTMLAnchorElement>) => (
-  <a target="_blank" {...props} />
+export interface Props extends BoxProps<"a"> {
+  newWindow?: boolean;
+}
+
+export const A = ({ cx, newWindow = true, ...rest }: Props) => (
+  <Box
+    as="a"
+    target={newWindow ? "_blank" : undefined}
+    cx={["text-primary underline break-words underline-offset-2", cx]}
+    {...rest}
+  />
 );

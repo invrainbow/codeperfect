@@ -10,7 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@react-icons/all-files": "^4.1.0",
     "@tabler/icons-react": "^2.44.0",
     "@types/bun": "^1.0.0",
     "@types/lodash": "^4.14.202",
@@ -18,12 +17,13 @@
     "@types/web": "^0.0.128",
     "autoprefixer": "^10.4.16",
     "classnames": "^2.3.2",
-    "lodash": "^4.17.21",
     "marked": "^11.1.0",
     "postcss": "^8.4.32",
+    "radash": "^11.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "sass": "^1.69.5",
+    "tailwind-merge": "^2.1.0",
     "tailwindcss": "^3.3.6"
   },
   "devDependencies": {

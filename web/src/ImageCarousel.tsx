@@ -1,5 +1,7 @@
-import cx from "classnames";
 import { useEffect, useState } from "react";
+import { Box } from "./components/Box";
+import { Flex } from "./components/Flex";
+import { Image } from "./components/Image";
 
 const IMAGES = [
   "/feature-autocomplete.png",
@@ -21,40 +23,34 @@ export const ImageCarousel = () => {
   }, [current]);
 
   return (
-    <div className="flex flex-col-reverse md:flex-row gap-4 md:gap-6 items-center">
-      <div className="flex flex-row md:flex-col gap-3">
+    <Flex cx="flex-col-reverse md:flex-row gap-4 md:gap-6">
+      <Flex cx="flex-row md:flex-col gap-3">
         {IMAGES.map((it, idx) => (
-          <div
-            className={cx(
+          <Box
+            cx={[
               "h-3 w-3 md:w-4 md:h-4 rounded-full cursor-pointer transition-colors",
-              current === idx
-                ? "bg-neutral-400"
-                : "bg-neutral-400/30 hover:bg-neutral-400/50"
-            )}
+              current === idx && "bg-neutral-400",
+              current !== idx && "bg-neutral-400/30 hover:bg-neutral-400/50",
+            ]}
             onClick={() => setCurrent(idx)}
             key={it}
           />
         ))}
-      </div>
-      <div className="relative flex-1">
-        <img
-          className="opacity-0 max-w-full"
-          alt="screenshot"
-          src={IMAGES[0]}
-        />
+      </Flex>
+      <Box cx="relative flex-1">
+        <Image cx="opacity-0 max-w-full" src={IMAGES[0]} />
         {IMAGES.map((it, idx) => (
-          <div className="absolute inset-0 flex items-center justify-start">
-            <img
-              className={cx(
+          <Flex cx="absolute inset-0 justify-start">
+            <Image
+              cx={[
                 "max-w-full border border-neutral-400 shadow-lg rounded-xl overflow-hidden",
-                idx === current ? "opacity-100" : "opacity-0"
-              )}
-              alt="screenshot"
+                idx === current ? "opacity-100" : "opacity-0",
+              ]}
               src={it}
             />
-          </div>
+          </Flex>
         ))}
-      </div>
-    </div>
+      </Box>
+    </Flex>
   );
 };

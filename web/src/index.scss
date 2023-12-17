@@ -4,84 +4,43 @@
 
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
 
-body {
-  @apply antialiased text-neutral-600;
-}
-
 * {
   @apply outline-none;
 }
 
-a {
-  @apply text-primary underline;
-  @apply break-words underline-offset-2;
-}
-a.btn {
-  @apply no-underline;
-}
-
-p,
-ul,
-ol,
-blockquote,
-pre {
-  &:not(:first-child) {
-    @apply mt-4;
+// not used now but saving for later
+.typography {
+  p,
+  ul,
+  ol,
+  blockquote,
+  pre {
+    &:not(:first-child) {
+      @apply mt-4;
+    }
   }
-}
-
-ul,
-ol {
-  @apply pl-4;
-  li {
-    @apply list-outside;
-    @apply ml-4;
+  ul,
+  ol {
+    @apply pl-4;
+    li {
+      @apply list-outside;
+      @apply ml-4;
+    }
   }
-}
-ul li {
-  @apply list-disc;
-}
-ol li {
-  @apply list-decimal;
-}
-
-code {
-  @apply rounded-md px-1.5 py-0.5 mb-[1px] inline-block;
-}
-pre {
-  @apply rounded-md px-3 py-2;
-}
-code,
-pre {
-  @apply font-mono text-sm text-lime-700 bg-[#eef2ee];
-}
-
-.title {
-  @apply font-bold text-black tracking-tight;
-}
-
-.btn {
-  @apply rounded-md leading-none py-4 px-6;
-  @apply disabled:opacity-50 no-underline outline-none;
-  @apply whitespace-nowrap inline-flex items-center;
-  @apply text-base font-sans font-medium box-border;
-  &:not(:disabled):not(.disabled) {
-    @apply hover:scale-[1.015] active:top-[1px] active:scale-[.985] transition-transform duration-100;
+  ul li {
+    @apply list-disc;
   }
-  &:disabled,
-  &.disabled {
-    @apply cursor-not-allowed opacity-30;
+  ol li {
+    @apply list-decimal;
   }
-  &.btn1 {
-    @apply bg-primary text-white saturate-[0.8];
+  code {
+    @apply rounded-md px-1.5 py-0.5 mb-[1px] inline-block;
   }
-  &.btn2 {
-    @apply bg-neutral-200 text-neutral-600;
+  pre {
+    @apply rounded-md px-3 py-2;
   }
-}
-
-.faq {
-  h3 {
-    @apply text-neutral-700 font-semibold text-lg;
+  code,
+  pre {
+    @apply font-mono text-sm text-lime-700 bg-[#eef2ee];
   }
 }

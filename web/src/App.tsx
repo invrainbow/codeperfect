@@ -1,20 +1,21 @@
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
-import cx from "classnames";
 import { Features } from "./Features";
 import { Hero } from "./Hero";
 import { Intro } from "./Intro";
+import { Box } from "./components/Box";
+import { Flex } from "./components/Flex";
 
 export const App = () => (
-  <div className={cx("flex flex-col min-h-screen font-sans")}>
-    <div className="flex-grow">
+  <Flex cx="flex-col items-stretch min-h-screen font-sans antialiased text-neutral-600">
+    <Box cx="flex-grow">
       <Header />
-      <div className="mx-auto w-full flex flex-col gap-24 py-12 md:py-20">
+      <Flex cx="flex-col mx-auto w-full gap-24 py-12 md:py-20">
         <Hero />
         <Intro />
         <Features />
-      </div>
-    </div>
+      </Flex>
+    </Box>
     <Footer />
-  </div>
+  </Flex>
 );
