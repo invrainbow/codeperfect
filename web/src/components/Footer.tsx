@@ -6,7 +6,7 @@ const FOOTER_LINKS = [
   { href: links.docs, label: "Docs" },
   { href: links.download, label: "Download" },
   { href: links.github, label: "Github" },
-  { href: "/faq", label: "FAQ" },
+  { href: links.faq, label: "FAQ" },
   { href: links.supportEmail, label: "Support" },
 ];
 

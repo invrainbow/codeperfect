@@ -1,23 +1,20 @@
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
-import { Faq } from "@/pages/Faq";
-import { Home } from "@/pages/Home";
 import cx from "classnames";
-import { Route, BrowserRouter as Router, Switch } from "react-router-dom";
-import { ScrollToTop } from "./components/ScrollToTop";
+import { Features } from "./Features";
+import { Hero } from "./Hero";
+import { Intro } from "./Intro";
 
 export const App = () => (
-  <Router>
-    <ScrollToTop />
-    <div className={cx("flex flex-col min-h-screen font-sans")}>
-      <div className="flex-grow">
-        <Header />
-        <Switch>
-          <Route path="/" exact component={Home} />
-          <Route path="/faq" component={Faq} />
-        </Switch>
+  <div className={cx("flex flex-col min-h-screen font-sans")}>
+    <div className="flex-grow">
+      <Header />
+      <div className="mx-auto w-full flex flex-col gap-24 py-12 md:py-20">
+        <Hero />
+        <Intro />
+        <Features />
       </div>
-      <Footer />
     </div>
-  </Router>
+    <Footer />
+  </div>
 );

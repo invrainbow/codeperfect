@@ -3,4 +3,5 @@ export const links = {
   supportEmail: "mailto:support@codeperfect95.com",
   github: "https://github.com/codeperfect95/codeperfect",
   download: "https://github.com/codeperfect95/codeperfect/releases/latest",
+  faq: "https://github.com/codeperfect95/codeperfect/blob/master/FAQ.md",
 };

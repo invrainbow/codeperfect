@@ -15,7 +15,6 @@
     "@types/bun": "^1.0.0",
     "@types/lodash": "^4.14.202",
     "@types/node": "^20.10.4",
-    "@types/react-router-dom": "^5.3.3",
     "@types/web": "^0.0.128",
     "autoprefixer": "^10.4.16",
     "classnames": "^2.3.2",
@@ -24,7 +23,6 @@
     "postcss": "^8.4.32",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "5",
     "sass": "^1.69.5",
     "tailwindcss": "^3.3.6"
   },

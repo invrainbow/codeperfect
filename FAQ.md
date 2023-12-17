@@ -1,4 +1,6 @@
-### What makes it fast?
+# FAQ
+
+## What makes it fast?
 
 There isn't any single big trick, besides just eschewing all the cumulative
 bloat that makes modern software slow. In particular we
@@ -16,3 +18,13 @@ application is doing.
 Where it makes sense, we use some optimizations (e.g. file mappings and
 multithreading), but mostly we're just coding in a straightforward way, and it's
 the hardware that's fast.
+
+## What does the name mean?
+
+It's a throwback to an era when software was way
+[faster](https://www.youtube.com/watch?v=GC-0tCy4P1U&t=2168s), despite running
+on hardware much slower than a phone today.
+
+## Got other questions?
+
+Reach out at [support@codeperfect95.com](mailto:support@codeperfect95.com).

@@ -1,5 +1,0 @@
-### What does the name mean?
-
-It's a throwback to an era when software was way
-[faster](https://www.youtube.com/watch?v=GC-0tCy4P1U&t=2168s), despite running
-on hardware much slower than a phone today.
