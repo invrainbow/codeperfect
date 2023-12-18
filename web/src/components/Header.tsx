@@ -1,5 +1,5 @@
 import { links } from "@/links";
-import { useEffect, useState } from "react";
+import { useEffect, useState } from "preact/hooks";
 import { Icon } from "./Icon";
 import { Link } from "./Link";
 import { Logo } from "./Logo";
