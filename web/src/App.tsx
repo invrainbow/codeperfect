@@ -3,19 +3,18 @@ import { Header } from "@/components/Header";
 import { Features } from "./Features";
 import { Hero } from "./Hero";
 import { Intro } from "./Intro";
-import { Box } from "./components/Box";
-import { Flex } from "./components/Flex";
+import dom from "./components/dom";
 
 export const App = () => (
-  <Flex cx="flex-col items-stretch min-h-screen font-sans antialiased text-neutral-600">
-    <Box cx="flex-grow">
+  <dom.div cx="flex flex-col items-stretch min-h-screen font-sans antialiased text-neutral-600">
+    <dom.div cx="flex-grow">
       <Header />
-      <Flex cx="flex-col mx-auto w-full gap-24 py-12 md:py-20">
+      <dom.div cx="flex flex-col mx-auto w-full gap-24 py-12 md:py-20">
         <Hero />
         <Intro />
         <Features />
-      </Flex>
-    </Box>
+      </dom.div>
+    </dom.div>
     <Footer />
-  </Flex>
+  </dom.div>
 );

@@ -1,10 +1,9 @@
 import { links } from "@/links";
 import { useEffect, useState } from "react";
-import { A } from "./A";
 import { Icon } from "./Icon";
+import { Link } from "./Link";
 import { Logo } from "./Logo";
-import { Box } from "./Box";
-import { Flex } from "./Flex";
+import dom from "./dom";
 
 const HEADER_LINKS = [
   [links.docs, "Docs"],
@@ -24,12 +23,12 @@ export function Header() {
   }, []);
 
   return (
-    <Box cx="p-4 md:p-6">
-      <Box cx="flex justify-between w-full md:max-w-screen-lg md:mx-auto">
+    <dom.div cx="p-4 md:p-6">
+      <dom.div cx="flex justify-between w-full md:max-w-screen-lg md:mx-auto">
         <Logo />
-        <Box cx="md:hidden relative">
+        <dom.div cx="md:hidden relative">
           <Icon
-            onClick={(e) => {
+            onClick={(e: MouseEvent) => {
               setShowMenu(!showMenu);
               e.stopPropagation();
             }}
@@ -37,47 +36,46 @@ export function Header() {
             icon="Menu2"
           />
           {showMenu && (
-            <Box
+            <dom.div
               cx="bg-neutral-900 text-black fixed top-0 left-0 right-0 p-4 border-b border-gray-200 shadow-lg z-50"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e: MouseEvent) => e.stopPropagation()}
             >
-              <Flex
-                as="button"
+              <dom.div
                 onClick={() => setShowMenu(false)}
                 cx="absolute z-50 top-4 right-4 w-8 justify-center h-8 rounded-full bg-neutral-700 text-white"
               >
                 <Icon icon="X" />
-              </Flex>
-              <Box cx="invert z-40 relative">
+              </dom.div>
+              <dom.div cx="invert z-40 relative">
                 <Logo onClick={() => setShowMenu(false)} />
-              </Box>
-              <Flex cx="mt-2 flex-col md:flex-row items-start md:items-center">
+              </dom.div>
+              <dom.div cx="flex mt-2 flex-col md:flex-row items-start md:items-center">
                 {HEADER_LINKS.map(([url, label]) => (
-                  <A
+                  <Link
                     key={url}
                     cx="flex text-neutral-100 no-underline whitespace-nowrap md:hidden leading-none py-2 items-start md:items-center"
                     onClick={() => setShowMenu(false)}
                     href={url}
                   >
                     {label}
-                  </A>
+                  </Link>
                 ))}
-              </Flex>
-            </Box>
+              </dom.div>
+            </dom.div>
           )}
-        </Box>
-        <Box cx="hidden md:flex items-center gap-x-7">
+        </dom.div>
+        <dom.div cx="hidden md:flex items-center gap-x-7">
           {HEADER_LINKS.map(([url, label]) => (
-            <A
+            <Link
               key={url}
               cx="text-neutral-700 no-underline whitespace-nowrap hidden md:inline-flex"
               href={url}
             >
               {label}
-            </A>
+            </Link>
           ))}
-        </Box>
-      </Box>
-    </Box>
+        </dom.div>
+      </dom.div>
+    </dom.div>
   );
 }

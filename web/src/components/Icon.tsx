@@ -1,27 +1,28 @@
-import { Box, Props as BoxProps } from "./Box";
+import { WrappedProps, wrapElement } from "./dom";
 
 import {
-  IconChevronRight,
-  IconDownload,
-  IconMenu2,
-  IconX,
-  IconBrain,
-  IconCommand,
-  IconTelescope,
-  IconWand,
-  IconRobot,
-  IconBulb,
-  IconHexagons,
-  IconTools,
-  IconSearch,
-  IconEdit,
   IconBinaryTree,
-  IconKeyboard,
+  IconBrain,
+  IconBulb,
+  IconChevronRight,
+  IconCommand,
   IconDiamond,
+  IconDownload,
+  IconEdit,
+  IconHexagons,
+  IconKeyboard,
+  IconMenu2,
+  IconRobot,
+  IconSearch,
   IconTags,
+  IconTelescope,
+  IconTools,
+  Icon as IconType,
+  IconWand,
+  IconX,
 } from "@tabler/icons-react";
 
-const ICONS = {
+const ICONS: Record<string, IconType> = {
   ChevronRight: IconChevronRight,
   Download: IconDownload,
   Menu2: IconMenu2,
@@ -44,10 +45,10 @@ const ICONS = {
 
 export type IconName = keyof typeof ICONS;
 
-interface Props extends BoxProps<(typeof ICONS)[IconName]> {
+interface Props extends WrappedProps<IconType> {
   icon: IconName;
 }
 
-export const Icon = ({ icon, ...props }: Props) => (
-  <Box as={ICONS[icon]} {...props} />
-);
+export const Icon = ({ icon, ...props }: Props) => {
+  return wrapElement(ICONS[icon], props);
+};

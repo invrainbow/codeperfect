@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@preact/preset-vite": "^2.7.0",
     "@tabler/icons-react": "^2.44.0",
     "@types/bun": "^1.0.0",
     "@types/lodash": "^4.14.202",
@@ -19,16 +20,13 @@
     "classnames": "^2.3.2",
     "marked": "^11.1.0",
     "postcss": "^8.4.32",
+    "preact": "^10.19.3",
     "radash": "^11.0.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
     "sass": "^1.69.5",
     "tailwind-merge": "^2.1.0",
     "tailwindcss": "^3.3.6"
   },
   "devDependencies": {
-    "@types/react": "^18.2.45",
-    "@types/react-dom": "^18.2.18",
     "@typescript-eslint/eslint-plugin": "^6.14.0",
     "@typescript-eslint/parser": "^6.14.0",
     "@vitejs/plugin-react": "^4.2.1",

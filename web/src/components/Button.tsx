@@ -1,7 +1,6 @@
-import { A } from "./A";
-import { Flex, Props as FlexProps } from "./Flex";
+import { Link, Props as LinkProps } from "./Link";
 
-interface Props extends FlexProps<"a"> {
+interface Props extends LinkProps {
   variant?: "primary" | "secondary";
   block?: boolean;
   disabled?: boolean;
@@ -9,17 +8,14 @@ interface Props extends FlexProps<"a"> {
 
 export const Button = ({
   cx,
-  href,
   variant = "primary",
   block,
   disabled,
   ...rest
 }: Props) => (
-  <Flex
-    as={A}
-    href={href}
+  <Link
     cx={[
-      "justify-center text-center group gap-1",
+      "flex justify-center text-center group gap-1",
       "rounded-md leading-none py-4 px-6",
       "no-underline outline-none whitespace-nowrap",
       "text-base font-sans font-medium box-border",
