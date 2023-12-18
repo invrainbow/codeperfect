@@ -1,7 +1,7 @@
 import { links } from "@/links";
-import { ImageCarousel } from "./ImageCarousel";
-import dom from "./components/dom";
 import { Button } from "./components/Button";
+import dom from "./components/dom";
+import { Icon } from "./components/Icon";
 
 const BAD_FEATURES = [
   "Electron",
@@ -11,25 +11,30 @@ const BAD_FEATURES = [
 ];
 
 export const Intro = () => (
-  <dom.div cx="flex items-center px-4 md:px-8 md:py-4 max-w-screen-xl mx-auto flex-col md:flex-row gap-16">
-    <dom.div cx="flex flex-col items-start md:w-1/3 md:mx-0 gap-6">
-      <dom.div cx="flex flex-col items-start leading-none gap-2 text-[160%] md:text-[200%] font-extrabold text-black">
+  <dom.div cx="text-white py-20 md:py-28 px-4 relative  overflow-x-clip">
+    <dom.div cx="bg-neutral-900 absolute inset-0 -rotate-[1.5deg] scale-x-150" />
+    <dom.div cx="flex flex-col items-center md:w-[400px] md:mx-auto gap-6 relative z-20">
+      <dom.div cx="flex flex-col items-center leading-none gap-1 text-[160%] md:text-4xl font-extrabold text-white">
         {BAD_FEATURES.map((name) => (
-          <dom.div key={name} cx="text-black md:whitespace-nowrap leading-none">
+          <dom.div key={name} cx="md:whitespace-nowrap leading-none">
             No {name}.
           </dom.div>
         ))}
       </dom.div>
-      <dom.div cx="leading-relaxed text-neutral-600">
+      <dom.div cx="leading-normal text-center text-neutral-400">
         CodePerfect is built from scratch in C/C++/OpenGL like a video game.
         Instant startup, 144 FPS, near-zero latency, native code intelligence.
       </dom.div>
       <dom.div>
-        <Button href={links.docs}>See features</Button>
+        <Button variant="inverse" href={links.docs}>
+          See features
+          <Icon
+            size={18}
+            cx="relative group-hover:translate-x-1 transition"
+            icon="ChevronRight"
+          />
+        </Button>
       </dom.div>
-    </dom.div>
-    <dom.div cx="lg:flex-1">
-      <ImageCarousel />
     </dom.div>
   </dom.div>
 );

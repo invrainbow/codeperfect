@@ -93,9 +93,9 @@ const FEATURES: Feature[] = [
 const SORTED_FEATURES = alphabetical(FEATURES, (it) => it.name);
 
 export const Features = () => (
-  <dom.div cx="flex max-w-screen-lg px-4 mx-auto flex-col md:flex-row gap-8 items-start md:items-center">
+  <dom.div cx="flex max-w-screen-lg px-4 mx-auto flex-col md:flex-row-reverse gap-8 items-start md:items-center">
     <dom.div cx="md:w-1/3">
-      <dom.div cx="font-bold text-black tracking-tight text-3xl md:text-4xl">
+      <dom.div cx="font-extrabold text-black tracking-tight text-3xl md:text-4xl">
         <dom.div>Batteries included,</dom.div>
         <dom.div>zero configuration.</dom.div>
       </dom.div>
@@ -111,7 +111,7 @@ export const Features = () => (
         />
       </Button>
     </dom.div>
-    <dom.div cx="flex md:mx-0 flex-wrap items-start md:grid md:grid-flow-col md:grid-rows-6 gap-2 md:gap-y-2.5 md:gap-x-4 text-xs md:text-sm rounded md:p-6 font-medium md:font-semibold">
+    <dom.div cx="flex md:mx-0 flex-wrap items-start md:grid md:grid-flow-col md:grid-rows-5 gap-2 md:gap-y-2.5 md:gap-x-6 text-xs md:text-sm rounded md:p-6 font-medium md:font-semibold">
       {SORTED_FEATURES.map(({ name, icon, href }) => (
         <dom.div key={name}>
           <Link

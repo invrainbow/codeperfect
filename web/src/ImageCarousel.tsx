@@ -22,7 +22,7 @@ export const ImageCarousel = () => {
 
   return (
     <dom.div cx="flex flex-col-reverse md:items-center md:flex-row gap-4 md:gap-6">
-      <dom.div cx="flex flex-row md:flex-col gap-3">
+      <dom.div cx="flex flex-row justify-center md:justify-nomal md:flex-col gap-3">
         {IMAGES.map((it, idx) => (
           <dom.div
             cx={[
@@ -41,7 +41,7 @@ export const ImageCarousel = () => {
           <dom.div cx="flex absolute inset-0 justify-start">
             <dom.img
               cx={[
-                "max-w-full border border-neutral-400 shadow-lg rounded-xl overflow-hidden",
+                "max-w-full border border-neutral-400 shadow-lg rounded-lg md:rounded-xl overflow-hidden",
                 idx === current ? "opacity-100" : "opacity-0",
               ]}
               src={it}

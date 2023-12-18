@@ -9,7 +9,7 @@ export const App = () => (
   <dom.div cx="flex flex-col items-stretch min-h-screen font-sans antialiased text-neutral-600">
     <dom.div cx="flex-grow">
       <Header />
-      <dom.div cx="flex flex-col mx-auto w-full gap-24 py-12 md:py-20">
+      <dom.div cx="flex flex-col mx-auto w-full gap-16 py-12 md:py-12">
         <Hero />
         <Intro />
         <Features />
