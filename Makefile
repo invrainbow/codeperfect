@@ -95,7 +95,7 @@ src/binaries.c: src/.cpcolors src/vert.glsl src/frag.glsl src/im.vert.glsl src/i
 COMMON_GOFLAGS = GOARCH=$(GOARCH) CC=clang CGO_CFLAGS="-mmacosx-version-min=10.12" CGO_LDFLAGS="-mmacosx-version-min=10.12"
 
 obj/gohelper.a: $(GO_DEPS)
-	$(COMMON_GOFLAGS) CGO_ENABLED=1 go build -ldflags "$(GOLDFLAGS)" -o $@ -buildmode=c-archive github.com/codeperfect95/codeperfect/go/helper && \
+	$(COMMON_GOFLAGS) CGO_ENABLED=1 go build -ldflags "$(GOLDFLAGS)" -o $@ -buildmode=c-archive github.com/invrainbow/codeperfect/go/helper && \
 		mv obj/gohelper.h src
 
 src/gohelper.h: obj/gohelper.a

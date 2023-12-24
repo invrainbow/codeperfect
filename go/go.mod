@@ -1,4 +1,4 @@
-module github.com/codeperfect95/codeperfect/go
+module github.com/invrainbow/codeperfect/go
 
 go 1.18
 

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/codeperfect95/codeperfect/go/versions"
+	"github.com/invrainbow/codeperfect/go/versions"
 	"github.com/denormal/go-gitignore"
 	"github.com/fatih/structtag"
 	"github.com/pkg/browser"

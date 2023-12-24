@@ -47,7 +47,7 @@ const config = {
           {
             label: "Download",
             position: "right",
-            href: "https://github.com/codeperfect95/codeperfect/releases/latest",
+            href: "https://github.com/invrainbow/codeperfect/releases/latest",
           },
           {
             label: "Website",

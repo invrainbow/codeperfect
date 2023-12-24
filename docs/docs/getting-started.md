@@ -6,7 +6,7 @@ title: "Getting Started"
 
 CodePerfect only supports MacOS. There are no plans to port to Windows or Linux.
 
-1. [Download](https://github.com/codeperfect95/codeperfect/releases/latest) the
+1. [Download](https://github.com/invrainbow/codeperfect/releases/latest) the
    appropriate binary for your architecture.
 2. Unzip and drag `CodePerfect.app` into your Applications folder and run it.
 
@@ -127,4 +127,4 @@ incorrect results, however, there are two fixes you can try:
 CodePerfect no longer automatically updates. It's no longer really in
 development anyway. But you can always grab the latest version from the
 [website](https://codeperfect95.com) or the latest source from
-[Github](https://github.com/codeperfect95/codeperfect).
+[Github](https://github.com/invrainbow/codeperfect).
