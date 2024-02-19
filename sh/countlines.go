@@ -27,7 +27,7 @@ func isFileOk(name string) bool {
 }
 
 func main() {
-	files, err := os.ReadDir(".")
+	files, err := os.ReadDir("src")
 	if err != nil {
 		die("couldn't read dir")
 	}
@@ -37,7 +37,7 @@ func main() {
 		if !file.IsDir() {
 			name := file.Name()
 			if isFileOk(name) {
-				names = append(names, name)
+				names = append(names, fmt.Sprintf("src/%s", name))
 			}
 		}
 	}
